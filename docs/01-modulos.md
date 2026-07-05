@@ -86,30 +86,39 @@ M6 Indicadores ► depende de M3 (datos de OT para KPIs)
 
 ## Módulo 2 — Planta
 
+### Jerarquía real (SGMWin / Sika)
+
+El usuario **siempre pertenece a una planta** (`usuario.sucursal_id`).
+No ve el árbol de otras plantas (salvo admin global / supervisa_sucursales).
+
+```
+SIKA                             ← empresa (fijo en la UI)
+  └── PLANTA_VIRREY              ← planta del usuario logueado (Sucursal)
+        └── ubicaciones…         ← las crea el usuario
+              └── sectores…      ← dentro de ubicaciones
+                    └── máquinas ← en nodos hoja
+```
+
+El usuario **solo ve su planta**. Al inicio el árbol bajo la planta está vacío.
+Profundidad **variable**: ubicación → máquina, o ubicación → sector → máquina.
+La **máquina** (`Equipo`) solo cuelga de un **nodo hoja**.
+
+| Concepto Sika/SGMWin | Modelo en la app |
+|----------------------|------------------|
+| Empresa (SIKA S.A.I.C.) | Constante / futuro `Empresa` |
+| Planta (PLANTA_VIRREY) | `Sucursal` + `usuario.sucursal_id` |
+| Ubicación / Sector / Zona | `Ubicacion` (árbol libre) |
+| Máquina / Equipo | `Equipo` en nodo hoja |
+
 ### Alcance
 
 | Funcionalidad | Descripción |
 |---------------|-------------|
-| Ubicaciones | Árbol genérico de profundidad libre (sucursal → zona → sector → …) |
-| Equipos | Catálogo con tipo, detalle dinámico, estado fuera de servicio |
-| Tipos de Equipo | Definición de campos dinámicos (detalle + lecturas) |
-| Componentes | Sub-partes de un equipo (si aplica) |
+| Ubicaciones | Árbol libre bajo la planta del usuario |
+| Equipos (máquinas) | Activo en hoja del árbol; tipo, detalle, fuera de servicio |
+| Tipos de Equipo | Campos dinámicos (detalle + lecturas) |
+| Componentes | Sub-partes de una máquina (si aplica) |
 | Contadores | Lecturas de horas, km, ciclos, etc. |
-
-### Mejora sobre SGMWin
-
-El original tiene Sucursal → Sector → Equipo (3 niveles).
-La OT real de Sika (Planta Virrey) muestra 4 niveles: Sucursal → Zona → Sector → Equipo.
-Se modela como **árbol genérico** mantenido por el Derivador de OT.
-
-### Ejemplo real
-
-```
-Planta Virrey (sucursal)
-  └── Silos Externos (ubicación)
-        └── Sector Losa (ubicación)
-              └── Silo 103 Arena Fina L-24 (equipo)
-```
 
 ---
 

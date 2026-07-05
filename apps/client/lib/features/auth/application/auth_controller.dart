@@ -74,6 +74,7 @@ class AuthController extends StateNotifier<AuthState> {
 					esAdministrador: false,
 					supervisaSucursales: false,
 					derechos: [],
+					sucursalId: null,
 					sucursalNombre: null,
 					perfilNombre: null,
 				),

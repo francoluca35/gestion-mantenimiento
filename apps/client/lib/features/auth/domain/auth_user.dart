@@ -6,6 +6,7 @@ class AuthUser {
 		required this.esAdministrador,
 		required this.supervisaSucursales,
 		required this.derechos,
+		required this.sucursalId,
 		required this.sucursalNombre,
 		required this.perfilNombre,
 	});
@@ -16,6 +17,7 @@ class AuthUser {
 	final bool esAdministrador;
 	final bool supervisaSucursales;
 	final List<String> derechos;
+	final String? sucursalId;
 	final String? sucursalNombre;
 	final String? perfilNombre;
 
@@ -36,6 +38,7 @@ class AuthUser {
 			esAdministrador: json['esAdministrador'] as bool? ?? false,
 			supervisaSucursales: json['supervisaSucursales'] as bool? ?? false,
 			derechos: derechosRaw.map((item) => item.toString()).toList(),
+			sucursalId: (json['sucursalId'] as String?) ?? (sucursal?['id'] as String?),
 			sucursalNombre: sucursal?['nombre'] as String?,
 			perfilNombre: perfil?['nombre'] as String?,
 		);

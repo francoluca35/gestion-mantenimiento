@@ -3,13 +3,38 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/config/app_config.dart';
+import 'core/layout/app_shell.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'features/auth/presentation/login_page.dart';
+import 'features/home/presentation/config_page.dart';
 import 'features/home/presentation/home_page.dart';
+import 'features/home/presentation/ot_page.dart';
+import 'features/home/presentation/perfil_page.dart';
+import 'features/planta/presentation/planta_page.dart';
 import 'features/seguridad/presentation/perfiles_page.dart';
 import 'features/seguridad/presentation/sucursales_page.dart';
 import 'features/seguridad/presentation/usuarios_page.dart';
+
+CustomTransitionPage<void> _fadePage(GoRouterState state, Widget child) {
+	return CustomTransitionPage<void>(
+		key: state.pageKey,
+		child: child,
+		transitionDuration: const Duration(milliseconds: 220),
+		reverseTransitionDuration: const Duration(milliseconds: 180),
+		transitionsBuilder: (context, animation, secondaryAnimation, child) {
+			final curved = CurvedAnimation(
+				parent: animation,
+				curve: Curves.easeOutCubic,
+				reverseCurve: Curves.easeInCubic,
+			);
+			return FadeTransition(
+				opacity: curved,
+				child: child,
+			);
+		},
+	);
+}
 
 class GestionMantenimientoApp extends ConsumerWidget {
 	const GestionMantenimientoApp({super.key});
@@ -17,7 +42,6 @@ class GestionMantenimientoApp extends ConsumerWidget {
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
 		final auth = ref.watch(authControllerProvider);
-
 		final router = ref.watch(_routerProvider);
 
 		if (!auth.bootstrapped) {
@@ -68,21 +92,47 @@ final _routerProvider = Provider<GoRouter>((ref) {
 				path: '/login',
 				builder: (context, state) => const LoginPage(),
 			),
-			GoRoute(
-				path: '/home',
-				builder: (context, state) => const HomePage(),
-			),
-			GoRoute(
-				path: '/usuarios',
-				builder: (context, state) => const UsuariosPage(),
-			),
-			GoRoute(
-				path: '/perfiles',
-				builder: (context, state) => const PerfilesPage(),
-			),
-			GoRoute(
-				path: '/sucursales',
-				builder: (context, state) => const SucursalesPage(),
+			ShellRoute(
+				builder: (context, state, child) {
+					return AppShell(
+						location: state.uri.path,
+						child: child,
+					);
+				},
+				routes: [
+					GoRoute(
+						path: '/home',
+						pageBuilder: (context, state) => _fadePage(state, const HomePage()),
+					),
+					GoRoute(
+						path: '/ot',
+						pageBuilder: (context, state) => _fadePage(state, const OtPage()),
+					),
+					GoRoute(
+						path: '/planta',
+						pageBuilder: (context, state) => _fadePage(state, const PlantaPage()),
+					),
+					GoRoute(
+						path: '/config',
+						pageBuilder: (context, state) => _fadePage(state, const ConfigPage()),
+					),
+					GoRoute(
+						path: '/perfil',
+						pageBuilder: (context, state) => _fadePage(state, const PerfilPage()),
+					),
+					GoRoute(
+						path: '/usuarios',
+						pageBuilder: (context, state) => _fadePage(state, const UsuariosPage()),
+					),
+					GoRoute(
+						path: '/perfiles',
+						pageBuilder: (context, state) => _fadePage(state, const PerfilesPage()),
+					),
+					GoRoute(
+						path: '/sucursales',
+						pageBuilder: (context, state) => _fadePage(state, const SucursalesPage()),
+					),
+				],
 			),
 		],
 	);

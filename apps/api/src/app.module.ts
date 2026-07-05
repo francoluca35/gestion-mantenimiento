@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './database/prisma.module';
+import { PlantaModule } from './modules/planta/planta.module';
 import { SeguridadModule } from './modules/seguridad/seguridad.module';
 import { StorageModule } from './modules/storage/storage.module';
 
@@ -14,6 +15,7 @@ import { StorageModule } from './modules/storage/storage.module';
 		}),
 		PrismaModule,
 		SeguridadModule,
+		PlantaModule,
 		StorageModule,
 	],
 	controllers: [AppController],

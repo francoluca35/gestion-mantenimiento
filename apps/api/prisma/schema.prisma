@@ -21,7 +21,9 @@ model Sucursal {
 	createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 	updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-	usuarios Usuario[]
+	usuarios    Usuario[]
+	ubicaciones Ubicacion[]
+	equipos     Equipo[]
 
 	@@map("sucursales")
 }
@@ -84,9 +86,10 @@ model Usuario {
 	createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
 	updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-	sucursal Sucursal? @relation(fields: [sucursalId], references: [id])
-	perfil   Perfil?   @relation(fields: [perfilId], references: [id])
+	sucursal Sucursal?  @relation(fields: [sucursalId], references: [id])
+	perfil   Perfil?    @relation(fields: [perfilId], references: [id])
 	sesiones Sesion[]
+	lecturas Lectura[]
 
 	@@map("usuarios")
 }
@@ -103,4 +106,93 @@ model Sesion {
 
 	@@index([usuarioId])
 	@@map("sesiones")
+}
+
+model Ubicacion {
+	id         String   @id @default(uuid()) @db.Uuid
+	sucursalId String   @map("sucursal_id") @db.Uuid
+	parentId   String?  @map("parent_id") @db.Uuid
+	nombre     String   @db.VarChar(200)
+	orden      Int      @default(0)
+	activa     Boolean  @default(true)
+	createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal Sucursal   @relation(fields: [sucursalId], references: [id])
+	parent   Ubicacion? @relation("UbicacionTree", fields: [parentId], references: [id])
+	children Ubicacion[] @relation("UbicacionTree")
+	equipos  Equipo[]
+
+	@@index([sucursalId, parentId])
+	@@map("ubicaciones")
+}
+
+model TipoEquipo {
+	id             String   @id @default(uuid()) @db.Uuid
+	nombre         String   @db.VarChar(100)
+	camposDetalle  Json     @default("[]") @map("campos_detalle")
+	camposLectura  Json     @default("[]") @map("campos_lectura")
+	activo         Boolean  @default(true)
+	createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	equipos Equipo[]
+
+	@@map("tipos_equipo")
+}
+
+model Equipo {
+	id               String    @id @default(uuid()) @db.Uuid
+	sucursalId       String    @map("sucursal_id") @db.Uuid
+	ubicacionId      String    @map("ubicacion_id") @db.Uuid
+	tipoEquipoId     String    @map("tipo_equipo_id") @db.Uuid
+	nombre           String    @db.VarChar(200)
+	codigo           String    @db.VarChar(50)
+	detalle          Json      @default("{}")
+	fueraDeServicio  Boolean   @default(false) @map("fuera_de_servicio")
+	fechaBaja        DateTime? @map("fecha_baja") @db.Date
+	activo           Boolean   @default(true)
+	createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal   Sucursal    @relation(fields: [sucursalId], references: [id])
+	ubicacion  Ubicacion   @relation(fields: [ubicacionId], references: [id])
+	tipoEquipo TipoEquipo  @relation(fields: [tipoEquipoId], references: [id])
+	componentes Componente[]
+	lecturas   Lectura[]
+
+	@@unique([sucursalId, codigo])
+	@@index([ubicacionId])
+	@@index([sucursalId, activo])
+	@@map("equipos")
+}
+
+model Componente {
+	id       String  @id @default(uuid()) @db.Uuid
+	equipoId String  @map("equipo_id") @db.Uuid
+	nombre   String  @db.VarChar(200)
+	codigo   String? @db.VarChar(50)
+	detalle  Json?
+	activo   Boolean @default(true)
+
+	equipo Equipo @relation(fields: [equipoId], references: [id], onDelete: Cascade)
+
+	@@index([equipoId])
+	@@map("componentes")
+}
+
+model Lectura {
+	id        String   @id @default(uuid()) @db.Uuid
+	equipoId  String   @map("equipo_id") @db.Uuid
+	usuarioId String?  @map("usuario_id") @db.Uuid
+	tipo      String   @db.VarChar(50)
+	valor     Decimal  @db.Decimal(15, 2)
+	fecha     DateTime @default(now()) @db.Timestamptz(6)
+	notas     String?  @db.Text
+
+	equipo  Equipo   @relation(fields: [equipoId], references: [id], onDelete: Cascade)
+	usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+	@@index([equipoId, fecha])
+	@@map("lecturas")
 }

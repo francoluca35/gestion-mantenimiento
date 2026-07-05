@@ -47,9 +47,20 @@ const ARBOL_DERECHOS: DerechoNode[] = [
 						]),
 					},
 					{
+						codigo: 'archivos.tipos_equipo',
+						nombre: 'Tipos de equipo',
+						orden: 3,
+						children: crudLeaves('archivos.tipos_equipo', [
+							'agregar',
+							'modificar',
+							'borrar',
+							'listar',
+						]),
+					},
+					{
 						codigo: 'archivos.procedimientos',
 						nombre: 'Procedimientos',
-						orden: 3,
+						orden: 4,
 						children: crudLeaves('archivos.procedimientos', [
 							'agregar',
 							'modificar',
@@ -267,14 +278,14 @@ async function main() {
 
 	const virrey = await prisma.sucursal.upsert({
 		where: { codigo: 'VIRREY' },
-		update: { nombre: 'Planta Virrey', activa: true },
-		create: { nombre: 'Planta Virrey', codigo: 'VIRREY' },
+		update: { nombre: 'PLANTA_VIRREY', activa: true },
+		create: { nombre: 'PLANTA_VIRREY', codigo: 'VIRREY' },
 	});
 
 	const rosario = await prisma.sucursal.upsert({
 		where: { codigo: 'ROSARIO' },
-		update: { nombre: 'Planta Rosario', activa: true },
-		create: { nombre: 'Planta Rosario', codigo: 'ROSARIO' },
+		update: { nombre: 'PLANTA_ROSARIO', activa: true },
+		create: { nombre: 'PLANTA_ROSARIO', codigo: 'ROSARIO' },
 	});
 
 	const perfilTecnico = await prisma.perfil.upsert({
@@ -321,6 +332,7 @@ async function main() {
 		perfilTecnico.id,
 		[
 			'programacion.ordenes_trabajo.buscar_y_actualizar',
+			'archivos.equipos.listar',
 			'stock.pañol.solicitudes_materiales.ver_pendientes',
 		],
 		derechoMap,
@@ -335,7 +347,7 @@ async function main() {
 
 	await assignDerechos(
 		perfilSupervisor.id,
-		['programacion', 'archivos.equipos.listar'],
+		['programacion', 'archivos'],
 		derechoMap,
 		true,
 	);
@@ -355,6 +367,7 @@ async function main() {
 			claveHash: passwordHash,
 			esAdministrador: true,
 			supervisaSucursales: true,
+			sucursalId: virrey.id,
 			activo: true,
 		},
 		create: {
@@ -363,6 +376,7 @@ async function main() {
 			email: 'admin@sika.local',
 			esAdministrador: true,
 			supervisaSucursales: true,
+			sucursalId: virrey.id,
 		},
 	});
 
@@ -436,9 +450,45 @@ async function main() {
 		},
 	});
 
-	console.log('Seed M1 completado');
+	// Tipos genéricos (sin datos de planta precargados)
+	await prisma.tipoEquipo.upsert({
+		where: { id: '55555555-5555-5555-5555-555555555501' },
+		update: { nombre: 'Máquina', activo: true },
+		create: {
+			id: '55555555-5555-5555-5555-555555555501',
+			nombre: 'Máquina',
+			camposDetalle: [],
+			camposLectura: [{ key: 'horas', label: 'Horas de operación' }],
+		},
+	});
+
+	await prisma.tipoEquipo.upsert({
+		where: { id: '55555555-5555-5555-5555-555555555502' },
+		update: { nombre: 'Instalación', activo: true },
+		create: {
+			id: '55555555-5555-5555-5555-555555555502',
+			nombre: 'Instalación',
+			camposDetalle: [],
+			camposLectura: [],
+		},
+	});
+
+	// Planta vacía: solo SIKA → PLANTA_VIRREY. El usuario crea ubicaciones/sectores/máquinas.
+	await prisma.lectura.deleteMany({
+		where: { equipo: { sucursalId: virrey.id } },
+	});
+	await prisma.equipo.deleteMany({ where: { sucursalId: virrey.id } });
+	await prisma.ubicacion.deleteMany({ where: { sucursalId: virrey.id } });
+	await prisma.lectura.deleteMany({
+		where: { equipo: { sucursalId: rosario.id } },
+	});
+	await prisma.equipo.deleteMany({ where: { sucursalId: rosario.id } });
+	await prisma.ubicacion.deleteMany({ where: { sucursalId: rosario.id } });
+
+	console.log('Seed M1 + M2 completado');
 	console.log(`Sucursales: ${virrey.codigo}, ${rosario.codigo}`);
 	console.log('Usuarios demo (clave: Sika123!): admin, tecnico, panolero, supervisor, admin.virrey');
+	console.log('Árbol planta vacío: SIKA → PLANTA_VIRREY (crear ubicaciones desde la app)');
 }
 
 main()

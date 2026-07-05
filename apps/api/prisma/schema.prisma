@@ -1,0 +1,106 @@
+generator client {
+	provider = "prisma-client-js"
+}
+
+datasource db {
+	provider = "postgresql"
+	url      = env("DATABASE_URL")
+}
+
+enum SupervisaSolicitudesOt {
+	ninguna
+	de_su_sector
+	todas
+}
+
+model Sucursal {
+	id        String   @id @default(uuid()) @db.Uuid
+	nombre    String   @db.VarChar(100)
+	codigo    String   @unique @db.VarChar(20)
+	activa    Boolean  @default(true)
+	createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	usuarios Usuario[]
+
+	@@map("sucursales")
+}
+
+model Perfil {
+	id          String   @id @default(uuid()) @db.Uuid
+	nombre      String   @db.VarChar(100)
+	descripcion String?  @db.Text
+	activo      Boolean  @default(true)
+	createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	usuarios Usuario[]
+	derechos PerfilDerecho[]
+
+	@@map("perfiles")
+}
+
+model Derecho {
+	id       String  @id @default(uuid()) @db.Uuid
+	parentId String? @map("parent_id") @db.Uuid
+	codigo   String  @unique @db.VarChar(100)
+	nombre   String  @db.VarChar(200)
+	orden    Int     @default(0)
+
+	parent   Derecho?        @relation("DerechoTree", fields: [parentId], references: [id])
+	children Derecho[]       @relation("DerechoTree")
+	perfiles PerfilDerecho[]
+
+	@@map("derechos")
+}
+
+model PerfilDerecho {
+	perfilId   String  @map("perfil_id") @db.Uuid
+	derechoId  String  @map("derecho_id") @db.Uuid
+	habilitado Boolean @default(true)
+	modoTotal  Boolean @default(false) @map("modo_total")
+
+	perfil  Perfil  @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+	derecho Derecho @relation(fields: [derechoId], references: [id], onDelete: Cascade)
+
+	@@id([perfilId, derechoId])
+	@@map("perfil_derechos")
+}
+
+model Usuario {
+	id                     String                 @id @default(uuid()) @db.Uuid
+	nombreUsuario          String                 @unique @map("nombre_usuario") @db.VarChar(50)
+	claveHash              String                 @map("clave_hash") @db.VarChar(255)
+	email                  String?                @db.VarChar(100)
+	sucursalId             String?                @map("sucursal_id") @db.Uuid
+	sectorId               String?                @map("sector_id") @db.Uuid
+	perfilId               String?                @map("perfil_id") @db.Uuid
+	esAdministrador        Boolean                @default(false) @map("es_administrador")
+	supervisaSucursales    Boolean                @default(false) @map("supervisa_sucursales")
+	supervisaSolicitudesOt SupervisaSolicitudesOt @default(ninguna) @map("supervisa_solicitudes_ot")
+	supervisaSolicitudesOc Boolean                @default(false) @map("supervisa_solicitudes_oc")
+	montoMaximoOc          Decimal?               @map("monto_maximo_oc") @db.Decimal(15, 2)
+	activo                 Boolean                @default(true)
+	createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal Sucursal? @relation(fields: [sucursalId], references: [id])
+	perfil   Perfil?   @relation(fields: [perfilId], references: [id])
+	sesiones Sesion[]
+
+	@@map("usuarios")
+}
+
+model Sesion {
+	id               String   @id @default(uuid()) @db.Uuid
+	usuarioId        String   @map("usuario_id") @db.Uuid
+	refreshTokenHash String   @map("refresh_token_hash") @db.VarChar(255)
+	expiresAt        DateTime @map("expires_at") @db.Timestamptz(6)
+	revocada         Boolean  @default(false)
+	createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+	usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+	@@index([usuarioId])
+	@@map("sesiones")
+}

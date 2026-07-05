@@ -49,11 +49,13 @@ Servicios:
 | MinIO API | http://localhost:9000 |
 | MinIO Console | http://localhost:9001 (`minioadmin` / `minioadmin`) |
 
-### 2. API
+### 2. API + base de datos (M1)
 
 ```bash
 cd apps/api
 npm install
+npx prisma migrate dev
+npx prisma db seed
 npm run start:dev
 ```
 
@@ -66,11 +68,21 @@ cd apps/client
 flutter pub get
 
 # Web (admin / desktop)
-flutter run -d chrome
+flutter run -d chrome --web-port=8080
 
 # Android (emulador)
 flutter run -d android --dart-define=API_BASE_URL=http://10.0.2.2:3000/v1
 ```
+
+### Usuarios demo (clave: `Sika123!`)
+
+| Usuario | Rol |
+|---------|-----|
+| `admin` | Administrador global (todas las sucursales) |
+| `tecnico` | Técnico — Planta Virrey |
+| `panolero` | Pañolero — Planta Virrey |
+| `supervisor` | Supervisor — Planta Virrey |
+| `admin.virrey` | Admin de sucursal — Planta Virrey |
 
 ## Módulos
 

@@ -1,168 +1,250 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/adaptive_scaffold.dart';
 import '../../../core/layout/breakpoints.dart';
-import '../../../core/network/api_client.dart';
 import '../../../shared/widgets/status_badge.dart';
+import '../../auth/application/auth_controller.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
 	const HomePage({super.key});
 
 	@override
-	State<HomePage> createState() => _HomePageState();
+	ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> {
 	int _selectedIndex = 0;
-	String _apiStatus = 'Verificando API...';
-	bool _apiOk = false;
 
-	static const _destinations = [
-		NavigationDestination(
-			icon: Icon(Icons.home_outlined),
-			selectedIcon: Icon(Icons.home),
-			label: 'Inicio',
-		),
-		NavigationDestination(
-			icon: Icon(Icons.assignment_outlined),
-			selectedIcon: Icon(Icons.assignment),
-			label: 'Mis OT',
-		),
-		NavigationDestination(
-			icon: Icon(Icons.notifications_outlined),
-			selectedIcon: Icon(Icons.notifications),
-			label: 'Avisos',
-		),
-		NavigationDestination(
-			icon: Icon(Icons.person_outline),
-			selectedIcon: Icon(Icons.person),
-			label: 'Perfil',
-		),
-	];
-
-	@override
-	void initState() {
-		super.initState();
-		_checkApi();
-	}
-
-	Future<void> _checkApi() async {
-		try {
-			final client = ApiClient();
-			final health = await client.getJson('health');
-			if (!mounted) return;
-			setState(() {
-				_apiOk = health['status'] == 'ok';
-				_apiStatus = _apiOk
-						? 'API conectada · storage: ${health['storageProvider']}'
-						: 'API respondió con error';
-			});
-		} catch (_) {
-			if (!mounted) return;
-			setState(() {
-				_apiOk = false;
-				_apiStatus = 'API no disponible (¿está corriendo NestJS?)';
-			});
-		}
+	List<NavigationDestination> _destinations(bool canConfig) {
+		return [
+			const NavigationDestination(
+				icon: Icon(Icons.home_outlined),
+				selectedIcon: Icon(Icons.home),
+				label: 'Inicio',
+			),
+			const NavigationDestination(
+				icon: Icon(Icons.assignment_outlined),
+				selectedIcon: Icon(Icons.assignment),
+				label: 'Mis OT',
+			),
+			if (canConfig)
+				const NavigationDestination(
+					icon: Icon(Icons.settings_outlined),
+					selectedIcon: Icon(Icons.settings),
+					label: 'Config',
+				),
+			const NavigationDestination(
+				icon: Icon(Icons.person_outline),
+				selectedIcon: Icon(Icons.person),
+				label: 'Perfil',
+			),
+		];
 	}
 
 	@override
 	Widget build(BuildContext context) {
+		final auth = ref.watch(authControllerProvider);
+		final user = auth.session?.usuario;
 		final width = MediaQuery.sizeOf(context).width;
 		final isMobile = Breakpoints.isMobile(width);
+		final canConfig = user?.tieneDerecho('configuracion.usuarios.listar') == true ||
+				user?.esAdministrador == true;
+		final destinations = _destinations(canConfig);
+
+		if (_selectedIndex >= destinations.length) {
+			_selectedIndex = 0;
+		}
+
+		final titles = destinations.map((item) => item.label).toList();
 
 		return AdaptiveScaffold(
-			title: isMobile ? 'Mis OT' : 'Dashboard',
+			title: titles[_selectedIndex],
 			selectedIndex: _selectedIndex,
 			onDestinationSelected: (index) => setState(() => _selectedIndex = index),
-			destinations: _destinations,
-			body: ListView(
-				padding: const EdgeInsets.all(16),
-				children: [
-					_ApiStatusCard(ok: _apiOk, message: _apiStatus, onRetry: _checkApi),
-					const SizedBox(height: 16),
-					if (isMobile) ...[
-						_MobileHomeCards(),
-					] else ...[
-						_DesktopDashboard(),
-					],
-				],
-			),
+			destinations: destinations,
+			body: switch (destinations[_selectedIndex].label) {
+				'Config' => _ConfigSection(canConfig: canConfig),
+				'Perfil' => _ProfileSection(
+						nombreUsuario: user?.nombreUsuario ?? '',
+						perfil: user?.perfilNombre,
+						sucursal: user?.sucursalNombre,
+						esAdmin: user?.esAdministrador ?? false,
+						derechosCount: user?.derechos.length ?? 0,
+						onLogout: () async {
+							await ref.read(authControllerProvider.notifier).logout();
+							if (context.mounted) context.go('/login');
+						},
+					),
+				_ => ListView(
+						padding: const EdgeInsets.all(16),
+						children: [
+							_WelcomeCard(
+								nombre: user?.nombreUsuario ?? '',
+								perfil: user?.perfilNombre,
+								sucursal: user?.sucursalNombre,
+							),
+							const SizedBox(height: 16),
+							if (isMobile) const _MobileHomeCards() else const _DesktopDashboard(),
+						],
+					),
+			},
 		);
 	}
 }
 
-class _ApiStatusCard extends StatelessWidget {
-	const _ApiStatusCard({
-		required this.ok,
-		required this.message,
-		required this.onRetry,
+class _WelcomeCard extends StatelessWidget {
+	const _WelcomeCard({
+		required this.nombre,
+		required this.perfil,
+		required this.sucursal,
 	});
 
-	final bool ok;
-	final String message;
-	final VoidCallback onRetry;
+	final String nombre;
+	final String? perfil;
+	final String? sucursal;
 
 	@override
 	Widget build(BuildContext context) {
 		return Card(
 			child: ListTile(
-				leading: Icon(
-					ok ? Icons.cloud_done : Icons.cloud_off,
-					color: ok ? Colors.green : Colors.orange,
-				),
-				title: Text(message),
-				trailing: IconButton(
-					onPressed: onRetry,
-					icon: const Icon(Icons.refresh),
+				leading: const CircleAvatar(child: Icon(Icons.person)),
+				title: Text('Hola, $nombre'),
+				subtitle: Text(
+					[
+						if (perfil != null) perfil!,
+						if (sucursal != null) sucursal! else 'Casa Central',
+					].join(' · '),
 				),
 			),
 		);
 	}
 }
 
-class _MobileHomeCards extends StatelessWidget {
+class _ConfigSection extends StatelessWidget {
+	const _ConfigSection({required this.canConfig});
+
+	final bool canConfig;
+
 	@override
 	Widget build(BuildContext context) {
-		return Column(
+		if (!canConfig) {
+			return const Center(child: Text('Sin permisos de configuración'));
+		}
+
+		return ListView(
+			padding: const EdgeInsets.all(16),
+			children: [
+				Card(
+					child: ListTile(
+						leading: const Icon(Icons.people_outline),
+						title: const Text('Usuarios'),
+						subtitle: const Text('Alta y gestión de usuarios'),
+						trailing: const Icon(Icons.chevron_right),
+						onTap: () => context.push('/usuarios'),
+					),
+				),
+				const SizedBox(height: 8),
+				Card(
+					child: ListTile(
+						leading: const Icon(Icons.badge_outlined),
+						title: const Text('Perfiles'),
+						subtitle: const Text('Perfiles y derechos'),
+						trailing: const Icon(Icons.chevron_right),
+						onTap: () => context.push('/perfiles'),
+					),
+				),
+				const SizedBox(height: 8),
+				Card(
+					child: ListTile(
+						leading: const Icon(Icons.apartment_outlined),
+						title: const Text('Sucursales'),
+						subtitle: const Text('Plantas y aislamiento de datos'),
+						trailing: const Icon(Icons.chevron_right),
+						onTap: () => context.push('/sucursales'),
+					),
+				),
+			],
+		);
+	}
+}
+
+class _ProfileSection extends StatelessWidget {
+	const _ProfileSection({
+		required this.nombreUsuario,
+		required this.perfil,
+		required this.sucursal,
+		required this.esAdmin,
+		required this.derechosCount,
+		required this.onLogout,
+	});
+
+	final String nombreUsuario;
+	final String? perfil;
+	final String? sucursal;
+	final bool esAdmin;
+	final int derechosCount;
+	final VoidCallback onLogout;
+
+	@override
+	Widget build(BuildContext context) {
+		return ListView(
+			padding: const EdgeInsets.all(16),
+			children: [
+				Card(
+					child: Padding(
+						padding: const EdgeInsets.all(16),
+						child: Column(
+							crossAxisAlignment: CrossAxisAlignment.start,
+							children: [
+								Text(nombreUsuario, style: Theme.of(context).textTheme.titleLarge),
+								const SizedBox(height: 8),
+								Text(perfil ?? (esAdmin ? 'Administrador' : 'Sin perfil')),
+								Text(sucursal ?? 'Todas las sucursales'),
+								const SizedBox(height: 8),
+								Text('$derechosCount derechos efectivos'),
+							],
+						),
+					),
+				),
+				const SizedBox(height: 16),
+				FilledButton.tonalIcon(
+					onPressed: onLogout,
+					icon: const Icon(Icons.logout),
+					label: const Text('Cerrar sesión'),
+				),
+			],
+		);
+	}
+}
+
+class _MobileHomeCards extends StatelessWidget {
+	const _MobileHomeCards();
+
+	@override
+	Widget build(BuildContext context) {
+		return const Column(
 			children: [
 				_ActionCard(
 					title: 'Mis OT',
-					subtitle: '3 pendientes',
+					subtitle: 'Próximo módulo: Mantenimiento',
 					icon: Icons.assignment,
 					color: Colors.blue,
 				),
-				const SizedBox(height: 12),
+				SizedBox(height: 12),
 				_ActionCard(
 					title: 'En ejecución',
-					subtitle: '1 activa',
+					subtitle: 'Disponible en Fase 1 OT',
 					icon: Icons.play_circle_outline,
 					color: Colors.indigo,
 				),
-				const SizedBox(height: 12),
-				_ActionCard(
-					title: 'Realizadas',
-					subtitle: '12 este mes',
-					icon: Icons.check_circle_outline,
-					color: Colors.green,
-				),
-				const SizedBox(height: 24),
-				Text(
-					'Órdenes recientes',
-					style: Theme.of(context).textTheme.titleMedium,
-				),
-				const SizedBox(height: 8),
-				const _OtListTile(
-					numero: '#1234',
+				SizedBox(height: 24),
+				_OtListTile(
+					numero: '#DEMO',
 					equipo: 'Silo 103 Arena Fina',
 					tipo: 'Preventivo',
 					estado: 'pendiente',
-				),
-				const _OtListTile(
-					numero: '#1235',
-					equipo: 'Bomba B2',
-					tipo: 'Correctivo',
-					estado: 'en_ejecucion',
 				),
 			],
 		);
@@ -170,58 +252,25 @@ class _MobileHomeCards extends StatelessWidget {
 }
 
 class _DesktopDashboard extends StatelessWidget {
+	const _DesktopDashboard();
+
 	@override
 	Widget build(BuildContext context) {
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.start,
 			children: [
-				Text(
-					'Resumen operativo',
-					style: Theme.of(context).textTheme.titleLarge,
-				),
+				Text('Módulo 1 — Seguridad activo', style: Theme.of(context).textTheme.titleLarge),
 				const SizedBox(height: 12),
-				Row(
-					children: const [
-						Expanded(child: _StatCard(label: 'Pendientes', value: '12', color: Colors.orange)),
+				const Row(
+					children: [
+						Expanded(child: _StatCard(label: 'Auth', value: 'JWT', color: Colors.blue)),
 						SizedBox(width: 12),
-						Expanded(child: _StatCard(label: 'En ejecución', value: '8', color: Colors.blue)),
+						Expanded(child: _StatCard(label: 'Permisos', value: 'Árbol', color: Colors.indigo)),
 						SizedBox(width: 12),
-						Expanded(child: _StatCard(label: 'Realizadas', value: '45', color: Colors.green)),
+						Expanded(child: _StatCard(label: 'Sucursales', value: '2', color: Colors.green)),
 						SizedBox(width: 12),
-						Expanded(child: _StatCard(label: 'Vencidas', value: '3', color: Colors.red)),
+						Expanded(child: _StatCard(label: 'Usuarios demo', value: '5', color: Colors.orange)),
 					],
-				),
-				const SizedBox(height: 24),
-				Text(
-					'OT recientes',
-					style: Theme.of(context).textTheme.titleMedium,
-				),
-				const SizedBox(height: 8),
-				Card(
-					child: Column(
-						children: const [
-							_OtListTile(
-								numero: '#1234',
-								equipo: 'Silo 103 Arena Fina',
-								tipo: 'Preventivo',
-								estado: 'pendiente',
-							),
-							Divider(height: 1),
-							_OtListTile(
-								numero: '#1235',
-								equipo: 'Bomba B2',
-								tipo: 'Correctivo',
-								estado: 'en_ejecucion',
-							),
-							Divider(height: 1),
-							_OtListTile(
-								numero: '#1236',
-								equipo: 'Filtro A1',
-								tipo: 'Preventivo',
-								estado: 'realizada',
-							),
-						],
-					),
 				),
 			],
 		);
@@ -252,8 +301,6 @@ class _ActionCard extends StatelessWidget {
 				),
 				title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
 				subtitle: Text(subtitle),
-				trailing: const Icon(Icons.chevron_right),
-				onTap: () {},
 			),
 		);
 	}
@@ -282,7 +329,7 @@ class _StatCard extends StatelessWidget {
 						const SizedBox(height: 8),
 						Text(
 							value,
-							style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+							style: Theme.of(context).textTheme.headlineSmall?.copyWith(
 										color: color,
 										fontWeight: FontWeight.bold,
 									),
@@ -309,11 +356,12 @@ class _OtListTile extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		return ListTile(
-			title: Text('$numero · $equipo'),
-			subtitle: Text(tipo),
-			trailing: StatusBadge(estado: estado),
-			onTap: () {},
+		return Card(
+			child: ListTile(
+				title: Text('$numero · $equipo'),
+				subtitle: Text(tipo),
+				trailing: StatusBadge(estado: estado),
+			),
 		);
 	}
 }

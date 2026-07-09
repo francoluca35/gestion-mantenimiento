@@ -1,6 +1,7 @@
 import {
 	Body,
 	Controller,
+	Delete,
 	Get,
 	Param,
 	ParseUUIDPipe,
@@ -13,6 +14,7 @@ import { RequiereDerecho } from '../../../common/decorators/requiere-derecho.dec
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { AsociarAlcanceDto } from './dto/asociar-alcance.dto';
 import { AsociarEquipoDto } from './dto/asociar-equipo.dto';
+import { CambiarEstadoEquipoDto } from './dto/cambiar-estado-equipo.dto';
 import { DesasociarAlcanceDto } from './dto/desasociar-alcance.dto';
 import { DesasociarEquipoDto } from './dto/desasociar-equipo.dto';
 import { CreateProcedimientoDto } from './dto/create-procedimiento.dto';
@@ -28,8 +30,20 @@ export class ProcedimientosController {
 	findAll(
 		@CurrentUser() user: AuthUser,
 		@Query('sucursalId') sucursalId?: string,
+		@Query('tipo') tipo?: string,
+		@Query('sectorResponsableId') sectorResponsableId?: string,
+		@Query('periodicidadTipo') periodicidadTipo?: string,
+		@Query('tipoEquipoId') tipoEquipoId?: string,
+		@Query('q') q?: string,
 	) {
-		return this.procedimientosService.findAll(user, sucursalId);
+		return this.procedimientosService.findAll(user, {
+			sucursalId,
+			tipo,
+			sectorResponsableId,
+			periodicidadTipo,
+			tipoEquipoId,
+			q,
+		});
 	}
 
 	@Get(':id')
@@ -52,6 +66,22 @@ export class ProcedimientosController {
 		@CurrentUser() user: AuthUser,
 	) {
 		return this.procedimientosService.update(id, dto, user);
+	}
+
+	@Delete(':id')
+	@RequiereDerecho('archivos.procedimientos.borrar')
+	remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+		return this.procedimientosService.remove(id, user);
+	}
+
+	@Patch(':id/estado-equipo')
+	@RequiereDerecho('archivos.procedimientos.asociar_a_equipo')
+	cambiarEstadoEquipo(
+		@Param('id', ParseUUIDPipe) id: string,
+		@Body() dto: CambiarEstadoEquipoDto,
+		@CurrentUser() user: AuthUser,
+	) {
+		return this.procedimientosService.cambiarEstadoEquipo(id, dto, user);
 	}
 
 	@Post(':id/asociar-equipo')

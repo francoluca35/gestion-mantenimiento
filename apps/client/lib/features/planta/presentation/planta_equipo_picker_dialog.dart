@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
-
 enum _PickerNodeKind { empresa, planta, ubicacion, equipo }
 
 class _PickerNode {
@@ -35,6 +35,9 @@ class PlantaEquipoPickerResult {
 		this.ubicacionId,
 		this.sucursalId,
 		this.emitirPrimeraOt = false,
+		this.fechaProgramacion,
+		this.tecnicoAsignadoId,
+		this.imprimirOt = false,
 	});
 
 	final PlantaPickerTargetTipo tipo;
@@ -42,7 +45,9 @@ class PlantaEquipoPickerResult {
 	final String? ubicacionId;
 	final String? sucursalId;
 	final bool emitirPrimeraOt;
-
+	final String? fechaProgramacion;
+	final String? tecnicoAsignadoId;
+	final bool imprimirOt;
 	List<String> get equipoIds =>
 			tipo == PlantaPickerTargetTipo.equipo && equipoId != null ? [equipoId!] : [];
 }
@@ -103,6 +108,10 @@ class _PlantaEquipoPickerDialogState
 	String _search = '';
 	bool _loading = true;
 	bool _emitirPrimeraOt = false;
+	bool _imprimirOt = false;
+	DateTime _fechaProgramacion = DateTime.now();
+	String? _tecnicoId;
+	List<Map<String, dynamic>> _tecnicos = [];
 	String? _error;
 
 	@override
@@ -131,11 +140,22 @@ class _PlantaEquipoPickerDialogState
 			final query = '?sucursalId=$_sucursalId';
 			final tree = await api.getList('ubicaciones/tree$query');
 			final equipos = await api.getList('equipos$query');
+			var tecnicos = <Map<String, dynamic>>[];
+			if (widget.showEmitirPrimeraOt) {
+				try {
+					tecnicos =
+							(await api.getList('ot/tecnicos?sucursalId=$_sucursalId'))
+									.cast<Map<String, dynamic>>();
+				} catch (_) {
+					tecnicos = [];
+				}
+			}
 
 			if (!mounted) return;
 			setState(() {
 				_ubicacionesTree = tree.cast<Map<String, dynamic>>();
 				_equipos = equipos.cast<Map<String, dynamic>>();
+				_tecnicos = tecnicos;
 				_selectedNode = _buildExplorerTree();
 			});
 		} catch (error) {
@@ -276,7 +296,13 @@ class _PlantaEquipoPickerDialogState
 			_PickerNodeKind.equipo => PlantaEquipoPickerResult(
 					tipo: PlantaPickerTargetTipo.equipo,
 					equipoId: node.id.replaceFirst('equipo:', ''),
-					emitirPrimeraOt: widget.showEmitirPrimeraOt ? _emitirPrimeraOt : false,
+					emitirPrimeraOt:
+							widget.showEmitirPrimeraOt ? _emitirPrimeraOt : false,
+					fechaProgramacion: _emitirPrimeraOt
+							? _formatApiDate(_fechaProgramacion)
+							: null,
+					tecnicoAsignadoId: _emitirPrimeraOt ? _tecnicoId : null,
+					imprimirOt: _emitirPrimeraOt && _imprimirOt,
 				),
 			_PickerNodeKind.ubicacion => PlantaEquipoPickerResult(
 					tipo: PlantaPickerTargetTipo.ubicacion,
@@ -308,6 +334,97 @@ class _PlantaEquipoPickerDialogState
 
 	void _selectNode(_PickerNode node) {
 		setState(() => _selectedNode = node);
+	}
+
+	String _formatApiDate(DateTime date) {
+		return '${date.year.toString().padLeft(4, '0')}-'
+				'${date.month.toString().padLeft(2, '0')}-'
+				'${date.day.toString().padLeft(2, '0')}';
+	}
+
+	Future<void> _pickFechaProgramacion() async {
+		final picked = await showDatePicker(
+			context: context,
+			initialDate: _fechaProgramacion,
+			firstDate: DateTime(2020),
+			lastDate: DateTime(2035),
+		);
+		if (picked != null) setState(() => _fechaProgramacion = picked);
+	}
+
+	Widget _buildEmitirOtOptions(BuildContext context) {
+		if (!widget.showEmitirPrimeraOt) return const SizedBox.shrink();
+		final node = _selectedNode;
+		if (node?.kind != _PickerNodeKind.equipo) return const SizedBox.shrink();
+
+		final dateFmt = DateFormat('dd/MM/yyyy');
+
+		return Column(
+			crossAxisAlignment: CrossAxisAlignment.stretch,
+			children: [
+				const Divider(height: 1),
+				Padding(
+					padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+					child: SwitchListTile(
+						contentPadding: EdgeInsets.zero,
+						title: const Text('Emitir primera OT'),
+						subtitle: const Text(
+							'Genera la OT periódica al asociar el equipo',
+							style: TextStyle(fontSize: 12),
+						),
+						value: _emitirPrimeraOt,
+						onChanged: (value) => setState(() => _emitirPrimeraOt = value),
+					),
+				),
+				if (_emitirPrimeraOt) ...[
+					Padding(
+						padding: const EdgeInsets.symmetric(horizontal: 20),
+						child: ListTile(
+							contentPadding: EdgeInsets.zero,
+							title: const Text('Fecha programación'),
+							subtitle: Text(dateFmt.format(_fechaProgramacion)),
+							trailing: const Icon(Icons.calendar_today_rounded),
+							onTap: _pickFechaProgramacion,
+						),
+					),
+					Padding(
+						padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+						child: DropdownButtonFormField<String?>(
+							value: _tecnicoId,
+							isExpanded: true,
+							decoration: const InputDecoration(
+								labelText: 'Técnico (opcional)',
+								isDense: true,
+								border: OutlineInputBorder(),
+							),
+							items: [
+								const DropdownMenuItem(value: null, child: Text('Sin asignar')),
+								..._tecnicos.map(
+									(t) => DropdownMenuItem(
+										value: t['id'] as String,
+										child: Text(t['nombreUsuario'] as String),
+									),
+								),
+							],
+							onChanged: (v) => setState(() => _tecnicoId = v),
+						),
+					),
+					Padding(
+						padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+						child: SwitchListTile(
+							contentPadding: EdgeInsets.zero,
+							title: const Text('Imprimir OT emitida'),
+							subtitle: const Text(
+								'Abre la vista de impresión al confirmar',
+								style: TextStyle(fontSize: 12),
+							),
+							value: _imprimirOt,
+							onChanged: (value) => setState(() => _imprimirOt = value),
+						),
+					),
+				],
+			],
+		);
 	}
 
 	String _breadcrumb(_PickerNode node) {
@@ -749,6 +866,7 @@ class _PlantaEquipoPickerDialogState
 												),
 						),
 						const Divider(height: 1),
+						_buildEmitirOtOptions(context),
 						Padding(
 							padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
 							child: Row(

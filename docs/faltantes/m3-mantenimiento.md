@@ -45,7 +45,8 @@ Estado actual: **módulo cerrado para desarrollo** (~95%).
 |------|-----------|-------|
 | FCM push real en Android | Media | Config `.env` Firebase |
 | Gantt programación | P2 | Mejor en M6 |
-| Búsqueda avanzada procedimientos | P2 | Búsqueda básica OK |
+| Búsqueda avanzada procedimientos | — | ✅ Sprint 1: filtros tipo/sector/periodicidad/tipo equipo + texto |
+| Toolbar procedimientos + export CSV | — | ✅ Sprint 1 |
 | Versiones / histórico procedimiento | P3 | |
 | Mano de obra y materiales en OT | M4 | Pañol |
 | Reserva materiales | M4 | |

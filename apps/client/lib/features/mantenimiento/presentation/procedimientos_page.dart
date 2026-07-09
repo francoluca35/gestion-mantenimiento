@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/layout/collapsible_panel.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../planta/presentation/planta_equipo_picker_dialog.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_user.dart';
+import 'procedimientos_export.dart';
+import 'procedimientos_list_toolbar.dart';
+import 'ot_pdf.dart';
 
 class ProcedimientosPage extends ConsumerStatefulWidget {
 	const ProcedimientosPage({super.key});
@@ -27,8 +31,16 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 	bool _saving = false;
 	bool _creating = false;
 	bool _listCollapsed = false;
+	bool _showFiltrosAvanzados = false;
 	String? _error;
 	String _search = '';
+	String? _filtroTipo;
+	String? _filtroSectorId;
+	String? _filtroPeriodicidad;
+	String? _filtroTipoEquipoId;
+	List<Map<String, dynamic>> _sectores = [];
+	List<Map<String, dynamic>> _tiposEquipo = [];
+	final Set<String> _checkedIds = {};
 
 	AuthUser? get _user => ref.read(authControllerProvider).session?.usuario;
 
@@ -48,10 +60,50 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 			_user?.tieneDerecho('archivos.procedimientos.asociar_a_equipo') == true ||
 			_user?.esAdministrador == true;
 
+	bool get _canBorrar =>
+			_user?.tieneDerecho('archivos.procedimientos.borrar') == true ||
+			_user?.esAdministrador == true;
+
 	@override
 	void initState() {
 		super.initState();
 		WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+	}
+
+	String _buildProcQuery() {
+		final params = <String>['sucursalId=${_user!.sucursalId}'];
+		if (_filtroTipo != null) params.add('tipo=$_filtroTipo');
+		if (_filtroSectorId != null) {
+			params.add('sectorResponsableId=$_filtroSectorId');
+		}
+		if (_filtroPeriodicidad != null) {
+			params.add('periodicidadTipo=$_filtroPeriodicidad');
+		}
+		if (_filtroTipoEquipoId != null) {
+			params.add('tipoEquipoId=$_filtroTipoEquipoId');
+		}
+		if (_search.trim().isNotEmpty) {
+			params.add('q=${Uri.encodeComponent(_search.trim())}');
+		}
+		return '?${params.join('&')}';
+	}
+
+	List<Map<String, dynamic>> _flattenUbicaciones(
+		List<Map<String, dynamic>> nodes, [
+		int depth = 0,
+	]) {
+		final out = <Map<String, dynamic>>[];
+		for (final node in nodes) {
+			out.add({
+				'id': node['id'],
+				'nombre': '${'  ' * depth}${node['nombre']}',
+			});
+			final children = node['children'] as List<dynamic>? ?? [];
+			out.addAll(
+				_flattenUbicaciones(children.cast<Map<String, dynamic>>(), depth + 1),
+			);
+		}
+		return out;
 	}
 
 	Future<void> _bootstrap() async {
@@ -67,12 +119,23 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 
 			final api = ref.read(apiClientProvider);
 			final sucursalId = _user!.sucursalId!;
+			final query = _buildProcQuery();
 			final procedimientos =
-					(await api.getList('procedimientos?sucursalId=$sucursalId'))
+					(await api.getList('procedimientos$query'))
 							.cast<Map<String, dynamic>>();
+			final tree = await api.getList('ubicaciones/tree?sucursalId=$sucursalId');
+			final tiposEquipo =
+					(await api.getList('tipos-equipo')).cast<Map<String, dynamic>>();
 
 			if (!mounted) return;
-			setState(() => _procedimientos = procedimientos);
+			setState(() {
+				_procedimientos = procedimientos;
+				_sectores = _flattenUbicaciones(tree.cast<Map<String, dynamic>>());
+				_tiposEquipo = tiposEquipo;
+				_checkedIds.removeWhere(
+					(id) => !procedimientos.any((p) => p['id'] == id),
+				);
+			});
 		} catch (error) {
 			if (mounted) setState(() => _error = error.toString());
 		} finally {
@@ -80,15 +143,149 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 		}
 	}
 
-	List<Map<String, dynamic>> get _filtrados {
-		if (_search.isEmpty) return _procedimientos;
-		final q = _search.toLowerCase();
-		return _procedimientos.where((p) {
-			final codigo = '${p['codigo'] ?? ''}';
-			final nombre = (p['nombre'] as String? ?? '').toLowerCase();
-			final tipo = (p['tipo'] as String? ?? '').toLowerCase();
-			return codigo.contains(q) || nombre.contains(q) || tipo.contains(q);
-		}).toList();
+	List<Map<String, dynamic>> get _filtrados => _procedimientos;
+
+	bool get _allVisibleSelected =>
+			_filtrados.isNotEmpty &&
+			_filtrados.every((p) => _checkedIds.contains(p['id'] as String));
+
+	List<Map<String, dynamic>> get _selectedProcs => _filtrados
+			.where((p) => _checkedIds.contains(p['id'] as String))
+			.toList();
+
+	void _toggleCheck(String id) {
+		setState(() {
+			if (_checkedIds.contains(id)) {
+				_checkedIds.remove(id);
+			} else {
+				_checkedIds.add(id);
+			}
+		});
+	}
+
+	void _toggleSelectAllVisible() {
+		setState(() {
+			if (_allVisibleSelected) {
+				for (final p in _filtrados) {
+					_checkedIds.remove(p['id'] as String);
+				}
+			} else {
+				for (final p in _filtrados) {
+					_checkedIds.add(p['id'] as String);
+				}
+			}
+		});
+	}
+
+	void _exportSelected() {
+		final items = _selectedProcs;
+		if (items.isEmpty) return;
+		ProcedimientosExport.download(items, suffix: 'seleccion');
+	}
+
+	void _exportFiltrados() {
+		if (_filtrados.isEmpty) return;
+		ProcedimientosExport.download(_filtrados, suffix: 'listado');
+	}
+
+	bool get _hayFiltrosActivos =>
+			_filtroTipo != null ||
+			_filtroSectorId != null ||
+			_filtroPeriodicidad != null ||
+			_filtroTipoEquipoId != null ||
+			_search.trim().isNotEmpty;
+
+	Future<void> _aplicarFiltros() => _bootstrap();
+
+	void _limpiarFiltros() {
+		setState(() {
+			_filtroTipo = null;
+			_filtroSectorId = null;
+			_filtroPeriodicidad = null;
+			_filtroTipoEquipoId = null;
+			_search = '';
+		});
+		_bootstrap();
+	}
+
+	void _modificarSeleccionado() {
+		final items = _selectedProcs;
+		if (items.length != 1) return;
+		_seleccionar(items.first);
+	}
+
+	Future<void> _eliminarSeleccionados() async {
+		final items = _selectedProcs;
+		if (items.isEmpty) return;
+
+		final confirmado = await showDialog<bool>(
+			context: context,
+			builder: (context) => AlertDialog(
+				title: const Text('Eliminar procedimiento(s)'),
+				content: Text(
+					items.length == 1
+							? '¿Eliminar el procedimiento #${items.first['codigo']}?'
+							: '¿Eliminar ${items.length} procedimientos seleccionados?',
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(context, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						onPressed: () => Navigator.pop(context, true),
+						child: const Text('Eliminar'),
+					),
+				],
+			),
+		);
+
+		if (confirmado != true) return;
+
+		try {
+			final api = ref.read(apiClientProvider);
+			for (final proc in items) {
+				await api.deleteJson('procedimientos/${proc['id']}');
+			}
+			if (!mounted) return;
+			setState(() {
+				_checkedIds.clear();
+				if (_selected != null &&
+						items.any((p) => p['id'] == _selected!['id'])) {
+					_selected = null;
+					_creating = false;
+				}
+			});
+			await _bootstrap();
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(
+						items.length == 1
+								? 'Procedimiento eliminado'
+								: '${items.length} procedimientos eliminados',
+					),
+				),
+			);
+		} catch (error) {
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text(error.toString())),
+			);
+		}
+	}
+
+	Future<void> _asociarSeleccionado() async {
+		final items = _selectedProcs;
+		if (items.length != 1) return;
+		await _seleccionar(items.first);
+		if (!mounted || _selected == null) return;
+		// El formulario ya expone la tarjeta de asociaciones.
+		ScaffoldMessenger.of(context).showSnackBar(
+			const SnackBar(
+				content: Text('Usá «Asociar equipo o sector» en el panel de asociaciones'),
+			),
+		);
 	}
 
 	void _nuevo() {
@@ -309,6 +506,20 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 												),
 									),
 								),
+								IconButton(
+									tooltip: _showFiltrosAvanzados
+											? 'Ocultar filtros'
+											: 'Filtros avanzados',
+									onPressed: () => setState(
+										() => _showFiltrosAvanzados = !_showFiltrosAvanzados,
+									),
+									icon: Icon(
+										_showFiltrosAvanzados
+												? Icons.filter_alt_off_rounded
+												: Icons.filter_alt_rounded,
+										color: _hayFiltrosActivos ? _accent : null,
+									),
+								),
 								if (_canAgregar)
 									FilledButton.icon(
 										style: FilledButton.styleFrom(backgroundColor: _accent),
@@ -340,20 +551,70 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 						),
 					Padding(
 						padding: const EdgeInsets.symmetric(horizontal: 16),
-						child: TextField(
-							decoration: InputDecoration(
-								hintText: 'Buscar por código, nombre o tipo…',
-								prefixIcon: const Icon(Icons.search_rounded, size: 20),
-								isDense: true,
-								filled: true,
-								fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-								border: OutlineInputBorder(
-									borderRadius: BorderRadius.circular(12),
-									borderSide: BorderSide.none,
+						child: Row(
+							children: [
+								Expanded(
+									child: TextField(
+										decoration: InputDecoration(
+											hintText: 'Buscar por código, nombre o descripción…',
+											prefixIcon: const Icon(Icons.search_rounded, size: 20),
+											isDense: true,
+											filled: true,
+											fillColor: scheme.surfaceContainerHighest
+													.withValues(alpha: 0.5),
+											border: OutlineInputBorder(
+												borderRadius: BorderRadius.circular(12),
+												borderSide: BorderSide.none,
+											),
+										),
+										onChanged: (value) => _search = value,
+										onSubmitted: (_) => _aplicarFiltros(),
+									),
 								),
-							),
-							onChanged: (value) => setState(() => _search = value),
+								const SizedBox(width: 8),
+								IconButton(
+									tooltip: 'Buscar',
+									onPressed: _aplicarFiltros,
+									icon: const Icon(Icons.search_rounded),
+								),
+							],
 						),
+					),
+					if (_showFiltrosAvanzados)
+						Padding(
+							padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+							child: _ProcFiltrosPanel(
+								filtroTipo: _filtroTipo,
+								filtroSectorId: _filtroSectorId,
+								filtroPeriodicidad: _filtroPeriodicidad,
+								filtroTipoEquipoId: _filtroTipoEquipoId,
+								sectores: _sectores,
+								tiposEquipo: _tiposEquipo,
+								onTipoChanged: (value) => setState(() => _filtroTipo = value),
+								onSectorChanged: (value) =>
+										setState(() => _filtroSectorId = value),
+								onPeriodicidadChanged: (value) =>
+										setState(() => _filtroPeriodicidad = value),
+								onTipoEquipoChanged: (value) =>
+										setState(() => _filtroTipoEquipoId = value),
+								onAplicar: _aplicarFiltros,
+								onLimpiar: _limpiarFiltros,
+							),
+						),
+					ProcedimientosListToolbar(
+						selectedCount: _checkedIds.length,
+						totalCount: _filtrados.length,
+						allSelected: _allVisibleSelected,
+						onToggleSelectAll: _toggleSelectAllVisible,
+						onClearSelection: () => setState(_checkedIds.clear),
+						onExportar: _exportSelected,
+						onExportarFiltrados: _exportFiltrados,
+						onModificar: _modificarSeleccionado,
+						onEliminar: _eliminarSeleccionados,
+						onAsociar: _asociarSeleccionado,
+						canModificar: _canModificar,
+						canEliminar: _canBorrar,
+						canAsociar: _canAsociar,
 					),
 					const SizedBox(height: 10),
 					Expanded(
@@ -369,6 +630,8 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 											return _ProcListTile(
 												proc: proc,
 												selected: selected,
+												checked: _checkedIds.contains(proc['id'] as String),
+												onCheck: () => _toggleCheck(proc['id'] as String),
 												onTap: () => _seleccionar(proc),
 											);
 										},
@@ -409,6 +672,7 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 		return _ProcedimientoForm(
 			key: ValueKey(_creating ? 'new' : _selected!['id']),
 			plantaNombre: _user?.sucursalNombre ?? 'Planta',
+			sectores: _sectores,
 			initial: _creating ? null : _selected,
 			saving: _saving,
 			canSave: _creating ? _canAgregar : _canModificar,
@@ -434,16 +698,21 @@ class _ProcedimientosPageState extends ConsumerState<ProcedimientosPage> {
 	}
 }
 
+
 class _ProcListTile extends StatelessWidget {
 	const _ProcListTile({
 		required this.proc,
 		required this.selected,
 		required this.onTap,
+		this.checked = false,
+		this.onCheck,
 	});
 
 	final Map<String, dynamic> proc;
 	final bool selected;
+	final bool checked;
 	final VoidCallback onTap;
+	final VoidCallback? onCheck;
 
 	@override
 	Widget build(BuildContext context) {
@@ -465,6 +734,16 @@ class _ProcListTile extends StatelessWidget {
 						padding: const EdgeInsets.all(14),
 						child: Row(
 							children: [
+								if (onCheck != null)
+									Padding(
+										padding: const EdgeInsets.only(right: 4),
+										child: Checkbox(
+											value: checked,
+											onChanged: (_) => onCheck!(),
+											activeColor: const Color(0xFF0F766E),
+											materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+										),
+									),
 								Container(
 									width: 44,
 									height: 44,
@@ -516,6 +795,7 @@ class _ProcListTile extends StatelessWidget {
 		);
 	}
 }
+
 
 class _ProcCompactTile extends StatelessWidget {
 	const _ProcCompactTile({
@@ -574,10 +854,12 @@ class _ProcCompactTile extends StatelessWidget {
 	}
 }
 
+
 class _ProcedimientoForm extends ConsumerStatefulWidget {
 	const _ProcedimientoForm({
 		super.key,
 		required this.plantaNombre,
+		required this.sectores,
 		required this.saving,
 		required this.canSave,
 		required this.onCancel,
@@ -589,6 +871,7 @@ class _ProcedimientoForm extends ConsumerStatefulWidget {
 	});
 
 	final String plantaNombre;
+	final List<Map<String, dynamic>> sectores;
 	final Map<String, dynamic>? initial;
 	final bool saving;
 	final bool canSave;
@@ -608,9 +891,12 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 		('mejora', 'Mejora'),
 		('preventivo', 'Preventivo'),
 		('preventivo_no_periodico', 'Preventivo no periódico'),
+		('predictivo', 'Predictivo'),
 	];
 
 	String _tipo = 'correctivo';
+	String? _sectorResponsableId;
+	final _nombreCtrl = TextEditingController();
 	final _descripcionCtrl = TextEditingController();
 	final _observacionesCtrl = TextEditingController();
 	final List<TextEditingController> _planillaKeyCtrls = [];
@@ -633,10 +919,6 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 	bool get _sinPeriodicidad => _tipo == 'preventivo_no_periodico';
 	bool get _periodicidadHabilitada => !_sinPeriodicidad;
 
-	String get _sectorResponsableLabel => widget.plantaNombre.isNotEmpty
-			? 'SIKA SAIC · ${widget.plantaNombre}'
-			: 'SIKA SAIC';
-
 	@override
 	void initState() {
 		super.initState();
@@ -645,6 +927,7 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 
 	@override
 	void dispose() {
+		_nombreCtrl.dispose();
 		_descripcionCtrl.dispose();
 		_observacionesCtrl.dispose();
 		for (final ctrl in _planillaKeyCtrls) {
@@ -686,6 +969,10 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 		}
 
 		_tipo = data['tipo'] as String? ?? 'correctivo';
+		_sectorResponsableId =
+				(data['sectorResponsable'] as Map<String, dynamic>?)?['id'] as String? ??
+				data['sectorResponsableId'] as String?;
+		_nombreCtrl.text = data['nombre'] as String? ?? '';
 		_descripcionCtrl.text = data['descripcion'] as String? ?? '';
 		_observacionesCtrl.text = data['observaciones'] as String? ?? '';
 		_setPlanillaFromData(data['planillaLecturas'] as List<dynamic>? ?? []);
@@ -777,6 +1064,9 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 		final payload = <String, dynamic>{
 			'tipo': _tipo,
 			'descripcion': _descripcionCtrl.text.trim(),
+			if (_nombreCtrl.text.trim().isNotEmpty) 'nombre': _nombreCtrl.text.trim(),
+			if (_sectorResponsableId != null)
+				'sectorResponsableId': _sectorResponsableId,
 			if (_observacionesCtrl.text.trim().isNotEmpty)
 				'observaciones': _observacionesCtrl.text.trim(),
 			'planillaLecturas': [
@@ -878,16 +1168,31 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 					child: Column(
 						crossAxisAlignment: CrossAxisAlignment.stretch,
 						children: [
-							InputDecorator(
-								decoration: const InputDecoration(
+							DropdownButtonFormField<String?>(
+								value: _sectorResponsableId,
+								isExpanded: true,
+								decoration: InputDecoration(
 									labelText: 'Sector responsable',
-									border: OutlineInputBorder(),
-									helperText: 'La empresa es responsable del procedimiento',
+									border: const OutlineInputBorder(),
+									helperText: widget.initial == null
+											? 'Opcional — ${widget.plantaNombre}'
+											: null,
 								),
-								child: Text(
-									_sectorResponsableLabel,
-									style: const TextStyle(fontWeight: FontWeight.w600),
-								),
+								items: [
+									const DropdownMenuItem(
+										value: null,
+										child: Text('Sin sector específico'),
+									),
+									...widget.sectores.map(
+										(s) => DropdownMenuItem(
+											value: s['id'] as String,
+											child: Text(s['nombre'] as String? ?? ''),
+										),
+									),
+								],
+								onChanged: widget.initial == null
+										? (value) => setState(() => _sectorResponsableId = value)
+										: null,
 							),
 							const SizedBox(height: 16),
 							DropdownButtonFormField<String>(
@@ -901,17 +1206,28 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 											(t) => DropdownMenuItem(value: t.$1, child: Text(t.$2)),
 										)
 										.toList(),
-								onChanged: (value) {
-									if (value == null) return;
-									setState(() {
-										_tipo = value;
-										if (value == 'preventivo') {
-											_periodicidadActiva = true;
-										} else if (value == 'preventivo_no_periodico') {
-											_periodicidadActiva = false;
-										}
-									});
-								},
+								onChanged: widget.initial == null
+										? (value) {
+												if (value == null) return;
+												setState(() {
+													_tipo = value;
+													if (value == 'preventivo') {
+														_periodicidadActiva = true;
+													} else if (value == 'preventivo_no_periodico') {
+														_periodicidadActiva = false;
+													}
+												});
+											}
+										: null,
+							),
+							const SizedBox(height: 16),
+							TextField(
+								controller: _nombreCtrl,
+								decoration: const InputDecoration(
+									labelText: 'Nombre / título',
+									border: OutlineInputBorder(),
+									hintText: 'Opcional — se usa la descripción si queda vacío',
+								),
 							),
 							const SizedBox(height: 16),
 							TextField(
@@ -1299,6 +1615,7 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 	}
 }
 
+
 class _SectionCard extends StatelessWidget {
 	const _SectionCard({required this.title, required this.child});
 
@@ -1335,6 +1652,7 @@ class _SectionCard extends StatelessWidget {
 		);
 	}
 }
+
 
 class _TimeField extends StatelessWidget {
 	const _TimeField({
@@ -1393,6 +1711,7 @@ class _TimeField extends StatelessWidget {
 		);
 	}
 }
+
 
 class _ProcUi {
 	static String periodicidadLabel(Map<String, dynamic> proc) {
@@ -1468,9 +1787,27 @@ class _EquiposAsociadosCardState extends ConsumerState<_EquiposAsociadosCard> {
 
 	bool get _puedeEmitirPrimeraOt {
 		final tipo = widget.procedimiento['tipo'] as String?;
+		final perTipo = widget.procedimiento['periodicidadTipo'] as String?;
+		final perValor = widget.procedimiento['periodicidadValor'];
 		return tipo == 'preventivo' &&
-				widget.procedimiento['periodicidadTipo'] == 'tiempo' &&
-				widget.procedimiento['periodicidadValor'] != null;
+				(perTipo == 'tiempo' || perTipo == 'contador') &&
+				perValor != null;
+	}
+
+	static String _formatDate(dynamic value) {
+		if (value == null) return '—';
+		final parsed = DateTime.tryParse(value.toString());
+		if (parsed == null) return value.toString();
+		return DateFormat('dd/MM/yyyy').format(parsed);
+	}
+
+	static String _estadoLabel(String estado) {
+		return switch (estado) {
+			'activo' => 'Activo',
+			'suspendido' => 'Suspendido',
+			'baja' => 'Baja',
+			_ => estado,
+		};
 	}
 
 	Future<void> _asociar() async {
@@ -1505,12 +1842,24 @@ class _EquiposAsociadosCardState extends ConsumerState<_EquiposAsociadosCard> {
 				case PlantaPickerTargetTipo.equipo:
 					final equipoId = result.equipoId;
 					if (equipoId == null) return;
-					await api.postJson(
+					final payload = <String, dynamic>{'equipoId': equipoId};
+					if (result.emitirPrimeraOt) {
+						payload['emitirPrimeraOt'] = true;
+						if (result.fechaProgramacion != null) {
+							payload['fechaProgramacion'] = result.fechaProgramacion;
+						}
+						if (result.tecnicoAsignadoId != null) {
+							payload['tecnicoAsignadoId'] = result.tecnicoAsignadoId;
+						}
+					}
+					final response = await api.postJson(
 						'procedimientos/${widget.procedimiento['id']}/asociar-equipo',
-						{
-							'equipoId': equipoId,
-						},
+						payload,
 					);
+					final otEmitida = response['otEmitida'] as Map<String, dynamic>?;
+					if (result.imprimirOt && otEmitida?['id'] != null) {
+						await abrirPdfOt(ref, otEmitida!['id'] as String);
+					}
 				case PlantaPickerTargetTipo.ubicacion:
 					await api.postJson(
 						'procedimientos/${widget.procedimiento['id']}/asociar-alcance',
@@ -1531,7 +1880,14 @@ class _EquiposAsociadosCardState extends ConsumerState<_EquiposAsociadosCard> {
 
 			await widget.onChanged?.call();
 			if (!mounted) return;
-			if (_puedeEmitirPrimeraOt) {
+			if (result.emitirPrimeraOt &&
+					result.tipo == PlantaPickerTargetTipo.equipo) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(
+						content: Text('Equipo asociado y primera OT periódica emitida'),
+					),
+				);
+			} else if (_puedeEmitirPrimeraOt) {
 				ScaffoldMessenger.of(context).showSnackBar(
 					SnackBar(
 						content: const Text(
@@ -1549,6 +1905,31 @@ class _EquiposAsociadosCardState extends ConsumerState<_EquiposAsociadosCard> {
 					const SnackBar(content: Text('Asociación guardada')),
 				);
 			}
+		} catch (error) {
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text(error.toString())),
+			);
+		} finally {
+			if (mounted) setState(() => _busy = false);
+		}
+	}
+
+	Future<void> _cambiarHabilitado(
+		Map<String, dynamic> asociacion,
+		bool habilitado,
+	) async {
+		final equipo = asociacion['equipo'] as Map<String, dynamic>;
+		setState(() => _busy = true);
+		try {
+			await ref.read(apiClientProvider).patchJson(
+						'procedimientos/${widget.procedimiento['id']}/estado-equipo',
+						{
+							'equipoId': equipo['id'],
+							'estado': habilitado ? 'activo' : 'suspendido',
+						},
+					);
+			await widget.onChanged?.call();
 		} catch (error) {
 			if (!mounted) return;
 			ScaffoldMessenger.of(context).showSnackBar(
@@ -1671,6 +2052,53 @@ class _EquiposAsociadosCardState extends ConsumerState<_EquiposAsociadosCard> {
 							),
 						)
 					else ...[
+						if (asociados.isNotEmpty) ...[
+							Padding(
+								padding: const EdgeInsets.only(bottom: 8),
+								child: Row(
+									children: const [
+										Expanded(
+											flex: 3,
+											child: Text(
+												'Equipo',
+												style: TextStyle(
+													fontWeight: FontWeight.w700,
+													fontSize: 12,
+												),
+											),
+										),
+										Expanded(
+											child: Text(
+												'Habilitado',
+												style: TextStyle(
+													fontWeight: FontWeight.w700,
+													fontSize: 12,
+												),
+											),
+										),
+										Expanded(
+											child: Text(
+												'Prog.',
+												style: TextStyle(
+													fontWeight: FontWeight.w700,
+													fontSize: 12,
+												),
+											),
+										),
+										Expanded(
+											child: Text(
+												'Últ. emisión',
+												style: TextStyle(
+													fontWeight: FontWeight.w700,
+													fontSize: 12,
+												),
+											),
+										),
+										SizedBox(width: 40),
+									],
+								),
+							),
+						],
 						...alcances.map((alcance) {
 							final esPlanta = alcance['tipo'] == 'planta';
 							final nombre = esPlanta
@@ -1698,23 +2126,227 @@ class _EquiposAsociadosCardState extends ConsumerState<_EquiposAsociadosCard> {
 							final equipo = asociacion['equipo'] as Map<String, dynamic>;
 							final ubicacion =
 									equipo['ubicacion'] as Map<String, dynamic>?;
-							return ListTile(
-								contentPadding: EdgeInsets.zero,
-								leading: const Icon(Icons.precision_manufacturing_outlined),
-								title: Text('${equipo['codigo']} — ${equipo['nombre']}'),
-								subtitle: Text(ubicacion?['nombre'] as String? ?? 'Equipo'),
-								trailing: widget.canAsociar
-										? IconButton(
+							final estado = asociacion['estado'] as String? ?? 'activo';
+							final habilitado = estado == 'activo';
+							return Padding(
+								padding: const EdgeInsets.symmetric(vertical: 4),
+								child: Row(
+									crossAxisAlignment: CrossAxisAlignment.start,
+									children: [
+										Expanded(
+											flex: 3,
+											child: ListTile(
+												contentPadding: EdgeInsets.zero,
+												leading: const Icon(
+													Icons.precision_manufacturing_outlined,
+													size: 20,
+												),
+												title: Text(
+													'${equipo['codigo']} — ${equipo['nombre']}',
+													style: const TextStyle(fontSize: 13),
+												),
+												subtitle: Text(
+													ubicacion?['nombre'] as String? ?? 'Equipo',
+													style: const TextStyle(fontSize: 11),
+												),
+											),
+										),
+										Expanded(
+											child: widget.canAsociar
+													? Switch(
+															value: habilitado,
+															onChanged: _busy
+																	? null
+																	: (value) => _cambiarHabilitado(
+																				asociacion,
+																				value,
+																			),
+														)
+													: Text(
+															_estadoLabel(estado),
+															style: TextStyle(
+																fontSize: 12,
+																color: habilitado
+																		? AppColors.success
+																		: AppColors.mutedText,
+															),
+														),
+										),
+										Expanded(
+											child: Text(
+												_formatDate(asociacion['fechaProgramacion']),
+												style: const TextStyle(fontSize: 12),
+											),
+										),
+										Expanded(
+											child: Text(
+												_formatDate(asociacion['ultimaEmision']),
+												style: const TextStyle(fontSize: 12),
+											),
+										),
+										if (widget.canAsociar)
+											IconButton(
 												tooltip: 'Desasociar',
 												onPressed: _busy
 														? null
 														: () => _desasociar(asociacion),
-												icon: const Icon(Icons.link_off_rounded),
+												icon: const Icon(Icons.link_off_rounded, size: 20),
 											)
-										: null,
+										else
+											const SizedBox(width: 40),
+									],
+								),
 							);
 						}),
 					],
+				],
+			),
+		);
+	}
+}
+class _ProcFiltrosPanel extends StatelessWidget {
+	const _ProcFiltrosPanel({
+		required this.filtroTipo,
+		required this.filtroSectorId,
+		required this.filtroPeriodicidad,
+		required this.filtroTipoEquipoId,
+		required this.sectores,
+		required this.tiposEquipo,
+		required this.onTipoChanged,
+		required this.onSectorChanged,
+		required this.onPeriodicidadChanged,
+		required this.onTipoEquipoChanged,
+		required this.onAplicar,
+		required this.onLimpiar,
+	});
+
+	final String? filtroTipo;
+	final String? filtroSectorId;
+	final String? filtroPeriodicidad;
+	final String? filtroTipoEquipoId;
+	final List<Map<String, dynamic>> sectores;
+	final List<Map<String, dynamic>> tiposEquipo;
+	final ValueChanged<String?> onTipoChanged;
+	final ValueChanged<String?> onSectorChanged;
+	final ValueChanged<String?> onPeriodicidadChanged;
+	final ValueChanged<String?> onTipoEquipoChanged;
+	final VoidCallback onAplicar;
+	final VoidCallback onLimpiar;
+
+	@override
+	Widget build(BuildContext context) {
+		final scheme = Theme.of(context).colorScheme;
+
+		return Container(
+			padding: const EdgeInsets.all(14),
+			decoration: BoxDecoration(
+				color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+				borderRadius: BorderRadius.circular(14),
+				border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.35)),
+			),
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.stretch,
+				children: [
+					DropdownButtonFormField<String?>(
+						value: filtroTipo,
+						isExpanded: true,
+						decoration: const InputDecoration(
+							labelText: 'Tipo de mantenimiento',
+							isDense: true,
+							border: OutlineInputBorder(),
+						),
+						items: const [
+							DropdownMenuItem(value: null, child: Text('Todos los tipos')),
+							DropdownMenuItem(value: 'preventivo', child: Text('Preventivo')),
+							DropdownMenuItem(
+								value: 'preventivo_no_periodico',
+								child: Text('Preventivo no periódico'),
+							),
+							DropdownMenuItem(value: 'correctivo', child: Text('Correctivo')),
+							DropdownMenuItem(value: 'mejora', child: Text('Mejora')),
+						],
+						onChanged: onTipoChanged,
+					),
+					const SizedBox(height: 10),
+					DropdownButtonFormField<String?>(
+						value: filtroSectorId,
+						isExpanded: true,
+						decoration: const InputDecoration(
+							labelText: 'Sector responsable',
+							isDense: true,
+							border: OutlineInputBorder(),
+						),
+						items: [
+							const DropdownMenuItem(value: null, child: Text('Todos los sectores')),
+							...sectores.map(
+								(s) => DropdownMenuItem(
+									value: s['id'] as String,
+									child: Text(s['nombre'] as String? ?? ''),
+								),
+							),
+						],
+						onChanged: onSectorChanged,
+					),
+					const SizedBox(height: 10),
+					DropdownButtonFormField<String?>(
+						value: filtroPeriodicidad,
+						isExpanded: true,
+						decoration: const InputDecoration(
+							labelText: 'Periodicidad',
+							isDense: true,
+							border: OutlineInputBorder(),
+						),
+						items: const [
+							DropdownMenuItem(value: null, child: Text('Todas')),
+							DropdownMenuItem(value: 'tiempo', child: Text('Por tiempo (días)')),
+							DropdownMenuItem(value: 'contador', child: Text('Por contador')),
+						],
+						onChanged: onPeriodicidadChanged,
+					),
+					const SizedBox(height: 10),
+					DropdownButtonFormField<String?>(
+						value: filtroTipoEquipoId,
+						isExpanded: true,
+						decoration: const InputDecoration(
+							labelText: 'Tipo de equipo asociado',
+							isDense: true,
+							border: OutlineInputBorder(),
+						),
+						items: [
+							const DropdownMenuItem(
+								value: null,
+								child: Text('Todos los tipos de equipo'),
+							),
+							...tiposEquipo.map(
+								(t) => DropdownMenuItem(
+									value: t['id'] as String,
+									child: Text(t['nombre'] as String? ?? ''),
+								),
+							),
+						],
+						onChanged: onTipoEquipoChanged,
+					),
+					const SizedBox(height: 12),
+					Row(
+						children: [
+							Expanded(
+								child: OutlinedButton(
+									onPressed: onLimpiar,
+									child: const Text('Limpiar'),
+								),
+							),
+							const SizedBox(width: 10),
+							Expanded(
+								child: FilledButton(
+									style: FilledButton.styleFrom(
+										backgroundColor: const Color(0xFF0F766E),
+									),
+									onPressed: onAplicar,
+									child: const Text('Aplicar filtros'),
+								),
+							),
+						],
+					),
 				],
 			),
 		);

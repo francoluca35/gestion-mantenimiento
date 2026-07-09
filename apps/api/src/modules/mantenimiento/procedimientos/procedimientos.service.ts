@@ -12,6 +12,7 @@ import { AsociarAlcanceDto } from './dto/asociar-alcance.dto';
 import { AsociarEquipoDto } from './dto/asociar-equipo.dto';
 import { DesasociarAlcanceDto } from './dto/desasociar-alcance.dto';
 import { DesasociarEquipoDto } from './dto/desasociar-equipo.dto';
+import { CambiarEstadoEquipoDto } from './dto/cambiar-estado-equipo.dto';
 import { CreateProcedimientoDto } from './dto/create-procedimiento.dto';
 import { UpdateProcedimientoDto } from './dto/update-procedimiento.dto';
 
@@ -27,11 +28,52 @@ export class ProcedimientosService {
 		private readonly otService: OtService,
 	) {}
 
-	async findAll(currentUser: AuthUser, sucursalIdQuery?: string) {
-		const sucursalId = resolveSucursalId(currentUser, sucursalIdQuery);
+	async findAll(
+		currentUser: AuthUser,
+		filters: {
+			sucursalId?: string;
+			tipo?: string;
+			sectorResponsableId?: string;
+			periodicidadTipo?: string;
+			tipoEquipoId?: string;
+			q?: string;
+		} = {},
+	) {
+		const sucursalId = resolveSucursalId(currentUser, filters.sucursalId);
+		const query = filters.q?.trim();
+
+		const where: Prisma.ProcedimientoWhereInput = {
+			sucursalId,
+			activo: true,
+			tipo: filters.tipo as Prisma.EnumTipoMantenimientoFilter | undefined,
+			sectorResponsableId: filters.sectorResponsableId,
+			periodicidadTipo:
+				filters.periodicidadTipo as Prisma.EnumPeriodicidadTipoNullableFilter | undefined,
+			...(filters.tipoEquipoId
+				? {
+						equipos: {
+							some: {
+								estado: 'activo',
+								equipo: { tipoEquipoId: filters.tipoEquipoId, activo: true },
+							},
+						},
+					}
+				: {}),
+			...(query
+				? {
+						OR: [
+							{ nombre: { contains: query, mode: 'insensitive' as const } },
+							{ descripcion: { contains: query, mode: 'insensitive' as const } },
+							...(Number.isFinite(Number.parseInt(query, 10))
+								? [{ codigo: Number.parseInt(query, 10) }]
+								: []),
+						],
+					}
+				: {}),
+		};
 
 		return this.prisma.procedimiento.findMany({
-			where: { sucursalId, activo: true },
+			where,
 			include: PROCEDIMIENTO_INCLUDE,
 			orderBy: { codigo: 'asc' },
 		});
@@ -63,7 +105,38 @@ export class ProcedimientosService {
 		}
 
 		assertSucursalAccess(currentUser, procedimiento.sucursalId);
-		return procedimiento;
+
+		const equipoIds = procedimiento.equipos.map((item) => item.equipoId);
+		const proximas =
+				equipoIds.length === 0
+						? []
+						: await this.prisma.ordenTrabajo.findMany({
+								where: {
+									procedimientoId: id,
+									equipoId: { in: equipoIds },
+									estado: { in: ['pendiente', 'necesaria_de_emitir'] },
+								},
+								orderBy: { fechaProgramacion: 'asc' },
+								select: {
+									equipoId: true,
+									fechaProgramacion: true,
+								},
+							});
+
+		const proximaPorEquipo = new Map<string, Date>();
+		for (const ot of proximas) {
+			if (!proximaPorEquipo.has(ot.equipoId)) {
+				proximaPorEquipo.set(ot.equipoId, ot.fechaProgramacion);
+			}
+		}
+
+		return {
+			...procedimiento,
+			equipos: procedimiento.equipos.map((item) => ({
+				...item,
+				fechaProgramacion: proximaPorEquipo.get(item.equipoId) ?? null,
+			})),
+		};
 	}
 
 	private resolvePeriodicidad(
@@ -207,6 +280,55 @@ export class ProcedimientosService {
 		});
 	}
 
+	async remove(id: string, currentUser: AuthUser) {
+		const procedimiento = await this.findOne(id, currentUser);
+
+		const otCount = await this.prisma.ordenTrabajo.count({
+			where: { procedimientoId: id },
+		});
+
+		if (otCount > 0) {
+			throw new BadRequestException(
+				'No se puede borrar: existen OT emitidas con este procedimiento',
+			);
+		}
+
+		return this.prisma.procedimiento.update({
+			where: { id: procedimiento.id },
+			data: { activo: false },
+			include: PROCEDIMIENTO_INCLUDE,
+		});
+	}
+
+	async cambiarEstadoEquipo(
+		id: string,
+		dto: CambiarEstadoEquipoDto,
+		currentUser: AuthUser,
+	) {
+		await this.findOne(id, currentUser);
+
+		const asociacion = await this.prisma.procedimientoEquipo.findUnique({
+			where: {
+				procedimientoId_equipoId: {
+					procedimientoId: id,
+					equipoId: dto.equipoId,
+				},
+			},
+		});
+
+		if (!asociacion || asociacion.estado === 'baja') {
+			throw new NotFoundException('Asociación no encontrada');
+		}
+
+		return this.prisma.procedimientoEquipo.update({
+			where: { id: asociacion.id },
+			data: { estado: dto.estado },
+			include: {
+				equipo: { include: { ubicacion: true } },
+			},
+		});
+	}
+
 	async asociarEquipo(
 		id: string,
 		dto: AsociarEquipoDto,
@@ -256,7 +378,7 @@ export class ProcedimientosService {
 			const fecha =
 				dto.fechaProgramacion ?? new Date().toISOString().slice(0, 10);
 
-			await this.otService.emitirPeriodica(
+			const otEmitida = await this.otService.emitirPeriodica(
 				{
 					sucursalId: procedimiento.sucursalId,
 					procedimientoId: id,
@@ -267,9 +389,11 @@ export class ProcedimientosService {
 				},
 				currentUser,
 			);
+
+			return { asociacion, otEmitida };
 		}
 
-		return asociacion;
+		return { asociacion, otEmitida: null };
 	}
 
 	async desasociarEquipo(

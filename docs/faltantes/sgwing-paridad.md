@@ -14,7 +14,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 
 | Bloque | Pantallas | Paridad | Prioridad siguiente |
 |--------|-----------|---------|---------------------|
-| Procedimientos | 01–07 | 🟡 ~55% | Diálogo asociar completo, búsqueda avanzada |
+| Procedimientos | 01–07 | 🟡 ~85% | Versiones (07), reserva materiales (04) |
 | Equipos | 08–15 | 🟡 ~50% | Proc. asociados por nodo, documentos, reportes |
 | OT / Programación | 16–32 | 🟡 ~75% | Filtros avanzados, columnas extendidas (P1) |
 
@@ -24,12 +24,12 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 
 | # | Captura | Función SGwing | Ruta / API | Estado | Prioridad |
 |---|---------|----------------|------------|--------|-----------|
-| 01 | `sgwing-01` | Buscar por descripción o código | `/procedimientos` | 🟡 | P2 |
-| 02 | `sgwing-02` | Búsqueda avanzada (sector, tipo, etc.) | — | ❌ | P2 |
-| 03 | `sgwing-03` | Agregar procedimiento (form completo) | `/procedimientos` | 🟡 | P2 |
+| 01 | `sgwing-01` | Buscar por descripción o código | `/procedimientos` | ✅ | P2 |
+| 02 | `sgwing-02` | Búsqueda avanzada (sector, tipo, etc.) | `GET /procedimientos?tipo&sectorResponsableId&periodicidadTipo&tipoEquipoId&q` | ✅ | P2 |
+| 03 | `sgwing-03` | Agregar procedimiento (form completo) | `/procedimientos` | ✅ | P2 |
 | 04 | `sgwing-04` | Reservar materiales | placeholder | ❌ | P1 (M4) |
-| 05 | `sgwing-05` | Resultado: Excel, modificar, eliminar, asociar si preventivo | `/procedimientos` | 🟡 | P2 |
-| 06 | `sgwing-06` | Asociar a planta / sector / equipo + imprimir OT + emitir OT | mapa + `asociar-equipo` / `asociar-alcance` | 🟡 | **P0** |
+| 05 | `sgwing-05` | Resultado: Excel, modificar, eliminar, asociar si preventivo | `/procedimientos` + toolbar | ✅ | P2 |
+| 06 | `sgwing-06` | Asociar a planta / sector / equipo + imprimir OT + emitir OT | mapa + `asociar-equipo` / `asociar-alcance` | ✅ | **P0** |
 | 07 | `sgwing-07` | Versiones del procedimiento | — | ❌ | P3 |
 
 ### Detalle 06 — asociar procedimiento
@@ -40,9 +40,9 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | Seleccionar **sector** sin expandir equipos | ✅ |
 | Seleccionar **equipo** individual | ✅ |
 | Varios procedimientos por misma máquina | ✅ |
-| Emitir primera OT al asociar (solo equipos nuevos) | 🟡 |
-| Imprimir OT / copias desde diálogo | ❌ |
-| Columna habilitado / fecha programación en grilla asociados | ❌ |
+| Emitir primera OT al asociar (solo equipos nuevos) | ✅ |
+| Imprimir OT / copias desde diálogo | ✅ |
+| Columna habilitado / fecha programación en grilla asociados | ✅ |
 
 ---
 

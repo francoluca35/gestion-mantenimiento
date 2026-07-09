@@ -12,7 +12,10 @@ SGMWin define **qué** debe hacer el sistema. Este documento define **cómo** se
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    CAPA DE PRESENTACIÓN                      │
-│  Flutter Web (admin)          Flutter Android (campo)        │
+│         Flutter — un código, dos targets                     │
+│  Web (desktop/tablet)    Android (móvil)                     │
+│  Todos los roles: técnico, supervisor, admin, gerencia       │
+│  UI adaptativa por ancho + permisos (no por plataforma)      │
 └──────────────────────────┬──────────────────────────────────┘
                            │ REST API (HTTPS)
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -81,6 +84,17 @@ M6 Indicadores ► depende de M3 (datos de OT para KPIs)
 | Derivador de OT | Perfil sobre Ubicaciones + Programación |
 | Técnico | `sector_id` fijo + perfil acotado a OT asignadas |
 | Pañolero | Perfil con derechos de Stock |
+
+### Plataformas por rol
+
+| Rol | Web | Android | Notas |
+|-----|-----|---------|-------|
+| Técnico | ✅ | ✅ | Móvil: flujo lineal OT en planta |
+| Supervisor | ✅ | ✅ | Móvil: OT sector, conformidad, alertas |
+| Admin / gerencia | ✅ | ✅ | Config pesada cómoda en desktop; consultas en móvil |
+| Pañolero | ✅ | ✅ | Móvil: aprobar solicitudes, stock rápido |
+
+Ver [`00-estado-proyecto.md`](00-estado-proyecto.md) y [`07-pantallas.md`](07-pantallas.md).
 
 ---
 

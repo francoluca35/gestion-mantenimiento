@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/auth_controller.dart';
+import '../../components/sika_logo.dart';
+import '../layout/breakpoints.dart';
 import '../theme/app_colors.dart';
 
 class AppNavItem {
@@ -12,6 +14,7 @@ class AppNavItem {
 		required this.icon,
 		required this.selectedIcon,
 		required this.route,
+		this.groupEnd = false,
 	});
 
 	final String id;
@@ -19,6 +22,7 @@ class AppNavItem {
 	final IconData icon;
 	final IconData selectedIcon;
 	final String route;
+	final bool groupEnd;
 }
 
 class AppShell extends ConsumerWidget {
@@ -31,10 +35,17 @@ class AppShell extends ConsumerWidget {
 	final String location;
 	final Widget child;
 
-	bool get _isHome => location == '/home';
+	static const sidebarExpandedWidth = 272.0;
+	static const sidebarCollapsedWidth = 72.0;
 
 	List<AppNavItem> _items({
 		required bool canPlanta,
+		required bool canProcedimientos,
+		required bool canBuscarOt,
+		required bool canEmitirNoPeriodica,
+		required bool canSolicitudes,
+		required bool canContadores,
+		required bool canOtNecesarias,
 		required bool canConfig,
 	}) {
 		return [
@@ -45,13 +56,14 @@ class AppShell extends ConsumerWidget {
 				selectedIcon: Icons.home_rounded,
 				route: '/home',
 			),
-			const AppNavItem(
-				id: 'ot',
-				label: 'Mis OT',
-				icon: Icons.assignment_outlined,
-				selectedIcon: Icons.assignment_rounded,
-				route: '/ot',
-			),
+			if (canProcedimientos)
+				const AppNavItem(
+					id: 'procedimientos',
+					label: 'Procedimientos',
+					icon: Icons.description_outlined,
+					selectedIcon: Icons.description_rounded,
+					route: '/procedimientos',
+				),
 			if (canPlanta)
 				const AppNavItem(
 					id: 'equipos',
@@ -59,6 +71,46 @@ class AppShell extends ConsumerWidget {
 					icon: Icons.precision_manufacturing_outlined,
 					selectedIcon: Icons.precision_manufacturing_rounded,
 					route: '/planta',
+				),
+			if (canBuscarOt)
+				const AppNavItem(
+					id: 'buscar-ot',
+					label: 'Buscar OT',
+					icon: Icons.search_rounded,
+					selectedIcon: Icons.manage_search_rounded,
+					route: '/ot',
+				),
+			if (canEmitirNoPeriodica)
+				const AppNavItem(
+					id: 'emitir-no-periodica',
+					label: 'OT no periódica',
+					icon: Icons.assignment_outlined,
+					selectedIcon: Icons.assignment_rounded,
+					route: '/ot/emitir-no-periodica',
+				),
+			if (canSolicitudes)
+				const AppNavItem(
+					id: 'solicitudes',
+					label: 'Solicitudes',
+					icon: Icons.campaign_outlined,
+					selectedIcon: Icons.campaign_rounded,
+					route: '/solicitudes',
+				),
+			if (canContadores)
+				const AppNavItem(
+					id: 'contadores',
+					label: 'Contadores',
+					icon: Icons.speed_outlined,
+					selectedIcon: Icons.speed_rounded,
+					route: '/contadores',
+				),
+			if (canOtNecesarias)
+				const AppNavItem(
+					id: 'ot-necesarias',
+					label: 'OT necesarias',
+					icon: Icons.pending_actions_outlined,
+					selectedIcon: Icons.pending_actions_rounded,
+					route: '/ot/necesarias',
 				),
 			if (canConfig)
 				const AppNavItem(
@@ -79,7 +131,14 @@ class AppShell extends ConsumerWidget {
 	}
 
 	String _selectedId() {
+		if (location.startsWith('/mis-ot')) return 'mis-ot';
+		if (location.startsWith('/ot/necesarias')) return 'ot-necesarias';
+		if (location.startsWith('/ot/emitir-no-periodica')) return 'emitir-no-periodica';
+		if (location.startsWith('/ot/emitir-periodica')) return 'emitir-no-periodica';
+		if (location.startsWith('/procedimientos')) return 'procedimientos';
 		if (location.startsWith('/planta')) return 'equipos';
+		if (location.startsWith('/solicitudes')) return 'solicitudes';
+		if (location.startsWith('/contadores')) return 'contadores';
 		if (location.startsWith('/usuarios') ||
 				location.startsWith('/perfiles') ||
 				location.startsWith('/sucursales') ||
@@ -87,7 +146,8 @@ class AppShell extends ConsumerWidget {
 			return 'config';
 		}
 		if (location.startsWith('/perfil')) return 'perfil';
-		if (location.startsWith('/ot')) return 'ot';
+		if (location.startsWith('/ot')) return 'buscar-ot';
+		if (location.startsWith('/home')) return 'home';
 		return 'home';
 	}
 
@@ -101,6 +161,96 @@ class AppShell extends ConsumerWidget {
 		if (context.mounted) context.go('/login');
 	}
 
+	List<AppNavItem> _technicianItems({bool includePerfil = true}) {
+		return [
+			const AppNavItem(
+				id: 'mis-ot',
+				label: 'Mis OT',
+				icon: Icons.assignment_outlined,
+				selectedIcon: Icons.assignment_rounded,
+				route: '/mis-ot',
+			),
+			if (includePerfil)
+				const AppNavItem(
+					id: 'perfil',
+					label: 'Perfil',
+					icon: Icons.person_outline,
+					selectedIcon: Icons.person_rounded,
+					route: '/perfil',
+				),
+		];
+	}
+
+	List<AppNavItem> _mobileItems({
+		required bool isTechnician,
+		required bool canBuscarOt,
+		required bool canSolicitudes,
+		required bool canPlanta,
+	}) {
+		if (isTechnician) {
+			return _technicianItems();
+		}
+
+		final items = <AppNavItem>[
+			const AppNavItem(
+				id: 'home',
+				label: 'Inicio',
+				icon: Icons.home_outlined,
+				selectedIcon: Icons.home_rounded,
+				route: '/home',
+			),
+		];
+
+		if (canBuscarOt) {
+			items.add(
+				const AppNavItem(
+					id: 'buscar-ot',
+					label: 'OT',
+					icon: Icons.search_rounded,
+					selectedIcon: Icons.manage_search_rounded,
+					route: '/ot',
+				),
+			);
+		}
+		if (canSolicitudes) {
+			items.add(
+				const AppNavItem(
+					id: 'solicitudes',
+					label: 'Solicitudes',
+					icon: Icons.campaign_outlined,
+					selectedIcon: Icons.campaign_rounded,
+					route: '/solicitudes',
+				),
+			);
+		}
+		if (canPlanta) {
+			items.add(
+				const AppNavItem(
+					id: 'equipos',
+					label: 'Planta',
+					icon: Icons.precision_manufacturing_outlined,
+					selectedIcon: Icons.precision_manufacturing_rounded,
+					route: '/planta',
+				),
+			);
+		}
+
+		items.add(
+			const AppNavItem(
+				id: 'perfil',
+				label: 'Perfil',
+				icon: Icons.person_outline,
+				selectedIcon: Icons.person_rounded,
+				route: '/perfil',
+			),
+		);
+
+		if (items.length > 5) {
+			return [...items.sublist(0, 3), items.last];
+		}
+		return items;
+	}
+
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
 		final user = ref.watch(authControllerProvider).session?.usuario;
@@ -108,372 +258,449 @@ class AppShell extends ConsumerWidget {
 				user?.esAdministrador == true;
 		final canPlanta = user?.tieneDerecho('archivos.equipos.listar') == true ||
 				user?.esAdministrador == true;
-		final items = _items(canPlanta: canPlanta, canConfig: canConfig);
+		final canProcedimientos =
+				user?.tieneDerecho('archivos.procedimientos.listar') == true ||
+				user?.esAdministrador == true;
+		final canBuscarOt =
+				user?.tieneDerecho('programacion.ordenes_trabajo.buscar_y_actualizar') == true ||
+				user?.esAdministrador == true;
+		final canEmitirNoPeriodica =
+				user?.tieneDerecho('programacion.ordenes_trabajo.emitir_no_periodica') == true ||
+				user?.esAdministrador == true;
+		final canSolicitudes =
+				user?.tieneDerecho('programacion.solicitudes_trabajo.listar') == true ||
+				user?.esAdministrador == true;
+		final canContadores =
+				user?.tieneDerecho('archivos.equipos.listar') == true ||
+				user?.esAdministrador == true;
+		final canOtNecesarias =
+				user?.tieneDerecho('programacion.ordenes_trabajo.emitir_periodica') == true ||
+				user?.esAdministrador == true;
+		final isTechnician = user?.esTecnico == true;
+
+		final width = MediaQuery.sizeOf(context).width;
+		final isMobile = width < Breakpoints.tablet;
+
+		final items = isTechnician
+				? _technicianItems(includePerfil: !isMobile)
+				: _items(
+						canPlanta: canPlanta,
+						canProcedimientos: canProcedimientos,
+						canBuscarOt: canBuscarOt,
+						canEmitirNoPeriodica: canEmitirNoPeriodica,
+						canSolicitudes: canSolicitudes,
+						canContadores: canContadores,
+						canOtNecesarias: canOtNecesarias,
+						canConfig: canConfig,
+					);
+		final mobileItems = _mobileItems(
+			isTechnician: isTechnician,
+			canBuscarOt: canBuscarOt,
+			canSolicitudes: canSolicitudes,
+			canPlanta: canPlanta,
+		);
 		final selectedId = _selectedId();
-		final isDark = Theme.of(context).brightness == Brightness.dark;
-		final pageBg = isDark ? AppColors.backgroundDark : const Color(0xFFF1F5F9);
-		final navBg = isDark ? const Color(0xFF111827) : Colors.white;
-		final scheme = Theme.of(context).colorScheme;
+		final pageBg = AppColors.backgroundDark;
+		final navBg = AppColors.black;
+
+		if (isTechnician) {
+			return Scaffold(
+				backgroundColor: pageBg,
+				body: child,
+			);
+		}
+
+		if (isMobile) {
+			final mobileIndex = mobileItems.indexWhere((item) => item.id == selectedId);
+			final navIndex = mobileIndex >= 0 ? mobileIndex : 0;
+
+			return Scaffold(
+				backgroundColor: AppColors.backgroundDark,
+				body: child,
+				bottomNavigationBar: NavigationBar(
+					selectedIndex: navIndex,
+					onDestinationSelected: (index) {
+						if (index < mobileItems.length) {
+							_go(context, mobileItems[index].route);
+						}
+					},
+					destinations: mobileItems
+							.map(
+								(item) => NavigationDestination(
+									icon: Icon(item.icon),
+									selectedIcon: Icon(item.selectedIcon),
+									label: item.label,
+								),
+							)
+							.toList(),
+				),
+			);
+		}
 
 		return Scaffold(
 			backgroundColor: pageBg,
-			body: AnimatedSwitcher(
-				duration: const Duration(milliseconds: 280),
-				switchInCurve: Curves.easeOutCubic,
-				switchOutCurve: Curves.easeInCubic,
-				transitionBuilder: (child, animation) {
-					return FadeTransition(opacity: animation, child: child);
-				},
-				child: _isHome
-						? KeyedSubtree(
-								key: const ValueKey('shell-sidebar'),
-								child: Row(
-									children: [
-										_Sidebar(
-											navBg: navBg,
-											items: items,
-											selectedId: selectedId,
-											onNavigate: (route) => _go(context, route),
-											onLogout: () => _logout(context, ref),
-											userName: user?.nombreUsuario ?? '',
-										),
-										VerticalDivider(
-											width: 1,
-											color: scheme.outlineVariant.withValues(alpha: 0.35),
-										),
-										Expanded(
-											child: AnimatedSwitcher(
-												duration: const Duration(milliseconds: 220),
-												switchInCurve: Curves.easeOutCubic,
-												child: KeyedSubtree(
-													key: ValueKey(location),
-													child: child,
-												),
-											),
-										),
-									],
-								),
-							)
-						: KeyedSubtree(
-								key: const ValueKey('shell-top'),
-								child: Column(
-									children: [
-										_TopNav(
-											navBg: navBg,
-											items: items,
-											selectedId: selectedId,
-											onNavigate: (route) => _go(context, route),
-											onLogout: () => _logout(context, ref),
-										),
-										Expanded(
-											child: AnimatedSwitcher(
-												duration: const Duration(milliseconds: 220),
-												switchInCurve: Curves.easeOutCubic,
-												child: KeyedSubtree(
-													key: ValueKey(location),
-													child: child,
-												),
-											),
-										),
-									],
-								),
-							),
+			body: Row(
+				children: [
+					_Sidebar(
+						navBg: navBg,
+						items: items,
+						selectedId: selectedId,
+						onNavigate: (route) => _go(context, route),
+						onHome: () => _go(
+							context,
+							isTechnician ? '/mis-ot' : '/home',
+						),
+						onLogout: () => _logout(context, ref),
+						userName: user?.nombreUsuario ?? '',
+						perfilNombre: user?.perfilNombre ??
+								(user?.esAdministrador == true ? 'Administrador' : ''),
+						sucursalNombre: user?.sucursalNombre ?? '',
+					),
+					Expanded(child: child),
+				],
 			),
 		);
 	}
 }
 
-class _Sidebar extends StatelessWidget {
+class _Sidebar extends StatefulWidget {
 	const _Sidebar({
 		required this.navBg,
 		required this.items,
 		required this.selectedId,
 		required this.onNavigate,
+		required this.onHome,
 		required this.onLogout,
 		required this.userName,
+		required this.perfilNombre,
+		required this.sucursalNombre,
 	});
 
 	final Color navBg;
 	final List<AppNavItem> items;
 	final String selectedId;
 	final ValueChanged<String> onNavigate;
+	final VoidCallback onHome;
 	final VoidCallback onLogout;
 	final String userName;
+	final String perfilNombre;
+	final String sucursalNombre;
 
 	@override
-	Widget build(BuildContext context) {
-		final scheme = Theme.of(context).colorScheme;
-
-		return SizedBox(
-			width: 260,
-			child: Material(
-				color: navBg,
-				child: Column(
-					crossAxisAlignment: CrossAxisAlignment.stretch,
-					children: [
-						Padding(
-							padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-							child: Column(
-								crossAxisAlignment: CrossAxisAlignment.start,
-								children: [
-									Text(
-										'SIKA',
-										style: Theme.of(context).textTheme.titleLarge?.copyWith(
-													fontWeight: FontWeight.w800,
-													color: AppColors.primary,
-												),
-									),
-									const SizedBox(height: 4),
-									Text(
-										'Mantenimiento',
-										style: Theme.of(context).textTheme.bodySmall?.copyWith(
-													color: scheme.onSurfaceVariant,
-												),
-									),
-								],
-							),
-						),
-						Expanded(
-							child: ListView(
-								padding: const EdgeInsets.symmetric(horizontal: 12),
-								children: items.map((item) {
-									final selected = item.id == selectedId;
-									return Padding(
-										padding: const EdgeInsets.only(bottom: 6),
-										child: Material(
-											color: selected
-													? AppColors.primary.withValues(alpha: 0.12)
-													: Colors.transparent,
-											borderRadius: BorderRadius.circular(12),
-											child: InkWell(
-												borderRadius: BorderRadius.circular(12),
-												onTap: () => onNavigate(item.route),
-												child: Padding(
-													padding: const EdgeInsets.symmetric(
-														horizontal: 14,
-														vertical: 12,
-													),
-													child: Row(
-														children: [
-															Icon(
-																selected ? item.selectedIcon : item.icon,
-																size: 20,
-																color: selected
-																		? AppColors.primary
-																		: scheme.onSurfaceVariant,
-															),
-															const SizedBox(width: 12),
-															Expanded(
-																child: Text(
-																	item.label,
-																	style: TextStyle(
-																		fontWeight:
-																				selected ? FontWeight.w700 : FontWeight.w500,
-																		color: selected ? AppColors.primary : null,
-																	),
-																),
-															),
-														],
-													),
-												),
-											),
-										),
-									);
-								}).toList(),
-							),
-						),
-						Padding(
-							padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-							child: Column(
-								children: [
-									Divider(
-										color: scheme.outlineVariant.withValues(alpha: 0.4),
-									),
-									if (userName.isNotEmpty) ...[
-										Padding(
-											padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-											child: Align(
-												alignment: Alignment.centerLeft,
-												child: Text(
-													userName,
-													style: Theme.of(context).textTheme.bodySmall?.copyWith(
-																color: scheme.onSurfaceVariant,
-																fontWeight: FontWeight.w500,
-															),
-												),
-											),
-										),
-									],
-									Material(
-										color: Colors.transparent,
-										borderRadius: BorderRadius.circular(12),
-										child: InkWell(
-											borderRadius: BorderRadius.circular(12),
-											onTap: onLogout,
-											child: Padding(
-												padding: const EdgeInsets.symmetric(
-													horizontal: 14,
-													vertical: 12,
-												),
-												child: Row(
-													children: [
-														Icon(
-															Icons.logout_rounded,
-															size: 20,
-															color: scheme.error,
-														),
-														const SizedBox(width: 12),
-														Text(
-															'Cerrar sesión',
-															style: TextStyle(
-																fontWeight: FontWeight.w600,
-																color: scheme.error,
-															),
-														),
-													],
-												),
-											),
-										),
-									),
-								],
-							),
-						),
-					],
-				),
-			),
-		);
-	}
+	State<_Sidebar> createState() => _SidebarState();
 }
 
-class _TopNav extends StatelessWidget {
-	const _TopNav({
-		required this.navBg,
-		required this.items,
-		required this.selectedId,
-		required this.onNavigate,
-		required this.onLogout,
-	});
+class _SidebarState extends State<_Sidebar> {
+	bool _collapsed = false;
 
-	final Color navBg;
-	final List<AppNavItem> items;
-	final String selectedId;
-	final ValueChanged<String> onNavigate;
-	final VoidCallback onLogout;
+	void _toggle() => setState(() => _collapsed = !_collapsed);
 
 	@override
 	Widget build(BuildContext context) {
-		final scheme = Theme.of(context).colorScheme;
+		final width = _collapsed
+				? AppShell.sidebarCollapsedWidth
+				: AppShell.sidebarExpandedWidth;
 
-		return Material(
-			color: navBg,
-			child: SafeArea(
-				bottom: false,
-				child: Container(
-					height: 72,
-					padding: const EdgeInsets.symmetric(horizontal: 16),
-					decoration: BoxDecoration(
-						border: Border(
-							bottom: BorderSide(
-								color: scheme.outlineVariant.withValues(alpha: 0.35),
-							),
-						),
-					),
-					child: Row(
-						children: [
-							Text(
-								'SIKA',
-								style: Theme.of(context).textTheme.titleMedium?.copyWith(
-											fontWeight: FontWeight.w800,
-											color: AppColors.primary,
+		return Row(
+			children: [
+				AnimatedContainer(
+					duration: const Duration(milliseconds: 220),
+					curve: Curves.easeOutCubic,
+					width: width,
+					child: Material(
+						color: widget.navBg,
+						child: Column(
+							crossAxisAlignment: CrossAxisAlignment.stretch,
+							children: [
+								Container(
+									color: AppColors.brandYellow,
+									padding: EdgeInsets.fromLTRB(
+										_collapsed ? 12 : 20,
+										20,
+										_collapsed ? 12 : 20,
+										16,
+									),
+									child: InkWell(
+										onTap: widget.onHome,
+										borderRadius: BorderRadius.circular(8),
+										child: _collapsed
+												? const Center(
+														child: SikaLogo(size: 28, compact: true),
+													)
+												: const SikaLogo(
+														size: 44,
+														showTagline: true,
+													),
+									),
+								),
+								Expanded(
+									child: ListView(
+										padding: EdgeInsets.fromLTRB(
+											_collapsed ? 8 : 10,
+											12,
+											_collapsed ? 8 : 10,
+											8,
 										),
-							),
-							const SizedBox(width: 20),
-							Expanded(
-								child: SingleChildScrollView(
-									scrollDirection: Axis.horizontal,
-									child: Row(
-										children: items.map((item) {
-											final selected = item.id == selectedId;
-											return Padding(
-												padding: const EdgeInsets.only(right: 10),
-												child: _SquareNavButton(
-													label: item.label,
-													icon: selected ? item.selectedIcon : item.icon,
-													selected: selected,
-													onTap: () => onNavigate(item.route),
-												),
+										children: widget.items.map((item) {
+											final selected = item.id == widget.selectedId;
+											return _NavTile(
+												item: item,
+												selected: selected,
+												collapsed: _collapsed,
+												onTap: () => widget.onNavigate(item.route),
 											);
 										}).toList(),
 									),
 								),
-							),
-							const SizedBox(width: 8),
-							IconButton(
-								tooltip: 'Cerrar sesión',
-								onPressed: onLogout,
-								icon: Icon(Icons.logout_rounded, color: scheme.error),
-							),
-						],
+								Padding(
+									padding: EdgeInsets.fromLTRB(
+										_collapsed ? 8 : 12,
+										8,
+										_collapsed ? 8 : 12,
+										16,
+									),
+									child: Column(
+										children: [
+											Divider(
+												color: Colors.white.withValues(alpha: 0.1),
+											),
+											if (!_collapsed && widget.userName.isNotEmpty) ...[
+												Padding(
+													padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+													child: Align(
+														alignment: Alignment.centerLeft,
+														child: Text(
+															widget.userName.toUpperCase(),
+															maxLines: 1,
+															overflow: TextOverflow.ellipsis,
+															style: const TextStyle(
+																color: AppColors.brandYellow,
+																fontWeight: FontWeight.w800,
+																fontSize: 12,
+																letterSpacing: 0.3,
+															),
+														),
+													),
+												),
+												if (widget.perfilNombre.isNotEmpty)
+													Padding(
+														padding: const EdgeInsets.fromLTRB(8, 0, 8, 2),
+														child: Align(
+															alignment: Alignment.centerLeft,
+															child: Text(
+																widget.perfilNombre,
+																maxLines: 1,
+																overflow: TextOverflow.ellipsis,
+																style: TextStyle(
+																	color: Colors.white.withValues(alpha: 0.85),
+																	fontSize: 12,
+																	fontWeight: FontWeight.w500,
+																),
+															),
+														),
+													),
+												if (widget.sucursalNombre.isNotEmpty)
+													Padding(
+														padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+														child: Align(
+															alignment: Alignment.centerLeft,
+															child: Text(
+																widget.sucursalNombre,
+																maxLines: 1,
+																overflow: TextOverflow.ellipsis,
+																style: TextStyle(
+																	color: Colors.white.withValues(alpha: 0.55),
+																	fontSize: 11,
+																	fontWeight: FontWeight.w500,
+																),
+															),
+														),
+													),
+											],
+											_NavActionTile(
+												label: 'Cerrar sesión',
+												icon: Icons.logout_rounded,
+												collapsed: _collapsed,
+												onTap: widget.onLogout,
+											),
+										],
+									),
+								),
+							],
+						),
 					),
 				),
+				_SidebarCollapseHandle(
+					collapsed: _collapsed,
+					onToggle: _toggle,
+				),
+			],
+		);
+	}
+}
+
+class _NavTile extends StatelessWidget {
+	const _NavTile({
+		required this.item,
+		required this.selected,
+		required this.collapsed,
+		required this.onTap,
+	});
+
+	final AppNavItem item;
+	final bool selected;
+	final bool collapsed;
+	final VoidCallback onTap;
+
+	@override
+	Widget build(BuildContext context) {
+		final icon = selected ? item.selectedIcon : item.icon;
+		final fgColor = selected ? AppColors.ink : Colors.white.withValues(alpha: 0.82);
+
+		final tile = Material(
+			color: selected ? AppColors.brandYellow : Colors.transparent,
+			borderRadius: BorderRadius.circular(12),
+			child: InkWell(
+				borderRadius: BorderRadius.circular(12),
+				onTap: onTap,
+				child: Padding(
+					padding: EdgeInsets.symmetric(
+						horizontal: collapsed ? 0 : 14,
+						vertical: 11,
+					),
+					child: collapsed
+							? Center(child: Icon(icon, size: 22, color: fgColor))
+							: Row(
+									children: [
+										Icon(icon, size: 20, color: fgColor),
+										const SizedBox(width: 12),
+										Expanded(
+											child: Text(
+												item.label,
+												maxLines: 1,
+												overflow: TextOverflow.ellipsis,
+												style: TextStyle(
+													fontWeight:
+															selected ? FontWeight.w700 : FontWeight.w500,
+													color: fgColor,
+													fontSize: 14,
+												),
+											),
+										),
+									],
+								),
+				),
+			),
+		);
+
+		return Padding(
+			padding: const EdgeInsets.only(bottom: 4),
+			child: collapsed
+					? Tooltip(message: item.label, child: tile)
+					: tile,
+		);
+	}
+}
+
+class _SidebarCollapseHandle extends StatelessWidget {
+	const _SidebarCollapseHandle({
+		required this.collapsed,
+		required this.onToggle,
+	});
+
+	final bool collapsed;
+	final VoidCallback onToggle;
+
+	@override
+	Widget build(BuildContext context) {
+		return SizedBox(
+			width: 20,
+			child: Stack(
+				clipBehavior: Clip.none,
+				children: [
+					const Positioned.fill(
+						child: VerticalDivider(
+							width: 1,
+							color: Color(0xFF2A2A2A),
+						),
+					),
+					Positioned(
+						left: -14,
+						top: 28,
+						child: Material(
+							color: AppColors.brandYellow,
+							shape: const CircleBorder(),
+							elevation: 2,
+							child: InkWell(
+								customBorder: const CircleBorder(),
+								onTap: onToggle,
+								child: Padding(
+									padding: const EdgeInsets.all(6),
+									child: Icon(
+										collapsed
+												? Icons.chevron_right_rounded
+												: Icons.chevron_left_rounded,
+										size: 18,
+										color: AppColors.ink,
+									),
+								),
+							),
+						),
+					),
+				],
 			),
 		);
 	}
 }
 
-class _SquareNavButton extends StatelessWidget {
-	const _SquareNavButton({
+class _NavActionTile extends StatelessWidget {
+	const _NavActionTile({
 		required this.label,
 		required this.icon,
-		required this.selected,
+		required this.collapsed,
 		required this.onTap,
 	});
 
 	final String label;
 	final IconData icon;
-	final bool selected;
+	final bool collapsed;
 	final VoidCallback onTap;
 
 	@override
 	Widget build(BuildContext context) {
-		final scheme = Theme.of(context).colorScheme;
+		const color = AppColors.accent;
 
-		return Material(
-			color: selected
-					? AppColors.primary.withValues(alpha: 0.12)
-					: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
-			borderRadius: BorderRadius.circular(14),
+		final tile = Material(
+			color: Colors.transparent,
+			borderRadius: BorderRadius.circular(12),
 			child: InkWell(
-				borderRadius: BorderRadius.circular(14),
+				borderRadius: BorderRadius.circular(12),
 				onTap: onTap,
-				child: AnimatedContainer(
-					duration: const Duration(milliseconds: 180),
-					curve: Curves.easeOutCubic,
-					width: 76,
-					height: 56,
-					child: Column(
-						mainAxisAlignment: MainAxisAlignment.center,
-						children: [
-							Icon(
-								icon,
-								size: 20,
-								color: selected ? AppColors.primary : scheme.onSurfaceVariant,
-							),
-							const SizedBox(height: 4),
-							Text(
-								label,
-								maxLines: 1,
-								overflow: TextOverflow.ellipsis,
-								style: TextStyle(
-									fontSize: 11,
-									fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-									color: selected ? AppColors.primary : scheme.onSurfaceVariant,
-								),
-							),
-						],
+				child: Padding(
+					padding: EdgeInsets.symmetric(
+						horizontal: collapsed ? 0 : 14,
+						vertical: 12,
 					),
+					child: collapsed
+							? Center(child: Icon(icon, size: 22, color: color))
+							: Row(
+									children: [
+										Icon(icon, size: 20, color: color),
+										const SizedBox(width: 12),
+										Text(
+											label,
+											style: const TextStyle(
+												fontWeight: FontWeight.w600,
+												color: color,
+												fontSize: 14,
+											),
+										),
+									],
+								),
 				),
 			),
 		);
+
+		return collapsed ? Tooltip(message: label, child: tile) : tile;
 	}
 }

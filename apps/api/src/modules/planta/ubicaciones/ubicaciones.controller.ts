@@ -30,6 +30,21 @@ export class UbicacionesController {
 		return this.ubicacionesService.getTree(user, sucursalId);
 	}
 
+	@Get('alcance/procedimientos')
+	@RequiereDerecho('archivos.equipos.listar')
+	getProcedimientosPorAlcance(
+		@CurrentUser() user: AuthUser,
+		@Query('sucursalId') sucursalId?: string,
+		@Query('ubicacionId') ubicacionId?: string,
+		@Query('equipoId') equipoId?: string,
+	) {
+		return this.ubicacionesService.getProcedimientosPorAlcance(user, {
+			sucursalId,
+			ubicacionId,
+			equipoId,
+		});
+	}
+
 	@Post()
 	@RequiereDerecho('archivos.ubicaciones.agregar_nodo')
 	create(@Body() dto: CreateUbicacionDto, @CurrentUser() user: AuthUser) {

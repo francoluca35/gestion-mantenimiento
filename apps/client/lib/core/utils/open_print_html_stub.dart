@@ -1,0 +1,1 @@
+void openHtmlForPrint(String html) {}

@@ -19,7 +19,7 @@ export class LecturasController {
 	}
 
 	@Post()
-	@RequiereDerecho('programacion.ordenes_trabajo.buscar_y_actualizar')
+	@RequiereDerecho('archivos.equipos.modificar')
 	create(
 		@Param('equipoId', ParseUUIDPipe) equipoId: string,
 		@Body() dto: CreateLecturaDto,

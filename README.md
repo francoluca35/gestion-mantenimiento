@@ -8,7 +8,7 @@ SGMWin es el documento de **requisitos funcionales**, no el diseño de la aplica
 
 | Capa | Tecnología |
 |------|------------|
-| App (técnicos + admin) | **Flutter** (Android + Web, un solo código) |
+| App (todos los roles) | **Flutter** (Android + Web, un solo código, UI adaptativa) |
 | Backend | NestJS + API REST |
 | Base de datos | PostgreSQL 16 + Row-Level Security |
 | Storage (fotos/PDF) | MinIO (dev) → Cloudflare R2 / S3 (prod) |
@@ -67,10 +67,10 @@ Health: http://localhost:3000/v1/health
 cd apps/client
 flutter pub get
 
-# Web (admin / desktop)
+# Web (cualquier rol con permisos)
 flutter run -d chrome --web-port=8080
 
-# Android (emulador)
+# Android (cualquier rol — supervisor, admin, técnico, etc.)
 flutter run -d android --dart-define=API_BASE_URL=http://10.0.2.2:3000/v1
 ```
 
@@ -98,6 +98,7 @@ flutter run -d android --dart-define=API_BASE_URL=http://10.0.2.2:3000/v1
 
 Ver [`docs/`](./docs/):
 
+- [**00 — Estado del proyecto**](./docs/00-estado-proyecto.md) — hecho, pendiente, mejoras
 - [01 — Módulos](./docs/01-modulos.md)
 - [02 — Entidades](./docs/02-entidades.md)
 - [03 — Relaciones](./docs/03-relaciones.md)

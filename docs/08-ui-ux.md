@@ -7,10 +7,24 @@ Principios de diseño para la experiencia moderna. SGMWin es referencia funciona
 ## Principios
 
 1. **Procesos, no formularios** — Cada pantalla responde a una acción del flujo de negocio.
-2. **Mobile-first por flujo** — Android es lineal (una acción); desktop es denso (tablas + panel).
-3. **No responsive de desktop** — Dos layouts adaptativos, no la misma pantalla achicada.
-4. **Mínimo y moderno** — Bordes redondeados, espaciado consistente, dark mode compatible.
-5. **Accesible en planta** — Botones grandes, alto contraste, funciona con una mano y guantes.
+2. **Mobile-first por flujo** — En pantalla angosta: una acción por vista; en ancha: tablas + panel.
+3. **Adaptativo, no encogido** — Dos layouts según ancho y rol; no la misma pantalla achicada.
+4. **Todos los roles, todas las plataformas** — Técnico, supervisor, admin y gerencia en Web y Android; el menú depende de permisos.
+5. **Mínimo y moderno** — Bordes redondeados, espaciado consistente, dark mode compatible.
+6. **Accesible en planta** — Botones grandes, alto contraste, funciona con una mano y guantes.
+
+### Matriz rol × plataforma
+
+| Rol | Desktop (≥900px) | Móvil (<600px) |
+|-----|------------------|----------------|
+| Técnico | Sidebar + `/ot` completo | Bottom nav: Inicio · Mis OT · Notif · Perfil |
+| Supervisor | Tabla OT + mapa lateral | Inicio · OT sector · Solicitudes · Notif |
+| Admin / gerencia | Config + tablas densas | KPIs + alertas + acciones rápidas |
+| Pañolero | Stock + solicitudes | Aprobar solicitudes · alertas stock |
+
+Breakpoints: ver `apps/client/lib/core/layout/breakpoints.dart` (600 / 900 / 1200).
+
+Estado shell: [`00-estado-proyecto.md`](00-estado-proyecto.md) — bottom nav y sidebars colapsables en `AppShell`.
 
 ---
 
@@ -20,13 +34,17 @@ Principios de diseño para la experiencia moderna. SGMWin es referencia funciona
 
 | Token | Light | Dark | Uso |
 |-------|-------|------|-----|
-| `primary` | `#1E40AF` | `#3B82F6` | Acciones principales, links |
-| `secondary` | `#64748B` | `#94A3B8` | Texto secundario, bordes |
+| `brandYellow` / `primary` | `#FFB11B` | `#FFB11B` | Marca Sika, botones, nav activo |
+| `brandRed` / `accent` | `#E30613` | `#E30613` | Marca Sika, CTAs, urgente, logo |
+| `ink` / `onPrimary` | `#1A1A1A` | `#FFFFFF` | Texto principal |
+| `white` | `#FFFFFF` | — | Superficies, texto sobre rojo |
+| `black` | `#000000` | — | Acentos tipográficos |
+| `secondary` | `#5C5C5C` | `#B0B0B0` | Texto secundario, bordes |
 | `success` | `#16A34A` | `#22C55E` | OT realizada, aprobado |
-| `warning` | `#D97706` | `#F59E0B` | OT pendiente, stock bajo |
-| `danger` | `#DC2626` | `#EF4444` | OT anulada, rechazado, urgente |
-| `surface` | `#FFFFFF` | `#1E293B` | Fondo de cards |
-| `background` | `#F8FAFC` | `#0F172A` | Fondo general |
+| `warning` | `#E6A000` | `#F59E0B` | OT en ejecución, stock bajo |
+| `danger` | `#E30613` | `#EF4444` | OT pendiente/anulada, rechazado |
+| `surface` | `#FFFFFF` | `#1E1E1E` | Fondo de cards |
+| `background` | `#FAFAFA` | `#121212` | Fondo general |
 
 ### Tipografía
 

@@ -7,10 +7,17 @@ No copia las ventanas de SGMWin — define la experiencia moderna.
 
 ## Principio
 
-| Plataforma | Paradigma | Navegación |
-|------------|-----------|------------|
-| **Desktop (Flutter Web)** | Dashboard + sidebar + panel detalle | Módulos en sidebar, contenido central, detalle lateral |
-| **Android (Flutter)** | Flujo lineal por proceso | Una acción por pantalla, botones grandes, pulgar |
+**Un solo código Flutter** compila a Web y Android. **Todos los roles** usan ambas plataformas según su contexto (oficina vs planta). El acceso a módulos lo define el **perfil de derechos**, no el dispositivo.
+
+| Plataforma | Ancho típico | Paradigma | Navegación |
+|------------|--------------|-----------|------------|
+| **Web / desktop** | ≥ 900px | Dashboard + sidebar + panel detalle | Sidebar colapsable, tablas densas, mapa lateral |
+| **Tablet** | 600–900px | Híbrido | Rail compacto o split según pantalla |
+| **Android / móvil** | < 600px | Flujo lineal por proceso | Bottom nav (3–4 ítems del rol), una acción por pantalla |
+
+> Mismo dato, misma API, distinta presentación — no achicar el desktop.
+
+Estado de implementación del shell: [`00-estado-proyecto.md`](00-estado-proyecto.md).
 
 ---
 
@@ -159,13 +166,31 @@ A-01 Inicio → A-02 Mis OT → A-03 Detalle → A-04 Checklist → A-07 Fotos �
 A-20 Inicio → A-21 Solicitudes → A-22 Detalle → Aprobar/Rechazar
 ```
 
-#### Supervisor (acceso limitado en mobile)
+#### Supervisor
 
-| # | Vista | Flujo |
-|---|-------|-------|
-| A-30 | OT de mi sector | Lista filtrada por sector |
-| A-31 | Solicitudes trabajo | Conformidad rápida |
-| A-32 | Notificaciones | OT vencidas, urgentes |
+| # | Vista | Web | Móvil |
+|---|-------|-----|-------|
+| A-30 | OT de mi sector | Tabla + mapa lateral | Lista → detalle |
+| A-31 | Solicitudes trabajo | Master-detail | Conformidad rápida |
+| A-32 | OT necesarias | Tabla + mapa | Lista + emitir lote |
+| A-33 | Notificaciones | Panel header | Lista con deep link |
+
+**Flujo móvil supervisor:**
+```
+A-30 Inicio → OT sector → Detalle → Asignar / PDF
+           → Solicitudes → Conformar → Emitir OT
+```
+
+#### Administrador / gerencia
+
+| # | Vista | Web | Móvil |
+|---|-------|-----|-------|
+| A-40 | Dashboard gerencial | D-50 completo | Cards KPI + alertas |
+| A-41 | Usuarios / perfiles | D-02, D-03, D-04 | Consulta + acciones puntuales |
+| A-42 | Config sucursal | D-05 | Solo lectura / alertas |
+| A-43 | Todas las OT (multi-sucursal) | D-21 avanzado | Lista filtrada + notificaciones |
+
+**Nota:** editor de derechos (D-04), Gantt y export masivo son **desktop-first**; en móvil se prioriza consulta y aprobaciones.
 
 ---
 
@@ -176,16 +201,20 @@ A-20 Inicio → A-21 Solicitudes → A-22 Detalle → Aprobar/Rechazar
 | S-01 | Login | Desktop + Android |
 | S-02 | Perfil de usuario | Desktop + Android |
 | S-03 | Configuración de notificaciones | Desktop + Android |
-| S-04 | Selector de sucursal | Desktop (admin multi-sucursal) |
+| S-04 | Selector de sucursal | Admin multi-sucursal (ambas plataformas) |
 
 ---
 
 ## Resumen por fase
 
-| Fase | Desktop | Android |
-|------|---------|---------|
-| **1 — MVP** | D-01, D-02, D-05, D-10, D-11, D-20, D-21, D-22, D-23 | S-01, A-01, A-02, A-03, A-08, A-09, A-11 |
-| **2** | D-24, D-25, D-30, D-31, D-40, D-42 | A-04, A-05, A-06, A-10, A-20, A-21, A-22 |
-| **3** | D-04, D-13, D-26, D-27, D-50–D-54 | A-07, A-23–A-26, A-30–A-32, offline |
+Las mismas rutas API alimentan Web y Android. La columna **Android** indica vistas con layout móvil dedicado.
 
-**Total estimado:** ~30 vistas desktop + ~20 vistas Android
+| Fase | Web (todos los roles con permiso) | Android (layouts móviles) |
+|------|-----------------------------------|---------------------------|
+| **1 — MVP** | D-01, D-02, D-05, D-10, D-11, D-20, D-21, D-22, D-23 | S-01, A-01–A-03, A-08, A-09, A-11, A-30–A-31 |
+| **2** | D-24, D-25, D-30, D-31, D-40, D-42 | A-04–A-06, A-10, A-20–A-22, A-32–A-33, shell adaptativo |
+| **3** | D-04, D-13, D-26, D-27, D-50–D-54 | A-07, A-23–A-26, A-40–A-43, offline |
+
+**Total estimado:** ~35 vistas con layout desktop + ~28 con layout móvil (muchas comparten lógica y rutas).
+
+Ver estado actual: [`00-estado-proyecto.md`](00-estado-proyecto.md).

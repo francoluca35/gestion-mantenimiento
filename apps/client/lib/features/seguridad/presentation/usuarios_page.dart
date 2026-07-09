@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
+import 'usuario_form_sheet.dart';
 
 class UsuariosPage extends ConsumerStatefulWidget {
 	const UsuariosPage({super.key});
@@ -23,13 +25,98 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
 		return ref.read(apiClientProvider).getList('usuarios');
 	}
 
+	void _refresh() => setState(() => _future = _load());
+
+	bool get _puedeAgregar {
+		final user = ref.read(authControllerProvider).session?.usuario;
+		return user?.tieneDerecho('configuracion.usuarios.agregar') ?? false;
+	}
+
+	bool get _puedeModificar {
+		final user = ref.read(authControllerProvider).session?.usuario;
+		return user?.tieneDerecho('configuracion.usuarios.modificar') ?? false;
+	}
+
+	bool get _puedeBorrar {
+		final user = ref.read(authControllerProvider).session?.usuario;
+		return user?.tieneDerecho('configuracion.usuarios.borrar') ?? false;
+	}
+
+	Future<void> _crear() async {
+		final ok = await showUsuarioForm(context, ref);
+		if (ok == true) {
+			_refresh();
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Usuario creado')),
+			);
+		}
+	}
+
+	Future<void> _editar(Map<String, dynamic> usuario) async {
+		final ok = await showUsuarioForm(context, ref, usuario: usuario);
+		if (ok == true) {
+			_refresh();
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Usuario actualizado')),
+			);
+		}
+	}
+
+	Future<void> _desactivar(Map<String, dynamic> usuario) async {
+		final nombre = usuario['nombreUsuario'] as String? ?? '';
+		final confirmado = await showDialog<bool>(
+			context: context,
+			builder: (context) => AlertDialog(
+				title: const Text('Desactivar usuario'),
+				content: Text(
+					'¿Desactivar a "$nombre"? No podrá iniciar sesión.',
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(context, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						style: FilledButton.styleFrom(
+							backgroundColor: AppColors.danger,
+						),
+						onPressed: () => Navigator.pop(context, true),
+						child: const Text('Desactivar'),
+					),
+				],
+			),
+		);
+
+		if (confirmado != true) return;
+
+		try {
+			await ref.read(apiClientProvider).deleteJson('usuarios/${usuario['id']}');
+			_refresh();
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text('Usuario "$nombre" desactivado')),
+			);
+		} catch (error) {
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text(error.toString())),
+			);
+		}
+	}
+
 	@override
 	Widget build(BuildContext context) {
+		final session = ref.watch(authControllerProvider).session;
+		final currentUserId = session?.usuario.id;
+
 		return Column(
 			children: [
 				_PageHeader(
 					title: 'Usuarios',
-					onRefresh: () => setState(() => _future = _load()),
+					onRefresh: _refresh,
+					onAdd: _puedeAgregar ? _crear : null,
 				),
 				Expanded(
 					child: FutureBuilder<List<dynamic>>(
@@ -56,6 +143,7 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
 									final perfil = usuario['perfil'] as Map<String, dynamic>?;
 									final sucursal = usuario['sucursal'] as Map<String, dynamic>?;
 									final activo = usuario['activo'] as bool? ?? false;
+									final esYo = usuario['id'] == currentUserId;
 
 									return Material(
 										color: Theme.of(context).colorScheme.surface,
@@ -65,6 +153,7 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
 												horizontal: 16,
 												vertical: 8,
 											),
+											onTap: _puedeModificar ? () => _editar(usuario) : null,
 											leading: CircleAvatar(
 												backgroundColor: Theme.of(context)
 														.colorScheme
@@ -84,13 +173,29 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
 												[
 													perfil?['nombre'] ?? 'Sin perfil',
 													sucursal?['nombre'] ?? 'Todas las sucursales',
+													if (usuario['esAdministrador'] == true)
+														'Admin',
 												].join(' · '),
 											),
-											trailing: Chip(
-												label: Text(activo ? 'Activo' : 'Inactivo'),
-												backgroundColor: activo
-														? Colors.green.withValues(alpha: 0.15)
-														: Colors.grey.withValues(alpha: 0.15),
+											trailing: Row(
+												mainAxisSize: MainAxisSize.min,
+												children: [
+													Chip(
+														label: Text(activo ? 'Activo' : 'Inactivo'),
+														backgroundColor: activo
+																? AppColors.success.withValues(alpha: 0.15)
+																: Colors.grey.withValues(alpha: 0.15),
+													),
+													if (_puedeBorrar && activo && !esYo)
+														IconButton(
+															tooltip: 'Desactivar',
+															onPressed: () => _desactivar(usuario),
+															icon: const Icon(
+																Icons.person_off_outlined,
+																size: 20,
+															),
+														),
+												],
 											),
 										),
 									);
@@ -105,10 +210,15 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
 }
 
 class _PageHeader extends StatelessWidget {
-	const _PageHeader({required this.title, required this.onRefresh});
+	const _PageHeader({
+		required this.title,
+		required this.onRefresh,
+		this.onAdd,
+	});
 
 	final String title;
 	final VoidCallback onRefresh;
+	final VoidCallback? onAdd;
 
 	@override
 	Widget build(BuildContext context) {
@@ -132,6 +242,13 @@ class _PageHeader extends StatelessWidget {
 								),
 					),
 					const Spacer(),
+					if (onAdd != null)
+						FilledButton.tonalIcon(
+							onPressed: onAdd,
+							icon: const Icon(Icons.person_add_outlined, size: 18),
+							label: const Text('Nuevo'),
+						),
+					if (onAdd != null) const SizedBox(width: 8),
 					IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh_rounded)),
 				],
 			),

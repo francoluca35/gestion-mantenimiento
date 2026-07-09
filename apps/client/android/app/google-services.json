@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "611040582990",
+    "project_id": "mantenimiento-app-75a63",
+    "storage_bucket": "mantenimiento-app-75a63.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:611040582990:android:b7b0a51426827f382c121f",
+        "android_client_info": {
+          "package_name": "com.sika.mantenimiento.gestion_mantenimiento"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNpc2DKXZh0ruwTCEnuF2kMxcMAj7SIZ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

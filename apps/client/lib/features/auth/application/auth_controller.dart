@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../../core/network/api_client.dart';
 import '../data/auth_repository.dart';
@@ -7,6 +9,7 @@ import '../domain/auth_user.dart';
 
 const _accessTokenKey = 'access_token';
 const _refreshTokenKey = 'refresh_token';
+const _fcmTokenKey = 'fcm_token';
 
 class AuthState {
 	const AuthState({
@@ -91,6 +94,7 @@ class AuthController extends StateNotifier<AuthState> {
 				),
 				bootstrapped: true,
 			);
+			await _maybeRegisterFcmToken();
 		} catch (_) {
 			await _clearTokens();
 			state = state.copyWith(clearSession: true, bootstrapped: true);
@@ -114,6 +118,7 @@ class AuthController extends StateNotifier<AuthState> {
 				loading: false,
 				bootstrapped: true,
 			);
+			await _maybeRegisterFcmToken();
 			return true;
 		} catch (error) {
 			state = state.copyWith(
@@ -138,6 +143,32 @@ class AuthController extends StateNotifier<AuthState> {
 	Future<void> _clearTokens() async {
 		await _prefs.remove(_accessTokenKey);
 		await _prefs.remove(_refreshTokenKey);
+	}
+
+	Future<void> _maybeRegisterFcmToken() async {
+		if (kIsWeb) return;
+
+		final usuarioId = state.session?.usuario.id;
+		if (usuarioId == null || usuarioId.isEmpty) return;
+
+		final lastToken = _prefs.getString(_fcmTokenKey);
+
+		try {
+			// Android suele no requerir permisos explícitos, pero igual pedimos si aplica.
+			await FirebaseMessaging.instance.requestPermission();
+			final token = await FirebaseMessaging.instance.getToken();
+			if (token == null || token.isEmpty) return;
+			if (token == lastToken) return;
+
+			await _api.postJson(
+				'dispositivos/fcm',
+				{'token': token},
+			);
+
+			await _prefs.setString(_fcmTokenKey, token);
+		} catch (_) {
+			// Notificaciones no deben romper login/bootstrapping.
+		}
 	}
 }
 

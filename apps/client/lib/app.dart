@@ -9,9 +9,18 @@ import 'features/auth/application/auth_controller.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/home/presentation/config_page.dart';
 import 'features/home/presentation/home_page.dart';
-import 'features/home/presentation/ot_page.dart';
 import 'features/home/presentation/perfil_page.dart';
+import 'features/mantenimiento/presentation/contadores_page.dart';
+import 'features/mantenimiento/presentation/emitir_ot_no_periodica_page.dart';
+import 'features/mantenimiento/presentation/emitir_ot_periodica_page.dart';
+import 'features/mantenimiento/presentation/ot_necesarias_page.dart';
+import 'features/mantenimiento/presentation/mis_ot_page.dart';
+import 'features/mantenimiento/presentation/ot_page.dart';
+import 'features/mantenimiento/presentation/procedimientos_page.dart';
+import 'features/mantenimiento/presentation/solicitudes_trabajo_page.dart';
 import 'features/planta/presentation/planta_page.dart';
+import 'features/seguridad/presentation/derechos_tree_page.dart';
+import 'features/seguridad/presentation/perfil_derechos_page.dart';
 import 'features/seguridad/presentation/perfiles_page.dart';
 import 'features/seguridad/presentation/sucursales_page.dart';
 import 'features/seguridad/presentation/usuarios_page.dart';
@@ -60,7 +69,7 @@ class GestionMantenimientoApp extends ConsumerWidget {
 			debugShowCheckedModeBanner: false,
 			theme: AppTheme.light(),
 			darkTheme: AppTheme.dark(),
-			themeMode: ThemeMode.system,
+			themeMode: ThemeMode.dark,
 			routerConfig: router,
 		);
 	}
@@ -82,9 +91,21 @@ final _routerProvider = Provider<GoRouter>((ref) {
 
 			final loggingIn = state.matchedLocation == '/login';
 			final isAuth = auth.isAuthenticated;
+			final user = auth.session?.usuario;
+			final loc = state.matchedLocation;
 
 			if (!isAuth && !loggingIn) return '/login';
-			if (isAuth && loggingIn) return '/home';
+			if (isAuth && loggingIn) {
+				return user?.esTecnico == true ? '/mis-ot' : '/home';
+			}
+
+			if (isAuth && user?.esTecnico == true) {
+				const permitidas = {'/mis-ot', '/perfil'};
+				if (loc == '/home' || !permitidas.contains(loc)) {
+					return '/mis-ot';
+				}
+			}
+
 			return null;
 		},
 		routes: [
@@ -109,6 +130,50 @@ final _routerProvider = Provider<GoRouter>((ref) {
 						pageBuilder: (context, state) => _fadePage(state, const OtPage()),
 					),
 					GoRoute(
+						path: '/mis-ot',
+						pageBuilder: (context, state) => _fadePage(state, const MisOtPage()),
+					),
+					GoRoute(
+						path: '/ot/necesarias',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const OtNecesariasPage()),
+					),
+					GoRoute(
+						path: '/ot/emitir-no-periodica',
+						pageBuilder: (context, state) {
+							final q = state.uri.queryParameters;
+							return _fadePage(
+								state,
+								EmitirOtNoPeriodicaPage(
+									equipoIdInicial: q['equipoId'],
+									procedimientoIdInicial: q['procedimientoId'],
+									comentariosInicial: q['comentarios'],
+									otReferencia: q['otReferencia'],
+								),
+							);
+						},
+					),
+					GoRoute(
+						path: '/ot/emitir-periodica',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const EmitirOtPeriodicaPage()),
+					),
+					GoRoute(
+						path: '/solicitudes',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const SolicitudesTrabajoPage()),
+					),
+					GoRoute(
+						path: '/contadores',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const ContadoresPage()),
+					),
+					GoRoute(
+						path: '/procedimientos',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const ProcedimientosPage()),
+					),
+					GoRoute(
 						path: '/planta',
 						pageBuilder: (context, state) => _fadePage(state, const PlantaPage()),
 					),
@@ -126,7 +191,26 @@ final _routerProvider = Provider<GoRouter>((ref) {
 					),
 					GoRoute(
 						path: '/perfiles',
-						pageBuilder: (context, state) => _fadePage(state, const PerfilesPage()),
+						pageBuilder: (context, state) =>
+								_fadePage(state, const PerfilesPage()),
+					),
+					GoRoute(
+						path: '/perfiles/:perfilId/derechos',
+						pageBuilder: (context, state) {
+							final extra = state.extra;
+							return _fadePage(
+								state,
+								PerfilDerechosPage(
+									perfilId: state.pathParameters['perfilId']!,
+									perfilNombre: extra is String ? extra : null,
+								),
+							);
+						},
+					),
+					GoRoute(
+						path: '/derechos',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const DerechosTreePage()),
 					),
 					GoRoute(
 						path: '/sucursales',

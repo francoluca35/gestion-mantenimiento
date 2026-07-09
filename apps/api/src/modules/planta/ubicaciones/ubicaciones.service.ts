@@ -154,6 +154,120 @@ export class UbicacionesService {
 		return ubicacion;
 	}
 
+	async collectDescendantUbicacionIds(
+		sucursalId: string,
+		rootId: string,
+	): Promise<string[]> {
+		const nodes = await this.prisma.ubicacion.findMany({
+			where: { sucursalId, activa: true },
+			select: { id: true, parentId: true },
+		});
+
+		const childrenMap = new Map<string, string[]>();
+		for (const node of nodes) {
+			if (!node.parentId) continue;
+			const list = childrenMap.get(node.parentId) ?? [];
+			list.push(node.id);
+			childrenMap.set(node.parentId, list);
+		}
+
+		const result = new Set<string>([rootId]);
+		const stack = [rootId];
+		while (stack.length > 0) {
+			const current = stack.pop()!;
+			for (const childId of childrenMap.get(current) ?? []) {
+				if (!result.has(childId)) {
+					result.add(childId);
+					stack.push(childId);
+				}
+			}
+		}
+
+		return [...result];
+	}
+
+	async getProcedimientosPorAlcance(
+		currentUser: AuthUser,
+		query: { sucursalId?: string; ubicacionId?: string; equipoId?: string },
+	) {
+		const sucursalId = resolveSucursalId(currentUser, query.sucursalId);
+
+		if (query.equipoId) {
+			const equipo = await this.prisma.equipo.findUnique({
+				where: { id: query.equipoId },
+			});
+			if (!equipo || equipo.sucursalId !== sucursalId) {
+				throw new NotFoundException('Equipo no encontrado');
+			}
+
+			return this.prisma.procedimientoEquipo.findMany({
+				where: { equipoId: query.equipoId, estado: 'activo' },
+				include: {
+					procedimiento: {
+						select: {
+							id: true,
+							codigo: true,
+							nombre: true,
+							tipo: true,
+							periodicidadTipo: true,
+							periodicidadValor: true,
+						},
+					},
+				},
+				orderBy: { procedimiento: { codigo: 'asc' } },
+			});
+		}
+
+		if (query.ubicacionId) {
+			const ubicacion = await this.findOneOrFail(query.ubicacionId);
+			assertSucursalAccess(currentUser, ubicacion.sucursalId);
+
+			return this.prisma.procedimientoAlcance.findMany({
+				where: {
+					ubicacionId: query.ubicacionId,
+					estado: 'activo',
+					procedimiento: { sucursalId, activo: true },
+				},
+				include: {
+					procedimiento: {
+						select: {
+							id: true,
+							codigo: true,
+							nombre: true,
+							tipo: true,
+							periodicidadTipo: true,
+							periodicidadValor: true,
+						},
+					},
+					ubicacion: { select: { id: true, nombre: true } },
+				},
+				orderBy: { procedimiento: { codigo: 'asc' } },
+			});
+		}
+
+		return this.prisma.procedimientoAlcance.findMany({
+			where: {
+				sucursalAlcanceId: sucursalId,
+				estado: 'activo',
+				procedimiento: { activo: true },
+			},
+			include: {
+				procedimiento: {
+					select: {
+						id: true,
+						codigo: true,
+						nombre: true,
+						tipo: true,
+						periodicidadTipo: true,
+						periodicidadValor: true,
+					},
+				},
+				sucursalAlcance: { select: { id: true, nombre: true } },
+			},
+			orderBy: { procedimiento: { codigo: 'asc' } },
+		});
+	}
+
 	private async isDescendant(nodeId: string, ancestorId: string): Promise<boolean> {
 		let current = await this.prisma.ubicacion.findUnique({ where: { id: nodeId } });
 		while (current?.parentId) {

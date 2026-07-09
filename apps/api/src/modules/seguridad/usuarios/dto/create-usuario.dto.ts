@@ -4,9 +4,9 @@ import {
 	IsEnum,
 	IsOptional,
 	IsString,
-	IsUUID,
 	MinLength,
 } from 'class-validator';
+import { IsAppUuid } from '../../../../common/decorators/is-app-uuid.decorator';
 import { SupervisaSolicitudesOt } from '@prisma/client';
 
 export class CreateUsuarioDto {
@@ -23,11 +23,15 @@ export class CreateUsuarioDto {
 	email?: string;
 
 	@IsOptional()
-	@IsUUID()
+	@IsAppUuid()
 	sucursalId?: string;
 
 	@IsOptional()
-	@IsUUID()
+	@IsAppUuid()
+	sectorId?: string;
+
+	@IsOptional()
+	@IsAppUuid()
 	perfilId?: string;
 
 	@IsOptional()

@@ -1,8 +1,9 @@
-import { IsInt, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsInt, IsOptional, Min } from 'class-validator';
+import { IsAppUuid } from '../../../../common/decorators/is-app-uuid.decorator';
 
 export class MoverUbicacionDto {
 	@IsOptional()
-	@IsUUID()
+	@IsAppUuid()
 	parentId?: string | null;
 
 	@IsOptional()

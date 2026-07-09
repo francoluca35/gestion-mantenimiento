@@ -1,8 +1,8 @@
 # Faltantes — Módulo 1 (Seguridad)
 
-Estado actual: **fundación usable**, no módulo cerrado.
+Estado actual: **módulo cerrado para desarrollo** (~92%). Pendiente solo paridad 1:1 SGMWin y extras opcionales.
 
-Sirve para seguir con M2/M3 (auth + guards en API). Falta cerrar administración, RLS y UI completa.
+**Estado global:** [`../00-estado-proyecto.md`](../00-estado-proyecto.md)
 
 ---
 
@@ -11,8 +11,8 @@ Sirve para seguir con M2/M3 (auth + guards en API). Falta cerrar administración
 | Criterio | Estado |
 |----------|--------|
 | Todo endpoint valida permisos contra el árbol de Derechos | Hecho (`JwtAuthGuard` + `DerechoGuard`) |
-| RLS de PostgreSQL filtra por `sucursal_id` | **Falta** |
-| Admin global (`sucursal_id = NULL`) ve todas las sucursales | Hecho |
+| RLS de PostgreSQL filtra por `sucursal_id` | **Hecho** — migración `20260709040000_rls_sucursal` |
+| Admin global (`sucursal_id = NULL`) ve todas las sucursales | Hecho (flag + RLS `app.es_admin_global`) |
 
 ---
 
@@ -21,157 +21,48 @@ Sirve para seguir con M2/M3 (auth + guards en API). Falta cerrar administración
 ### Backend
 
 - Login / refresh / logout / `GET /auth/me` (JWT)
+- `PATCH /auth/clave`, `GET /auth/sesiones`, `POST /auth/sesiones/revocar-todas`
 - Tablas: `sucursales`, `usuarios`, `perfiles`, `derechos`, `perfil_derechos`, `sesiones`
 - CRUD API: usuarios, perfiles, sucursales
+- `sectorId` en usuarios (FK a `ubicaciones`)
 - Árbol de derechos (seed parcial) + resolución Total/Parcial en `PermisosService`
 - Flags: `es_administrador`, `supervisa_sucursales`, `supervisa_solicitudes_ot/oc`, `monto_maximo_oc`
-- Aislamiento por sucursal en **lógica NestJS** (no en DB)
+- Aislamiento por sucursal en **NestJS + RLS PostgreSQL**
+- RLS contexto por request (`RlsInterceptor` + `PrismaService` con `set_config`)
 - Seed demo: `admin`, `tecnico`, `panolero`, `supervisor`, `admin.virrey` (clave `Sika123!`)
+- Tests e2e: `apps/api/test/auth-security.e2e-spec.ts` (6 casos)
 
 ### Flutter
 
 - Login real + sesión persistida
-- Redirect según autenticación
+- Redirect según autenticación y rol (técnico → `/mis-ot`)
 - Home con pestaña Config (si tiene permiso)
-- Listados de solo lectura: Usuarios, Perfiles, Sucursales
-- Perfil + logout
+- CRUD: Usuarios, Perfiles, Sucursales (formularios sheet)
+- Editor derechos Total/Parcial (`/perfiles/:id/derechos`)
+- Árbol derechos solo lectura (`/derechos`)
+- Perfil: cambio de clave, listado de sesiones, revocar todas
+- Usuario: asignación de sector (árbol ubicaciones por sucursal)
 
 ---
 
-## Qué falta
+## Qué falta (no bloquea M2/M3)
 
-### 1. Row-Level Security (PostgreSQL) — prioridad alta
+### 1. Árbol de derechos completo 1:1 SGMWin — prioridad media
 
-Hoy el filtro por sucursal es solo en servicios NestJS. Si hay un bug o query mal armada, se puede filtrar mal.
+El seed actual es un **subconjunto** útil para M1–M3. Falta completar según `docs/05-permisos.md` (catálogos, Gantt, stock, etc.).
 
-Falta:
-
-- Políticas RLS en tablas con `sucursal_id` (usuarios y las que vengan en M2+)
-- Setear contexto de sesión por request (`app.current_sucursal_id`, `app.es_admin_global`, `app.supervisa_sucursales`)
-- Probar que un usuario de Virrey no ve datos de Rosario aunque se equivoque el service
-
-Referencia: `docs/03-relaciones.md`
-
----
-
-### 2. UI de administración (Flutter) — prioridad alta
-
-La API ya permite crear/editar; la app solo lista.
-
-| Pantalla | Falta |
-|----------|-------|
-| Usuarios | Formulario alta / edición / desactivar; asignar sucursal, perfil, flags |
-| Perfiles | Alta / edición / desactivar |
-| Sucursales | Alta / edición / desactivar |
-| Derechos por perfil | Editor checklist Total/Parcial (sección 12 del spec) |
-
-Sin esto, la configuración se hace solo por seed o llamadas manuales a la API.
-
----
-
-### 3. Editor de derechos Total/Parcial — prioridad alta
-
-API lista:
-
-- `GET /perfiles/:id/derechos`
-- `PUT /perfiles/:id/derechos`
-
-Falta en Flutter:
-
-- Árbol expandible
-- Checkbox por nodo
-- Modo **Total** (padre habilita todos los hijos) vs **Parcial** (hijos sueltos)
-- Guardar y recargar estado
-
-Es la pantalla que en SGMWin define el perfil; sin ella el modelo de permisos no se administra desde la app.
-
----
-
-### 4. Árbol de derechos completo 1:1 SGMWin — prioridad media
-
-El seed actual es un **subconjunto** útil para M1–M3 (archivos, programación, stock/pañol, análisis, configuración).
-
-Falta completar según `docs/05-permisos.md`:
-
-- Catálogos generales (eventos, tareas, causas, síntomas, etc.)
-- Contadores, gestión (backlog, Gantt, presupuesto)
-- Movimientos, reserva, vale de consumo, préstamo de herramientas
-- Análisis de stock completo
-- Parámetros, reportes, copia de seguridad
-- Nodos reservados documentados (reabrir OT, etc.)
-
-No bloquea desarrollo, pero sí la paridad con el manual.
-
----
-
-### 5. `sector_id` en Usuario — prioridad media
-
-El campo existe en el modelo, pero:
-
-- No hay FK real a `Ubicacion` (M2 aún no existe)
-- No hay UI para asignar sector al usuario
-- No se usa en filtros de “solo su sector”
-
-Depende de **M2 — Planta** (árbol de ubicaciones). Completar cuando exista Ubicacion.
-
----
-
-### 6. Validaciones y reglas de negocio finas — prioridad media
+### 2. Validaciones opcionales — prioridad baja
 
 | Regla | Estado |
 |-------|--------|
-| No desactivar el propio usuario | Hecho |
-| Solo admin crea otros administradores | Hecho |
-| No listar usuarios de otra sucursal (sin supervisar) | Hecho en service |
-| Forzar `es_administrador` / generar perfiles solo por flag (no por árbol) | Parcial (flag existe; UI no lo refleja del todo) |
-| Historial de sesiones / “cerrar todas las sesiones” | Falta |
-| Cambio de clave por el propio usuario | Falta |
-| Recuperación de clave / bloqueo por intentos fallidos | Falta (opcional) |
+| Recuperación de clave / bloqueo por intentos | Falta (opcional) |
+| Invalidar JWT access al cambiar clave | Parcial — se revocan sesiones DB; access token sigue válido hasta expirar |
+| Pantalla **admin_sucursal** (dashboard dedicado) | Falta (opcional) |
 
----
+### 3. Tests adicionales — prioridad baja
 
-### 7. Pantallas / flujos pendientes del spec — prioridad baja
-
-Del spec original (sección 12):
-
-- Pantalla **admin_sucursal** (dashboard con rama Configuración, no Análisis)
-- Asignar usuarios a sucursal desde la ficha de sucursal
-- Ver árbol de derechos global (`GET /derechos/tree`) en UI (solo lectura, para soporte)
-
----
-
-### 8. Tests — prioridad media
-
-Falta:
-
-- Tests e2e de login / refresh / logout
-- Tests de permisos (técnico no lista usuarios; admin sí)
-- Tests de aislamiento por sucursal
-- Tests de resolución Total/Parcial del árbol
-
----
-
-## Orden sugerido para cerrar M1
-
-1. Formularios CRUD en Flutter (usuarios, perfiles, sucursales)
-2. Editor de derechos Total/Parcial
-3. RLS en PostgreSQL
-4. Ampliar seed del árbol de derechos
-5. Tests de auth y permisos
-6. `sector_id` cuando exista M2
-7. Extras (cambio de clave, admin_sucursal)
-
----
-
-## Qué no hace falta para avanzar a M2
-
-Se puede empezar **M2 — Planta** con lo actual:
-
-- Auth JWT funciona
-- Guards protegen endpoints nuevos con `@RequiereDerecho(...)`
-- Usuarios demo listos para probar roles
-
-Lo pendiente de M1 se puede ir cerrando en paralelo o en un sprint de “hardening” antes de producción.
+- Resolución Total/Parcial del árbol (unit)
+- Más casos RLS directos en DB (equipos cross-sucursal por ID)
 
 ---
 
@@ -180,5 +71,4 @@ Lo pendiente de M1 se puede ir cerrando en paralelo o en un sprint de “hardeni
 - `docs/01-modulos.md` — alcance M1
 - `docs/05-permisos.md` — árbol completo y reglas
 - `docs/06-apis.md` — contrato REST M1
-- `docs/07-pantallas.md` — D-01 a D-05 (login, usuarios, perfiles, derechos, sucursales)
-- `docs/09-roadmap.md` — Sprint 1–2
+- `docs/07-pantallas.md` — D-01 a D-05

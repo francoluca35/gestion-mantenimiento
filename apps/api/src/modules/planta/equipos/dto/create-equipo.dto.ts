@@ -1,14 +1,15 @@
-import { IsObject, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsAppUuid } from '../../../../common/decorators/is-app-uuid.decorator';
 
 export class CreateEquipoDto {
 	@IsOptional()
-	@IsUUID()
+	@IsAppUuid()
 	sucursalId?: string;
 
-	@IsUUID()
+	@IsAppUuid()
 	ubicacionId!: string;
 
-	@IsUUID()
+	@IsAppUuid()
 	tipoEquipoId!: string;
 
 	@IsString()

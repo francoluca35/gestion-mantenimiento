@@ -9,7 +9,9 @@ import { PrismaService } from '../../../database/prisma.service';
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { assertSucursalAccess, resolveSucursalId } from '../planta.scope';
 import { CreateEquipoDto } from './dto/create-equipo.dto';
+import { DuplicarEquipoDto } from './dto/duplicar-equipo.dto';
 import { MoverEquipoDto } from './dto/mover-equipo.dto';
+import { PegarEquipoDto } from './dto/pegar-equipo.dto';
 import { UpdateEquipoDto } from './dto/update-equipo.dto';
 
 @Injectable()
@@ -189,5 +191,146 @@ export class EquiposService {
 				tipoEquipo: true,
 			},
 		});
+	}
+
+	async getHistorial(id: string, currentUser: AuthUser) {
+		await this.findOne(id, currentUser);
+
+		return this.prisma.historialEquipo.findMany({
+			where: { equipoId: id },
+			include: {
+				usuario: { select: { id: true, nombreUsuario: true } },
+				ot: { select: { id: true, numero: true, estado: true } },
+			},
+			orderBy: { fecha: 'desc' },
+			take: 50,
+		});
+	}
+
+	async getProcedimientos(id: string, currentUser: AuthUser) {
+		await this.findOne(id, currentUser);
+
+		return this.prisma.procedimientoEquipo.findMany({
+			where: { equipoId: id, estado: 'activo' },
+			include: {
+				procedimiento: {
+					select: {
+						id: true,
+						codigo: true,
+						nombre: true,
+						tipo: true,
+						periodicidadTipo: true,
+						periodicidadValor: true,
+					},
+				},
+			},
+			orderBy: { procedimiento: { codigo: 'asc' } },
+		});
+	}
+
+	private async generarCodigoDuplicado(codigo: string, sucursalId: string) {
+		let candidate = `${codigo}-C`;
+		let n = 1;
+		while (
+			await this.prisma.equipo.findFirst({
+				where: { sucursalId, codigo: candidate },
+			})
+		) {
+			n++;
+			candidate = `${codigo}-C${n}`;
+		}
+		return candidate;
+	}
+
+	async duplicar(id: string, dto: DuplicarEquipoDto, currentUser: AuthUser) {
+		const source = await this.findOne(id, currentUser);
+		const ubicacionId = dto.ubicacionId ?? source.ubicacionId;
+
+		const ubicacion = await this.prisma.ubicacion.findUnique({
+			where: { id: ubicacionId },
+			include: { _count: { select: { children: true } } },
+		});
+
+		if (!ubicacion || ubicacion.sucursalId !== source.sucursalId) {
+			throw new BadRequestException('Ubicación destino inválida');
+		}
+
+		if (ubicacion._count.children > 0) {
+			throw new BadRequestException('El destino debe ser un nodo hoja');
+		}
+
+		const nuevoCodigo = await this.generarCodigoDuplicado(source.codigo, source.sucursalId);
+
+		const equipo = await this.prisma.equipo.create({
+			data: {
+				sucursalId: source.sucursalId,
+				ubicacionId,
+				tipoEquipoId: source.tipoEquipoId,
+				nombre: `${source.nombre} (copia)`,
+				codigo: nuevoCodigo,
+				detalle: source.detalle as Prisma.InputJsonValue,
+			},
+			include: {
+				ubicacion: true,
+				tipoEquipo: true,
+			},
+		});
+
+		if (source.componentes.length > 0) {
+			await this.prisma.componente.createMany({
+				data: source.componentes.map((componente) => ({
+					equipoId: equipo.id,
+					nombre: componente.nombre,
+					codigo: componente.codigo,
+					detalle: componente.detalle as Prisma.InputJsonValue,
+				})),
+			});
+		}
+
+		return equipo;
+	}
+
+	async pegarComoComponentes(
+		targetEquipoId: string,
+		dto: PegarEquipoDto,
+		currentUser: AuthUser,
+	) {
+		const target = await this.findOne(targetEquipoId, currentUser);
+		const source = await this.findOne(dto.sourceEquipoId, currentUser);
+
+		if (target.id === source.id) {
+			throw new BadRequestException('No se puede pegar un equipo sobre sí mismo');
+		}
+
+		if (target.sucursalId !== source.sucursalId) {
+			throw new BadRequestException('Los equipos deben pertenecer a la misma planta');
+		}
+
+		const sourceDetalle =
+			typeof source.detalle === 'object' && source.detalle !== null
+				? (source.detalle as Record<string, unknown>)
+				: {};
+
+		await this.prisma.componente.createMany({
+			data: [
+				{
+					equipoId: target.id,
+					nombre: source.nombre,
+					codigo: source.codigo,
+					detalle: {
+						...sourceDetalle,
+						origenEquipoId: source.id,
+					} as Prisma.InputJsonValue,
+				},
+				...source.componentes.map((componente) => ({
+					equipoId: target.id,
+					nombre: componente.nombre,
+					codigo: componente.codigo,
+					detalle: componente.detalle as Prisma.InputJsonValue,
+				})),
+			],
+		});
+
+		return this.findOne(target.id, currentUser);
 	}
 }

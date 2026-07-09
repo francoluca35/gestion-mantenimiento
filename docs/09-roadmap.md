@@ -2,6 +2,8 @@
 
 Plan por fases con criterios de aceptación, estimaciones y dependencias.
 
+**Estado actual detallado:** [`00-estado-proyecto.md`](00-estado-proyecto.md)
+
 ---
 
 ## Resumen
@@ -107,13 +109,15 @@ Plan por fases con criterios de aceptación, estimaciones y dependencias.
 |-------|---------|
 | FCM setup | Firebase + registro de tokens |
 | Evento ot.asignada | Push al técnico |
-| Flutter Android | Inicio, Mis OT, Detalle, Firma, Cerrar |
-| Flutter Web básico | Login, dashboard, tabla OT, emitir |
+| Flutter Android — técnico | Inicio, Mis OT, Detalle, Firma, Cerrar |
+| Flutter Android — supervisor | OT sector, solicitudes, notificaciones |
+| Flutter Web | Login, dashboard, tabla OT, emitir (todos los roles) |
+| Shell adaptativo | `AdaptiveScaffold` + bottom nav por rol en móvil |
 
 **Criterio de aceptación:**
 - Técnico recibe push al asignarle OT
 - Técnico ve, ejecuta y cierra OT desde Android
-- Admin emite OT desde web
+- Supervisor y admin pueden operar desde web **y** Android según permisos
 
 ---
 

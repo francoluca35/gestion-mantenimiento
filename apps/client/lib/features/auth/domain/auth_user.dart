@@ -26,6 +26,20 @@ class AuthUser {
 		return derechos.contains(codigo);
 	}
 
+	/// Perfil operativo de campo — solo Mis OT, sin emisión ni supervisión.
+	bool get esTecnico {
+		if (esAdministrador || supervisaSucursales) return false;
+		final perfil = perfilNombre?.toLowerCase().trim() ?? '';
+		if (perfil.contains('técnico') || perfil.contains('tecnico')) {
+			return true;
+		}
+		return tieneDerecho('programacion.ordenes_trabajo.buscar_y_actualizar') &&
+				!tieneDerecho('programacion.ordenes_trabajo.emitir_no_periodica') &&
+				!tieneDerecho('programacion.ordenes_trabajo.emitir_periodica') &&
+				!tieneDerecho('programacion.solicitudes_trabajo.listar') &&
+				!tieneDerecho('configuracion.usuarios.listar');
+	}
+
 	factory AuthUser.fromJson(Map<String, dynamic> json) {
 		final sucursal = json['sucursal'] as Map<String, dynamic>?;
 		final perfil = json['perfil'] as Map<String, dynamic>?;

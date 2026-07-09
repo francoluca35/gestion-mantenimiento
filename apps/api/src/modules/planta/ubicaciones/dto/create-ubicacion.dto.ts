@@ -1,12 +1,13 @@
-import { IsInt, IsOptional, IsString, IsUUID, Min, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsAppUuid } from '../../../../common/decorators/is-app-uuid.decorator';
 
 export class CreateUbicacionDto {
 	@IsOptional()
-	@IsUUID()
+	@IsAppUuid()
 	sucursalId?: string;
 
 	@IsOptional()
-	@IsUUID()
+	@IsAppUuid()
 	parentId?: string;
 
 	@IsString()

@@ -15,7 +15,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | Bloque | Pantallas | Paridad | Prioridad siguiente |
 |--------|-----------|---------|---------------------|
 | Procedimientos | 01–07 | 🟡 ~85% | Versiones (07), reserva materiales (04) |
-| Equipos | 08–15 | 🟡 ~50% | Proc. asociados por nodo, documentos, reportes |
+| Equipos | 08–15 | ✅ ~95% | Repuestos por equipo (M4) |
 | OT / Programación | 16–32 | 🟡 ~75% | Filtros avanzados, columnas extendidas (P1) |
 
 ---
@@ -51,13 +51,13 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | # | Captura | Función SGwing | Ruta / API | Estado | Prioridad |
 |---|---------|----------------|------------|--------|-----------|
 | 08 | `sgwing-08` | Mapa planta SIKA → sector → equipo | `/planta` | ✅ | — |
-| 09 | `sgwing-09` | Toolbar: agregar, modificar, eliminar, listar, copiar, mover, pegar | `/planta` | 🟡 | P2 |
-| 10 | `sgwing-10` | Historial OT y procedimientos | tab Historial + `GET equipos/:id/historial` | 🟡 | P2 |
-| 11 | `sgwing-11` | Agregar equipo con campos opcionales dinámicos | `/planta` | 🟡 | P1 |
-| 12 | `sgwing-12` | Reportes / impresión con vista previa | — | ❌ | P1 |
-| 13 | `sgwing-13` | Procedimientos asociados desde equipo/sector | tab Procedimientos | 🟡 | **P0** |
-| 14 | `sgwing-14` | En planta: solo proc. de **esa** planta (no todos) | alcance API sí; filtro UI | 🟡 | **P0** |
-| 15 | `sgwing-15` | Documentos (planos, videos, informes) | — | ❌ | P1 |
+| 09 | `sgwing-09` | Toolbar: agregar, modificar, eliminar, listar, copiar, mover, pegar | `/planta` + `PlantaToolbar` | ✅ | — |
+| 10 | `sgwing-10` | Historial OT y procedimientos | tab Historial + timeline UX | ✅ | — |
+| 11 | `sgwing-11` | Agregar equipo con campos opcionales dinámicos | `/planta` | ✅ | — |
+| 12 | `sgwing-12` | Reportes / impresión con vista previa | `PlantaPrint` + toolbar | ✅ | — |
+| 13 | `sgwing-13` | Procedimientos asociados desde equipo/sector | tab Procedimientos + cards | ✅ | **P0** |
+| 14 | `sgwing-14` | En planta: solo proc. de **esa** planta (no todos) | alcance API + `PlantaSectionCard` | ✅ | **P0** |
+| 15 | `sgwing-15` | Documentos (planos, videos, informes) | tab Documentos + visor | ✅ | — |
 | — | — | Repuestos por equipo | — | ❌ | P2 (M4) |
 
 ### Detalle 09 — toolbar equipo
@@ -65,11 +65,11 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | Acción | Estado |
 |--------|--------|
 | Agregar | ✅ |
-| Modificar | 🟡 |
-| Eliminar / baja | ❌ |
-| Listar / imprimir | ❌ |
-| Copiar / pegar | ❌ |
-| Mover | 🟡 API |
+| Modificar | ✅ equipo y sector |
+| Eliminar / baja | ✅ equipo y sector |
+| Listar / imprimir | ✅ buscar + vista previa HTML + CSV |
+| Copiar / pegar | ✅ |
+| Mover | ✅ equipo y sector |
 | Fuera de servicio | ✅ |
 
 ---

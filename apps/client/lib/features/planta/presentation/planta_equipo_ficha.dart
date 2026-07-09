@@ -1,13 +1,33 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/open_external_url.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_user.dart';
 import '../services/equipo_storage_service.dart';
+import 'planta_ui.dart';
+
+IconData _iconoDocumento(Map<String, dynamic> doc) {
+	final tipo = (doc['tipo'] as String? ?? '').toLowerCase();
+	final nombre = (doc['nombre'] as String? ?? '').toLowerCase();
+	if (tipo.contains('video') || nombre.endsWith('.mp4')) {
+		return Icons.videocam_outlined;
+	}
+	if (tipo.contains('plano') || nombre.endsWith('.dwg') || nombre.endsWith('.dxf')) {
+		return Icons.architecture_outlined;
+	}
+	if (tipo.contains('pdf') || nombre.endsWith('.pdf')) {
+		return Icons.picture_as_pdf_outlined;
+	}
+	if (tipo.contains('imagen') || nombre.endsWith('.png') || nombre.endsWith('.jpg')) {
+		return Icons.image_outlined;
+	}
+	return Icons.insert_drive_file_outlined;
+}
 
 class PlantaEquipoFicha extends ConsumerStatefulWidget {
 	const PlantaEquipoFicha({
@@ -313,12 +333,20 @@ class _PlantaEquipoFichaState extends ConsumerState<PlantaEquipoFicha>
 	}
 
 	void _abrirDocumento(Map<String, dynamic> doc) {
-		final key = doc['storageKey'] as String;
+		final key = doc['storageKey'] as String?;
+		if (key == null || key.isEmpty) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('El documento no tiene archivo asociado')),
+			);
+			return;
+		}
 		final url = '${AppConfig.apiBaseUrl}/storage/files/${Uri.encodeComponent(key)}';
-		Clipboard.setData(ClipboardData(text: url));
-		ScaffoldMessenger.of(context).showSnackBar(
-			const SnackBar(content: Text('URL copiada al portapapeles')),
-		);
+		openExternalUrl(url);
+		if (!kIsWeb) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Enlace copiado — abrilo en el navegador')),
+			);
+		}
 	}
 
 	Future<void> _agregarComponente() async {
@@ -466,32 +494,72 @@ class _PlantaEquipoFichaState extends ConsumerState<PlantaEquipoFicha>
 	@override
 	Widget build(BuildContext context) {
 		final fuera = widget.detalle['fueraDeServicio'] as bool? ?? false;
+		final scheme = Theme.of(context).colorScheme;
 
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.stretch,
 			children: [
+				if (fuera)
+					Container(
+						margin: const EdgeInsets.only(bottom: 12),
+						padding: const EdgeInsets.all(14),
+						decoration: BoxDecoration(
+							color: AppColors.warning.withValues(alpha: 0.12),
+							borderRadius: BorderRadius.circular(12),
+							border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+						),
+						child: Row(
+							children: [
+								const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
+								const SizedBox(width: 10),
+								Expanded(
+									child: Text(
+										'Esta máquina está fuera de servicio. No se programan OT hasta reactivarla.',
+										style: TextStyle(
+											fontSize: 13,
+											color: scheme.onSurface,
+											height: 1.35,
+										),
+									),
+								),
+							],
+						),
+					),
 				if (_canMarcarFuera)
-					SwitchListTile(
-						contentPadding: EdgeInsets.zero,
-						value: fuera,
-						onChanged: _togglingFuera ? null : _toggleFueraServicio,
-						title: const Text('Fuera de servicio'),
+					Container(
+						margin: const EdgeInsets.only(bottom: 12),
+						padding: const EdgeInsets.symmetric(horizontal: 4),
+						decoration: BoxDecoration(
+							color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+							borderRadius: BorderRadius.circular(12),
+						),
+						child: SwitchListTile(
+							contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+							value: fuera,
+							onChanged: _togglingFuera ? null : _toggleFueraServicio,
+							title: const Text('Marcar fuera de servicio'),
+							subtitle: const Text(
+								'Indicá si la máquina no debe recibir mantenimiento programado',
+								style: TextStyle(fontSize: 12),
+							),
+						),
 					),
 				TabBar(
 					controller: _tabs,
 					isScrollable: true,
+					labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
 					tabs: const [
-						Tab(text: 'General'),
-						Tab(text: 'Componentes'),
-						Tab(text: 'Lecturas'),
-						Tab(text: 'Historial'),
-						Tab(text: 'Procedimientos'),
-						Tab(text: 'Documentos'),
+						Tab(icon: Icon(Icons.info_outline_rounded, size: 18), text: 'Datos'),
+						Tab(icon: Icon(Icons.widgets_outlined, size: 18), text: 'Partes'),
+						Tab(icon: Icon(Icons.speed_rounded, size: 18), text: 'Lecturas'),
+						Tab(icon: Icon(Icons.history_rounded, size: 18), text: 'Historial'),
+						Tab(icon: Icon(Icons.description_outlined, size: 18), text: 'Procedimientos'),
+						Tab(icon: Icon(Icons.folder_open_rounded, size: 18), text: 'Documentos'),
 					],
 				),
 				const SizedBox(height: 12),
 				SizedBox(
-					height: 300,
+					height: 380,
 					child: TabBarView(
 						controller: _tabs,
 						children: [
@@ -517,15 +585,18 @@ class _PlantaEquipoFichaState extends ConsumerState<PlantaEquipoFicha>
 							_AsyncListPanel(
 								loading: _loadingHistorial,
 								error: _historialError,
-								emptyLabel: 'Sin eventos en el historial',
+								emptyLabel: 'Todavía no hay movimientos registrados',
+								emptyHint:
+										'Acá verás OT realizadas, cambios y eventos de esta máquina.',
 								items: _historial,
 								itemBuilder: (item) {
 									final ot = item['ot'] as Map<String, dynamic>?;
-									return ListTile(
-										dense: true,
-										contentPadding: EdgeInsets.zero,
-										title: Text(ot?['numero']?.toString() ?? 'Evento'),
-										subtitle: Text(item['comentario'] as String? ?? ''),
+									final numero = ot?['numero'];
+									return PlantaHistorialTile(
+										titulo: numero != null ? 'OT #$numero' : 'Evento de equipo',
+										subtitulo: item['comentario'] as String? ?? '',
+										fecha: PlantaUi.formatDate(item['fecha']),
+										estado: ot?['estado'] as String?,
 									);
 								},
 								onRetry: () {
@@ -536,15 +607,17 @@ class _PlantaEquipoFichaState extends ConsumerState<PlantaEquipoFicha>
 							_AsyncListPanel(
 								loading: _loadingProcedimientos,
 								error: _procedimientosError,
-								emptyLabel: 'Sin procedimientos asociados',
+								emptyLabel: 'Sin procedimientos vinculados',
+								emptyHint:
+										'Asociá procedimientos desde Mantenimiento → Procedimientos.',
 								items: _procedimientos,
 								itemBuilder: (item) {
 									final proc = item['procedimiento'] as Map<String, dynamic>?;
-									return ListTile(
-										dense: true,
-										contentPadding: EdgeInsets.zero,
-										title: Text(proc?['nombre'] as String? ?? ''),
-										subtitle: Text('#${proc?['codigo'] ?? ''}'),
+									return PlantaProcTile(
+										codigo: proc?['codigo'],
+										nombre: proc?['nombre'] as String? ?? '',
+										tipo: proc?['tipo'] as String?,
+										subtitle: PlantaUi.periodicidadCorta(proc),
 									);
 								},
 								onRetry: () {
@@ -588,16 +661,36 @@ class _MaquinaInfoBody extends StatelessWidget {
 			crossAxisAlignment: CrossAxisAlignment.start,
 			children: [
 				Wrap(
-					spacing: 12,
-					runSpacing: 12,
+					spacing: 10,
+					runSpacing: 10,
 					children: [
-						_InfoChip(label: 'Código', value: '${detalle['codigo'] ?? '-'}'),
-						_InfoChip(label: 'Tipo', value: '${tipo?['nombre'] ?? '-'}'),
-						_InfoChip(label: 'Ubicación', value: '${ubicacion?['nombre'] ?? '-'}'),
+						PlantaInfoPill(
+							label: 'Código',
+							value: '${detalle['codigo'] ?? '—'}',
+							icon: Icons.tag_rounded,
+						),
+						PlantaInfoPill(
+							label: 'Tipo de máquina',
+							value: '${tipo?['nombre'] ?? '—'}',
+							icon: Icons.category_outlined,
+						),
+						PlantaInfoPill(
+							label: 'Ubicación',
+							value: '${ubicacion?['nombre'] ?? '—'}',
+							icon: Icons.place_outlined,
+							color: PlantaUi.accentTeal,
+						),
 					],
 				),
 				if (campos.isNotEmpty) ...[
 					const SizedBox(height: 16),
+					Text(
+						'Datos técnicos del tipo',
+						style: Theme.of(context).textTheme.titleSmall?.copyWith(
+									fontWeight: FontWeight.w700,
+								),
+					),
+					const SizedBox(height: 8),
 					...campos.entries.map(
 						(e) => ListTile(
 							dense: true,
@@ -697,31 +790,6 @@ class _ComponentesPanel extends StatelessWidget {
 	}
 }
 
-class _InfoChip extends StatelessWidget {
-	const _InfoChip({required this.label, required this.value});
-
-	final String label;
-	final String value;
-
-	@override
-	Widget build(BuildContext context) {
-		return Container(
-			padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-			decoration: BoxDecoration(
-				color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-				borderRadius: BorderRadius.circular(12),
-			),
-			child: Column(
-				crossAxisAlignment: CrossAxisAlignment.start,
-				children: [
-					Text(label, style: Theme.of(context).textTheme.bodySmall),
-					Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-				],
-			),
-		);
-	}
-}
-
 class _LecturasPanel extends StatelessWidget {
 	const _LecturasPanel({
 		required this.lecturas,
@@ -807,11 +875,13 @@ class _AsyncListPanel extends StatelessWidget {
 		required this.items,
 		required this.itemBuilder,
 		required this.onRetry,
+		this.emptyHint,
 	});
 
 	final bool loading;
 	final String? error;
 	final String emptyLabel;
+	final String? emptyHint;
 	final List<Map<String, dynamic>> items;
 	final Widget Function(Map<String, dynamic> item) itemBuilder;
 	final VoidCallback onRetry;
@@ -820,17 +890,20 @@ class _AsyncListPanel extends StatelessWidget {
 	Widget build(BuildContext context) {
 		if (loading) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
 		if (error != null) {
-			return Center(
-				child: Column(
-					mainAxisSize: MainAxisSize.min,
-					children: [
-						Text(error!),
-						TextButton(onPressed: onRetry, child: const Text('Reintentar')),
-					],
-				),
+			return PlantaEmptyState(
+				icon: Icons.error_outline_rounded,
+				title: 'No pudimos cargar la información',
+				message: error,
+				action: TextButton(onPressed: onRetry, child: const Text('Reintentar')),
 			);
 		}
-		if (items.isEmpty) return Center(child: Text(emptyLabel));
+		if (items.isEmpty) {
+			return PlantaEmptyState(
+				icon: Icons.inbox_outlined,
+				title: emptyLabel,
+				message: emptyHint,
+			);
+		}
 		return ListView.builder(
 			itemCount: items.length,
 			itemBuilder: (_, i) => itemBuilder(items[i]),
@@ -863,54 +936,69 @@ class _DocumentosPanel extends StatelessWidget {
 	Widget build(BuildContext context) {
 		if (loading) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
 		if (error != null) {
-			return Center(
-				child: Column(
-					mainAxisSize: MainAxisSize.min,
-					children: [
-						Text(error!),
-						TextButton(onPressed: onRetry, child: const Text('Reintentar')),
-					],
-				),
+			return PlantaEmptyState(
+				icon: Icons.error_outline_rounded,
+				title: 'No pudimos cargar los documentos',
+				message: error,
+				action: TextButton(onPressed: onRetry, child: const Text('Reintentar')),
 			);
 		}
 
 		return Column(
+			crossAxisAlignment: CrossAxisAlignment.stretch,
 			children: [
 				if (canSubir && onSubir != null)
 					Align(
 						alignment: Alignment.centerRight,
-						child: TextButton.icon(
+						child: FilledButton.tonalIcon(
 							onPressed: onSubir,
 							icon: const Icon(Icons.upload_file_outlined, size: 18),
-							label: const Text('Adjuntar'),
+							label: const Text('Adjuntar documento'),
 						),
 					),
 				if (items.isEmpty)
-					const Expanded(child: Center(child: Text('Sin documentos')))
+					const Expanded(
+						child: PlantaEmptyState(
+							icon: Icons.folder_open_outlined,
+							title: 'Sin documentos adjuntos',
+							message: 'Planos, informes y videos de esta máquina aparecerán acá.',
+						),
+					)
 				else
 					Expanded(
-						child: ListView.builder(
+						child: ListView.separated(
 							itemCount: items.length,
+							separatorBuilder: (_, __) => const SizedBox(height: 8),
 							itemBuilder: (_, i) {
 								final doc = items[i];
-								return ListTile(
-									dense: true,
-									contentPadding: EdgeInsets.zero,
-									title: Text(doc['nombre'] as String? ?? ''),
-									subtitle: Text(doc['tipo'] as String? ?? ''),
-									trailing: Row(
-										mainAxisSize: MainAxisSize.min,
-										children: [
-											IconButton(
-												icon: const Icon(Icons.link_rounded, size: 20),
-												onPressed: onAbrir == null ? null : () => onAbrir!(doc),
-											),
-											if (onEliminar != null)
+								final icono = _iconoDocumento(doc);
+								return Material(
+									color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+									borderRadius: BorderRadius.circular(12),
+									child: ListTile(
+										shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+										leading: CircleAvatar(
+											backgroundColor: AppColors.brandYellow.withValues(alpha: 0.15),
+											child: Icon(icono, color: AppColors.brandYellow, size: 20),
+										),
+										title: Text(doc['nombre'] as String? ?? 'Documento'),
+										subtitle: Text(doc['tipo'] as String? ?? 'Archivo'),
+										trailing: Row(
+											mainAxisSize: MainAxisSize.min,
+											children: [
 												IconButton(
-													icon: const Icon(Icons.delete_outline_rounded, size: 20),
-													onPressed: () => onEliminar!(doc['id'] as String),
+													tooltip: 'Abrir',
+													icon: const Icon(Icons.open_in_new_rounded, size: 20),
+													onPressed: onAbrir == null ? null : () => onAbrir!(doc),
 												),
-										],
+												if (onEliminar != null)
+													IconButton(
+														tooltip: 'Eliminar',
+														icon: const Icon(Icons.delete_outline_rounded, size: 20),
+														onPressed: () => onEliminar!(doc['id'] as String),
+													),
+											],
+										),
 									),
 								);
 							},

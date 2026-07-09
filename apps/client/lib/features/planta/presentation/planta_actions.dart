@@ -273,24 +273,41 @@ Future<bool> showEditEquipoDialog({
 				child: SingleChildScrollView(
 					child: Column(
 						mainAxisSize: MainAxisSize.min,
+						crossAxisAlignment: CrossAxisAlignment.stretch,
 						children: [
+							Container(
+								padding: const EdgeInsets.all(12),
+								decoration: BoxDecoration(
+									color: AppColors.brandYellow.withValues(alpha: 0.1),
+									borderRadius: BorderRadius.circular(10),
+								),
+								child: Text(
+									'${detalle['nombre'] ?? ''} · ${detalle['codigo'] ?? ''}',
+									style: const TextStyle(fontSize: 13, height: 1.35, fontWeight: FontWeight.w600),
+								),
+							),
+							const SizedBox(height: 14),
 							TextField(
 								controller: nombreCtrl,
-								decoration: const InputDecoration(labelText: 'Nombre'),
+								decoration: const InputDecoration(
+									labelText: 'Nombre de la máquina',
+									border: OutlineInputBorder(),
+								),
 							),
-							const SizedBox(height: 8),
+							const SizedBox(height: 10),
 							TextField(
 								controller: codigoCtrl,
-								decoration: const InputDecoration(labelText: 'Código'),
+								decoration: const InputDecoration(
+									labelText: 'Código interno',
+									helperText: 'Debe ser único en la planta',
+									border: OutlineInputBorder(),
+								),
 							),
 							if (campos.isNotEmpty) ...[
-								const SizedBox(height: 12),
-								const Align(
-									alignment: Alignment.centerLeft,
-									child: Text(
-										'Campos del tipo',
-										style: TextStyle(fontWeight: FontWeight.w600),
-									),
+								const SizedBox(height: 14),
+								const Text(
+									'Datos adicionales del tipo',
+									style: TextStyle(fontWeight: FontWeight.w600),
 								),
 								const SizedBox(height: 8),
 								...buildCamposDetalleFields(
@@ -369,22 +386,38 @@ Future<bool> showCreateMaquinaDialog({
 						child: SingleChildScrollView(
 							child: Column(
 								mainAxisSize: MainAxisSize.min,
+								crossAxisAlignment: CrossAxisAlignment.stretch,
 								children: [
-									Align(
-										alignment: Alignment.centerLeft,
-										child: Text('En: $ubicacionNombre'),
+									Container(
+										padding: const EdgeInsets.all(12),
+										decoration: BoxDecoration(
+											color: AppColors.brandYellow.withValues(alpha: 0.1),
+											borderRadius: BorderRadius.circular(10),
+										),
+										child: Text(
+											'Vas a registrar una máquina en: $ubicacionNombre',
+											style: const TextStyle(fontSize: 13, height: 1.35),
+										),
 									),
-									const SizedBox(height: 12),
+									const SizedBox(height: 14),
 									TextField(
 										controller: nombreCtrl,
-										decoration: const InputDecoration(labelText: 'Nombre'),
+										decoration: const InputDecoration(
+											labelText: 'Nombre de la máquina',
+											hintText: 'Ej: SILO-104',
+											border: OutlineInputBorder(),
+										),
 									),
-									const SizedBox(height: 8),
+									const SizedBox(height: 10),
 									TextField(
 										controller: codigoCtrl,
-										decoration: const InputDecoration(labelText: 'Código'),
+										decoration: const InputDecoration(
+											labelText: 'Código interno',
+											helperText: 'Debe ser único en la planta',
+											border: OutlineInputBorder(),
+										),
 									),
-									const SizedBox(height: 8),
+									const SizedBox(height: 10),
 									DropdownButtonFormField<String>(
 										value: tipoId,
 										items: tipos
@@ -398,10 +431,18 @@ Future<bool> showCreateMaquinaDialog({
 										onChanged: (v) {
 											if (v != null) setDialog(() => tipoId = v);
 										},
-										decoration: const InputDecoration(labelText: 'Tipo'),
+										decoration: const InputDecoration(
+											labelText: 'Tipo de máquina',
+											border: OutlineInputBorder(),
+										),
 									),
 									if (camposActuales.isNotEmpty) ...[
-										const SizedBox(height: 12),
+										const SizedBox(height: 14),
+										const Text(
+											'Datos adicionales del tipo',
+											style: TextStyle(fontWeight: FontWeight.w600),
+										),
+										const SizedBox(height: 8),
 										...buildCamposDetalleFields(
 											campos: camposActuales,
 											controllers: campoCtrls,

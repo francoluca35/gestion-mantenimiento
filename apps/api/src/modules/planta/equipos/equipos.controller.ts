@@ -1,6 +1,7 @@
 import {
 	Body,
 	Controller,
+	Delete,
 	Get,
 	Param,
 	ParseUUIDPipe,
@@ -76,6 +77,12 @@ export class EquiposController {
 		@CurrentUser() user: AuthUser,
 	) {
 		return this.equiposService.update(id, dto, user);
+	}
+
+	@Delete(':id')
+	@RequiereDerecho('archivos.equipos.borrar')
+	remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+		return this.equiposService.remove(id, user);
 	}
 
 	@Post(':id/mover')

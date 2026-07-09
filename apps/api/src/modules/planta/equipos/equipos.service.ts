@@ -153,6 +153,29 @@ export class EquiposService {
 		}
 	}
 
+	async remove(id: string, currentUser: AuthUser) {
+		const equipo = await this.findOne(id, currentUser);
+
+		const otCount = await this.prisma.ordenTrabajo.count({
+			where: { equipoId: id },
+		});
+
+		if (otCount > 0) {
+			throw new BadRequestException(
+				'No se puede dar de baja: la máquina tiene órdenes de trabajo asociadas',
+			);
+		}
+
+		return this.prisma.equipo.update({
+			where: { id: equipo.id },
+			data: { activo: false },
+			include: {
+				ubicacion: true,
+				tipoEquipo: true,
+			},
+		});
+	}
+
 	async mover(id: string, dto: MoverEquipoDto, currentUser: AuthUser) {
 		const equipo = await this.findOne(id, currentUser);
 		const ubicacion = await this.prisma.ubicacion.findUnique({

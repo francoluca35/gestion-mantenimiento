@@ -24,7 +24,9 @@ Estado actual: **módulo cerrado para desarrollo** (~95%).
 
 - `/planta` — explorador + stats + detalle
 - Menú contextual: editar / mover / eliminar ubicaciones y equipos
-- **Toolbar SGwing:** copiar, cortar, pegar, listar equipos
+- **Toolbar SGwing:** copiar, cortar, pegar, buscar máquina, imprimir (vista previa HTML), export CSV, acciones sector/equipo
+- **Reportes:** `PlantaPrint` — listado imprimible con paleta Sika (sgwing-12)
+- **Documentos:** adjuntar, abrir en navegador, iconos por tipo (sgwing-15)
 - **Drag & drop** visual para mover equipos y ubicaciones en el explorador
 - Ficha máquina: General, **Componentes**, Lecturas, Historial, Procedimientos, Documentos
 - Campos dinámicos `TipoEquipo.camposDetalle` en alta/edición

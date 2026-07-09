@@ -7,6 +7,10 @@ import '../../auth/domain/auth_user.dart';
 import 'planta_actions.dart';
 import 'planta_clipboard.dart';
 import 'planta_equipo_ficha.dart';
+import 'planta_export.dart';
+import 'planta_print.dart';
+import 'planta_toolbar.dart';
+import 'planta_ui.dart';
 
 enum _NodeKind { empresa, planta, ubicacion, maquina }
 
@@ -76,6 +80,10 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 
 	bool get _canCopiarEquipos =>
 			_user?.tieneDerecho('archivos.equipos.copiar') == true ||
+			_user?.esAdministrador == true;
+
+	bool get _canBorrarEquipos =>
+			_user?.tieneDerecho('archivos.equipos.borrar') == true ||
 			_user?.esAdministrador == true;
 
 	bool get _canCambiarPlanta =>
@@ -374,6 +382,114 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 		if (ok) await _onEquipoUpdated();
 	}
 
+	Future<void> _deleteEquipo() async {
+		final detalle = _equipoDetalle;
+		if (detalle == null) return;
+
+		final confirmado = await showDialog<bool>(
+			context: context,
+			builder: (context) => AlertDialog(
+				title: const Text('Dar de baja la máquina'),
+				content: Text(
+					'¿Querés dar de baja ${detalle['codigo']} — ${detalle['nombre']}?\n\n'
+					'Solo es posible si no tiene órdenes de trabajo. La máquina dejará de aparecer en el explorador.',
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(context, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+						onPressed: () => Navigator.pop(context, true),
+						child: const Text('Dar de baja'),
+					),
+				],
+			),
+		);
+
+		if (confirmado != true) return;
+
+		try {
+			await ref.read(apiClientProvider).deleteJson('equipos/${detalle['id']}');
+			if (!mounted) return;
+			setState(() {
+				_selected = _TreeNode(
+					id: 'planta:$_sucursalId',
+					label: _plantaNombre ?? 'PLANTA',
+					kind: _NodeKind.planta,
+					activo: true,
+				);
+				_equipoDetalle = null;
+			});
+			await _reload();
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Máquina dada de baja')),
+			);
+		} catch (error) {
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text(error.toString())),
+			);
+		}
+	}
+
+	void _exportEquipos() {
+		if (_equipos.isEmpty) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('No hay máquinas para exportar en esta planta')),
+			);
+			return;
+		}
+		PlantaExport.downloadEquipos(_equipos);
+	}
+
+	void _imprimirEquipos({String? sectorFiltro}) {
+		if (_equipos.isEmpty) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('No hay máquinas para imprimir en esta planta')),
+			);
+			return;
+		}
+		PlantaPrint.previewEquipos(
+			empresaNombre: _empresaNombre,
+			plantaNombre: _plantaNombre ?? 'PLANTA',
+			equipos: _equipos,
+			sectorFiltro: sectorFiltro,
+		);
+	}
+
+	void _onToolbarModificar() {
+		final selected = _selected;
+		if (selected == null) return;
+		if (selected.kind == _NodeKind.maquina) {
+			_editEquipo();
+		} else if (selected.kind == _NodeKind.ubicacion) {
+			_editUbicacion(selected);
+		}
+	}
+
+	void _onToolbarMover() {
+		final selected = _selected;
+		if (selected == null) return;
+		if (selected.kind == _NodeKind.maquina) {
+			_moverEquipo();
+		} else if (selected.kind == _NodeKind.ubicacion) {
+			_moverUbicacion(selected);
+		}
+	}
+
+	void _onToolbarEliminar() {
+		final selected = _selected;
+		if (selected == null) return;
+		if (selected.kind == _NodeKind.maquina) {
+			_deleteEquipo();
+		} else if (selected.kind == _NodeKind.ubicacion) {
+			_deleteUbicacion(selected);
+		}
+	}
+
 	Future<void> _moverEquipo() async {
 		final detalle = _equipoDetalle;
 		if (detalle == null) return;
@@ -543,33 +659,66 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 					}).toList();
 
 					return AlertDialog(
-						title: const Text('Listar equipos'),
+						title: const Text('Buscar máquina'),
 						content: SizedBox(
-							width: 420,
-							height: 420,
+							width: 460,
+							height: 460,
 							child: Column(
+								crossAxisAlignment: CrossAxisAlignment.stretch,
 								children: [
 									TextField(
 										controller: controller,
 										autofocus: true,
 										decoration: const InputDecoration(
-											labelText: 'Buscar por nombre o código',
-											prefixIcon: Icon(Icons.search),
+											labelText: 'Nombre o código',
+											hintText: 'Ej: SILO-104',
+											prefixIcon: Icon(Icons.search_rounded),
+											border: OutlineInputBorder(),
 										),
 										onChanged: (value) => setDialogState(() => query = value),
 									),
-									const SizedBox(height: 12),
+									const SizedBox(height: 8),
+									Text(
+										'${filtered.length} de ${_equipos.length} máquinas',
+										style: TextStyle(
+											fontSize: 12,
+											color: Theme.of(context).colorScheme.onSurfaceVariant,
+										),
+									),
+									const SizedBox(height: 8),
 									Expanded(
 										child: filtered.isEmpty
-												? const Center(child: Text('Sin resultados'))
-												: ListView.builder(
+												? PlantaEmptyState(
+														icon: Icons.precision_manufacturing_outlined,
+														title: query.trim().isEmpty
+																? 'No hay máquinas en esta planta'
+																: 'Sin resultados',
+														message: query.trim().isEmpty
+																? 'Agregá la primera máquina desde un sector.'
+																: 'Probá con otro nombre o código.',
+													)
+												: ListView.separated(
 														itemCount: filtered.length,
+														separatorBuilder: (_, __) => const Divider(height: 1),
 														itemBuilder: (context, index) {
 															final equipo = filtered[index];
+															final tipo = equipo['tipoEquipo'] as Map<String, dynamic>?;
+															final ubicacion = equipo['ubicacion'] as Map<String, dynamic>?;
 															return ListTile(
-																dense: true,
+																leading: CircleAvatar(
+																	backgroundColor: AppColors.brandYellow.withValues(alpha: 0.15),
+																	child: const Icon(
+																		Icons.precision_manufacturing_outlined,
+																		size: 20,
+																		color: AppColors.brandYellow,
+																	),
+																),
 																title: Text(equipo['nombre'] as String? ?? ''),
-																subtitle: Text(equipo['codigo'] as String? ?? ''),
+																subtitle: Text(
+																	'${equipo['codigo'] ?? ''} · ${tipo?['nombre'] ?? ''} · ${ubicacion?['nombre'] ?? ''}',
+																	maxLines: 2,
+																	overflow: TextOverflow.ellipsis,
+																),
 																onTap: () => Navigator.pop(
 																	ctx,
 																	equipo['id'] as String,
@@ -582,6 +731,18 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 							),
 						),
 						actions: [
+							TextButton.icon(
+								onPressed: _equipos.isEmpty
+										? null
+										: () {
+												Navigator.pop(ctx);
+												_imprimirEquipos(
+													sectorFiltro: query.trim().isEmpty ? null : query.trim(),
+												);
+											},
+								icon: const Icon(Icons.print_outlined, size: 18),
+								label: const Text('Imprimir listado'),
+							),
 							TextButton(
 								onPressed: () => Navigator.pop(ctx),
 								child: const Text('Cerrar'),
@@ -773,7 +934,9 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 										child: TextField(
 											onChanged: (value) => setState(() => _search = value),
 											decoration: InputDecoration(
-												hintText: 'Buscar ubicación, sector o máquina...',
+												hintText: 'Buscar sector o máquina…',
+												helperText: 'Ej: SILO, sector losa, código de máquina',
+												helperMaxLines: 2,
 												prefixIcon: const Icon(Icons.search, size: 20),
 												filled: true,
 												fillColor: isDark
@@ -820,23 +983,42 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 					Expanded(
 						child: Column(
 							children: [
-								_TopBar(
+								PlantaToolbar(
 									plantaNombre: _plantaNombre ?? '',
 									onRefresh: _bootstrap,
-									showAdd: _showAddButton,
-									onAdd: _onAddPressed,
 									sucursales: _canCambiarPlanta ? _sucursales : const [],
 									sucursalId: _sucursalId,
 									onSucursalChanged: _canCambiarPlanta ? _onSucursalChanged : null,
-									showEquipoToolbar: _selected?.kind == _NodeKind.maquina,
-									canCopiar: _canCopiarEquipos,
-									canCortar: _canMoverEquipos,
-									canPegar: _canPegar,
+									selectionKind: switch (_selected?.kind) {
+										_NodeKind.maquina => 'maquina',
+										_NodeKind.ubicacion => 'ubicacion',
+										_NodeKind.planta => 'planta',
+										_ => null,
+									},
 									clipboardLabel: _clipboard?.nombre,
+									canAgregar: _showAddButton,
+									onAgregar: _onAddPressed,
+									canModificar:
+											(_selected?.kind == _NodeKind.maquina && _canModificarEquipos) ||
+											(_selected?.kind == _NodeKind.ubicacion && _canModificarUbicaciones),
+									onModificar: _onToolbarModificar,
+									canEliminar:
+											(_selected?.kind == _NodeKind.maquina && _canBorrarEquipos) ||
+											(_selected?.kind == _NodeKind.ubicacion && _canBorrarUbicaciones),
+									onEliminar: _onToolbarEliminar,
+									canMover:
+											(_selected?.kind == _NodeKind.maquina && _canMoverEquipos) ||
+											(_selected?.kind == _NodeKind.ubicacion && _canMoverUbicaciones),
+									onMover: _onToolbarMover,
+									canCopiar: _selected?.kind == _NodeKind.maquina && _canCopiarEquipos,
 									onCopiar: _copiarEquipoSeleccionado,
+									canCortar: _selected?.kind == _NodeKind.maquina && _canMoverEquipos,
 									onCortar: _cortarEquipoSeleccionado,
-									onPegar: _pegarClipboard,
-									onListar: _listarEquipos,
+									canPegar: _canPegar,
+									onPegar: _canPegar ? () => _pegarClipboard() : null,
+									onBuscar: () => _listarEquipos(),
+									onImprimir: _imprimirEquipos,
+									onExportar: _exportEquipos,
 								),
 								Expanded(
 									child: ListView(
@@ -879,141 +1061,52 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 	}
 }
 
-class _TopBar extends StatelessWidget {
-	const _TopBar({
-		required this.plantaNombre,
-		required this.onRefresh,
-		required this.showAdd,
-		required this.onAdd,
-		this.sucursales = const [],
-		this.sucursalId,
-		this.onSucursalChanged,
-		this.showEquipoToolbar = false,
-		this.canCopiar = false,
-		this.canCortar = false,
-		this.canPegar = false,
-		this.clipboardLabel,
-		this.onCopiar,
-		this.onCortar,
-		this.onPegar,
-		this.onListar,
+class _StatCard extends StatelessWidget {
+	const _StatCard({
+		required this.label,
+		required this.value,
+		required this.color,
+		this.hint,
 	});
 
-	final String plantaNombre;
-	final VoidCallback onRefresh;
-	final bool showAdd;
-	final VoidCallback onAdd;
-	final List<Map<String, dynamic>> sucursales;
-	final String? sucursalId;
-	final ValueChanged<String?>? onSucursalChanged;
-	final bool showEquipoToolbar;
-	final bool canCopiar;
-	final bool canCortar;
-	final bool canPegar;
-	final String? clipboardLabel;
-	final VoidCallback? onCopiar;
-	final VoidCallback? onCortar;
-	final Future<void> Function()? onPegar;
-	final Future<void> Function()? onListar;
+	final String label;
+	final String value;
+	final Color color;
+	final String? hint;
 
 	@override
 	Widget build(BuildContext context) {
 		return Container(
-			height: 64,
-			padding: const EdgeInsets.symmetric(horizontal: 20),
+			padding: const EdgeInsets.all(16),
 			decoration: BoxDecoration(
 				color: Theme.of(context).colorScheme.surface,
-				border: Border(
-					bottom: BorderSide(
-						color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
-					),
+				borderRadius: BorderRadius.circular(16),
+				border: Border.all(
+					color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
 				),
 			),
-			child: Row(
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
 				children: [
+					Text(label, style: Theme.of(context).textTheme.bodySmall),
+					if (hint != null) ...[
+						const SizedBox(height: 2),
+						Text(
+							hint!,
+							style: TextStyle(
+								fontSize: 11,
+								color: Theme.of(context).colorScheme.onSurfaceVariant,
+							),
+						),
+					],
+					const SizedBox(height: 8),
 					Text(
-						'Gestión de equipos',
-						style: Theme.of(context).textTheme.titleLarge?.copyWith(
+						value,
+						style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+									color: color,
 									fontWeight: FontWeight.w700,
 								),
 					),
-					const SizedBox(width: 12),
-					if (sucursales.isNotEmpty && onSucursalChanged != null)
-						DropdownButtonHideUnderline(
-							child: DropdownButton<String>(
-								value: sucursalId,
-								items: sucursales
-										.map(
-											(s) => DropdownMenuItem(
-												value: s['id'] as String,
-												child: Text(s['nombre'] as String),
-											),
-										)
-										.toList(),
-								onChanged: onSucursalChanged,
-							),
-						)
-					else
-						Container(
-							padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-							decoration: BoxDecoration(
-								color: AppColors.primary.withValues(alpha: 0.1),
-								borderRadius: BorderRadius.circular(999),
-							),
-							child: Text(
-								plantaNombre,
-								style: const TextStyle(
-									color: AppColors.primary,
-									fontWeight: FontWeight.w600,
-									fontSize: 12,
-								),
-							),
-						),
-					if (clipboardLabel != null) ...[
-						const SizedBox(width: 12),
-						Tooltip(
-							message: 'Portapapeles: $clipboardLabel',
-							child: Icon(
-								Icons.content_paste_go_outlined,
-								size: 18,
-								color: AppColors.primary.withValues(alpha: 0.8),
-							),
-						),
-					],
-					const Spacer(),
-					if (onListar != null)
-						IconButton(
-							onPressed: onListar,
-							icon: const Icon(Icons.list_alt_outlined),
-							tooltip: 'Listar equipos',
-						),
-					if (showEquipoToolbar && canCopiar && onCopiar != null)
-						IconButton(
-							onPressed: onCopiar,
-							icon: const Icon(Icons.content_copy_outlined),
-							tooltip: 'Copiar equipo',
-						),
-					if (showEquipoToolbar && canCortar && onCortar != null)
-						IconButton(
-							onPressed: onCortar,
-							icon: const Icon(Icons.content_cut_outlined),
-							tooltip: 'Cortar (mover)',
-						),
-					if (canPegar && onPegar != null)
-						IconButton(
-							onPressed: onPegar,
-							icon: const Icon(Icons.content_paste_outlined),
-							tooltip: 'Pegar',
-						),
-					IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh)),
-					if (showAdd) ...[
-						const SizedBox(width: 8),
-						FilledButton.icon(
-							onPressed: onAdd,
-							icon: const Icon(Icons.add),
-							label: const Text('Agregar'),
-						),
-					],
 				],
 			),
 		);
@@ -1038,10 +1131,30 @@ class _StatsRow extends StatelessWidget {
 		return LayoutBuilder(
 			builder: (context, constraints) {
 				final cards = [
-					_StatCard(label: 'Máquinas totales', value: '$total', color: AppColors.primary),
-					_StatCard(label: 'Activas', value: '$activos', color: AppColors.success),
-					_StatCard(label: 'Desactivadas', value: '$desactivados', color: AppColors.warning),
-					_StatCard(label: 'Ubicaciones / sectores', value: '$sectores', color: AppColors.secondary),
+					_StatCard(
+						label: 'Máquinas en planta',
+						value: '$total',
+						hint: 'Total registradas',
+						color: AppColors.brandYellow,
+					),
+					_StatCard(
+						label: 'Operativas',
+						value: '$activos',
+						hint: 'Disponibles para OT',
+						color: AppColors.success,
+					),
+					_StatCard(
+						label: 'Fuera de servicio',
+						value: '$desactivados',
+						hint: 'No programar mantenimiento',
+						color: AppColors.warning,
+					),
+					_StatCard(
+						label: 'Sectores',
+						value: '$sectores',
+						hint: 'Ubicaciones del mapa',
+						color: AppColors.secondary,
+					),
 				];
 
 				if (constraints.maxWidth < 700) {
@@ -1067,46 +1180,6 @@ class _StatsRow extends StatelessWidget {
 							.toList(),
 				);
 			},
-		);
-	}
-}
-
-class _StatCard extends StatelessWidget {
-	const _StatCard({
-		required this.label,
-		required this.value,
-		required this.color,
-	});
-
-	final String label;
-	final String value;
-	final Color color;
-
-	@override
-	Widget build(BuildContext context) {
-		return Container(
-			padding: const EdgeInsets.all(16),
-			decoration: BoxDecoration(
-				color: Theme.of(context).colorScheme.surface,
-				borderRadius: BorderRadius.circular(16),
-				border: Border.all(
-					color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
-				),
-			),
-			child: Column(
-				crossAxisAlignment: CrossAxisAlignment.start,
-				children: [
-					Text(label, style: Theme.of(context).textTheme.bodySmall),
-					const SizedBox(height: 8),
-					Text(
-						value,
-						style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-									color: color,
-									fontWeight: FontWeight.w700,
-								),
-					),
-				],
-			),
 		);
 	}
 }
@@ -1597,31 +1670,48 @@ class _AlcanceProcedimientosSectionState extends ConsumerState<_AlcanceProcedimi
 
 	@override
 	Widget build(BuildContext context) {
-		return Column(
-			crossAxisAlignment: CrossAxisAlignment.start,
-			children: [
-				Text(
-					'Procedimientos por alcance',
-					style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-				),
-				const SizedBox(height: 8),
-				if (_loading)
-					const LinearProgressIndicator(minHeight: 2)
-				else if (_error != null)
-					Text(_error!, style: const TextStyle(color: AppColors.danger))
-				else if (_items.isEmpty)
-					const Text('Sin procedimientos asociados a este alcance')
-				else
-					..._items.map((item) {
-						final proc = item['procedimiento'] as Map<String, dynamic>?;
-						return ListTile(
-							dense: true,
-							contentPadding: EdgeInsets.zero,
-							title: Text(proc?['nombre'] as String? ?? ''),
-							subtitle: Text('#${proc?['codigo'] ?? ''}'),
-						);
-					}),
-			],
+		final alcanceLabel = widget.ubicacionId != null
+				? 'este sector'
+				: 'toda la planta';
+
+		return PlantaSectionCard(
+			title: 'Procedimientos de mantenimiento',
+			subtitle:
+					'Solo los asociados a $alcanceLabel (no el listado general de la empresa).',
+			child: _loading
+					? const Center(child: Padding(
+							padding: EdgeInsets.all(16),
+							child: CircularProgressIndicator(strokeWidth: 2),
+						))
+					: _error != null
+							? PlantaEmptyState(
+									icon: Icons.error_outline_rounded,
+									title: 'No pudimos cargar los procedimientos',
+									message: _error,
+									action: TextButton(
+										onPressed: _load,
+										child: const Text('Reintentar'),
+									),
+								)
+							: _items.isEmpty
+									? const PlantaEmptyState(
+											icon: Icons.description_outlined,
+											title: 'Sin procedimientos en este alcance',
+											message:
+													'Cuando asocies un procedimiento a esta planta, sector o máquina, aparecerá acá.',
+										)
+									: Column(
+											children: _items.map((item) {
+												final proc = item['procedimiento'] as Map<String, dynamic>?;
+												if (proc == null) return const SizedBox.shrink();
+												return PlantaProcTile(
+													codigo: proc['codigo'],
+													nombre: proc['nombre'] as String? ?? '',
+													tipo: proc['tipo'] as String?,
+													subtitle: PlantaUi.periodicidadCorta(proc),
+												);
+											}).toList(),
+										),
 		);
 	}
 }

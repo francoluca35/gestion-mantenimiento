@@ -11,7 +11,10 @@ import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_user.dart';
 import '../../planta/presentation/planta_map_panel.dart';
 import 'ot_ejecucion_sheet.dart';
+import 'ot_export.dart';
 import 'ot_firma_sheet.dart';
+import 'ot_list_toolbar.dart';
+import 'ot_motivo_pendiente_dialog.dart';
 import 'ot_pdf.dart';
 import 'ot_ui.dart';
 
@@ -46,6 +49,14 @@ class _OtPageState extends ConsumerState<OtPage> {
 	String? _filtroEstado;
 	String? _filtroTipo;
 	String? _filtroTecnicoId;
+	String? _filtroPrioridad;
+	String? _filtroSectorId;
+	String? _filtroMotivoId;
+	String _filtroNumero = '';
+	List<Map<String, dynamic>> _sectores = [];
+	List<Map<String, dynamic>> _motivos = [];
+	final Set<String> _checkedIds = {};
+	bool _batchBusy = false;
 	late DateTime _fechaDesde;
 	late DateTime _fechaHasta;
 	String _search = '';
@@ -132,6 +143,16 @@ class _OtPageState extends ConsumerState<OtPage> {
 		if (_filtroTipo != null) params.add('tipo=$_filtroTipo');
 		if (_filtroTecnicoId != null) params.add('tecnicoId=$_filtroTecnicoId');
 		if (_filtroEstado != null) params.add('estado=$_filtroEstado');
+		if (_filtroPrioridad != null) params.add('prioridad=$_filtroPrioridad');
+		if (_filtroSectorId != null) {
+			params.add('sectorResponsableId=$_filtroSectorId');
+		}
+		if (_filtroMotivoId != null) {
+			params.add('motivoPendienteId=$_filtroMotivoId');
+		}
+		if (_filtroNumero.trim().isNotEmpty) {
+			params.add('numero=${Uri.encodeComponent(_filtroNumero.trim())}');
+		}
 		if (widget.misOtOnly) params.add('misOt=true');
 		if (_mapFiltroEquipoId != null) params.add('equipoId=$_mapFiltroEquipoId');
 		if (_mapFiltroUbicacionId != null) {
@@ -199,7 +220,10 @@ class _OtPageState extends ConsumerState<OtPage> {
 		setState(() {
 			_loading = true;
 			_error = null;
-			if (!keepSelection) _selected = null;
+			if (!keepSelection) {
+				_selected = null;
+				_checkedIds.clear();
+			}
 		});
 
 		try {
@@ -208,6 +232,19 @@ class _OtPageState extends ConsumerState<OtPage> {
 			final resumen = await api.getJson('ot/resumen$query');
 			final ordenes = await api.getList('ot$query');
 			final tecnicos = (await api.getList('ot/tecnicos')).cast<Map<String, dynamic>>();
+			var motivos = <Map<String, dynamic>>[];
+			try {
+				motivos =
+						(await api.getList('motivos-ot-pendiente'))
+								.cast<Map<String, dynamic>>();
+			} catch (_) {
+				motivos = [];
+			}
+			final user = ref.read(authControllerProvider).session?.usuario;
+			if (user?.sucursalId != null) {
+				final tree = await api.getList('ubicaciones/tree?sucursalId=${user!.sucursalId}');
+				_sectores = _flattenUbicaciones(tree.cast<Map<String, dynamic>>());
+			}
 
 			if (!mounted) return;
 			final lista = ordenes.cast<Map<String, dynamic>>();
@@ -215,6 +252,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 				_resumen = resumen;
 				_ordenes = lista;
 				_tecnicos = tecnicos;
+				_motivos = motivos;
 			});
 
 			if (lista.isNotEmpty && MediaQuery.sizeOf(context).width >= 900) {
@@ -237,6 +275,10 @@ class _OtPageState extends ConsumerState<OtPage> {
 			_filtroEstado = null;
 			_filtroTipo = null;
 			_filtroTecnicoId = null;
+			_filtroPrioridad = null;
+			_filtroSectorId = null;
+			_filtroMotivoId = null;
+			_filtroNumero = '';
 			_search = '';
 		});
 		_bootstrap();
@@ -293,7 +335,236 @@ class _OtPageState extends ConsumerState<OtPage> {
 			_filtroEstado != null ||
 			_filtroTipo != null ||
 			_filtroTecnicoId != null ||
+			_filtroPrioridad != null ||
+			_filtroSectorId != null ||
+			_filtroMotivoId != null ||
+			_filtroNumero.trim().isNotEmpty ||
 			_search.isNotEmpty;
+
+	List<Map<String, dynamic>> _flattenUbicaciones(
+		List<Map<String, dynamic>> nodes, [
+		int depth = 0,
+	]) {
+		final out = <Map<String, dynamic>>[];
+		for (final node in nodes) {
+			out.add({
+				'id': node['id'],
+				'nombre': '${'  ' * depth}${node['nombre']}',
+			});
+			final children = node['children'] as List<dynamic>? ?? [];
+			out.addAll(
+				_flattenUbicaciones(children.cast<Map<String, dynamic>>(), depth + 1),
+			);
+		}
+		return out;
+	}
+
+	List<Map<String, dynamic>> get _selectedOts => _filtradas
+			.where((ot) => _checkedIds.contains(ot['id'] as String))
+			.toList();
+
+	bool get _allVisibleSelected =>
+			_filtradas.isNotEmpty &&
+			_filtradas.every((ot) => _checkedIds.contains(ot['id'] as String));
+
+	void _toggleCheck(String id) {
+		setState(() {
+			if (_checkedIds.contains(id)) {
+				_checkedIds.remove(id);
+			} else {
+				_checkedIds.add(id);
+			}
+		});
+	}
+
+	void _toggleSelectAllVisible() {
+		setState(() {
+			if (_allVisibleSelected) {
+				for (final ot in _filtradas) {
+					_checkedIds.remove(ot['id'] as String);
+				}
+			} else {
+				for (final ot in _filtradas) {
+					_checkedIds.add(ot['id'] as String);
+				}
+			}
+		});
+	}
+
+	void _clearChecked() => setState(_checkedIds.clear);
+
+	Future<void> _runBatch(Future<void> Function() action, String okMessage) async {
+		setState(() => _batchBusy = true);
+		try {
+			await action();
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text(okMessage)),
+			);
+			await _bootstrap(keepSelection: true);
+		} catch (error) {
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text('$error')),
+			);
+		} finally {
+			if (mounted) setState(() => _batchBusy = false);
+		}
+	}
+
+	Future<void> _batchReasignar() async {
+		final ots = _selectedOts;
+		if (ots.isEmpty) return;
+
+		final tecnicoId = await showDialog<String>(
+			context: context,
+			builder: (context) => SimpleDialog(
+				title: const Text('Reasignar técnico'),
+				children: _tecnicos
+						.map(
+							(t) => SimpleDialogOption(
+								onPressed: () => Navigator.pop(context, t['id'] as String),
+								child: Text(t['nombreUsuario'] as String),
+							),
+						)
+						.toList(),
+			),
+		);
+		if (tecnicoId == null || !mounted) return;
+
+		await _runBatch(() async {
+			final api = ref.read(apiClientProvider);
+			for (final ot in ots) {
+				await api.patchJson(
+					'ot/${ot['id']}/asignar',
+					{'tecnicoAsignadoId': tecnicoId},
+				);
+			}
+		}, 'Técnico reasignado en ${ots.length} OT');
+	}
+
+	Future<void> _batchMotivoPendiente() async {
+		final ots = _selectedOts;
+		if (ots.isEmpty) return;
+
+		final motivoId = await OtMotivoPendienteDialog.show(
+			context,
+			motivos: _motivos,
+		);
+		if (!mounted) return;
+
+		await _runBatch(() async {
+			final api = ref.read(apiClientProvider);
+			for (final ot in ots) {
+				await api.patchJson(
+					'ot/${ot['id']}/motivo-pendiente',
+					{'motivoPendienteId': motivoId},
+				);
+			}
+			if (motivoId != null) {
+				final motivos =
+						(await api.getList('motivos-ot-pendiente'))
+								.cast<Map<String, dynamic>>();
+				if (mounted) setState(() => _motivos = motivos);
+			}
+		}, 'Motivo aplicado en ${ots.length} OT');
+	}
+
+	Future<void> _batchCambiarEstado() async {
+		final ots = _selectedOts;
+		if (ots.isEmpty) return;
+
+		const estados = ['pendiente', 'en_ejecucion', 'realizada'];
+		final estado = await showDialog<String>(
+			context: context,
+			builder: (context) => SimpleDialog(
+				title: const Text('Cambiar estado'),
+				children: estados
+						.map(
+							(e) => SimpleDialogOption(
+								onPressed: () => Navigator.pop(context, e),
+								child: Text(OtUi.estadoLabel(e)),
+							),
+						)
+						.toList(),
+			),
+		);
+		if (estado == null || !mounted) return;
+
+		await _runBatch(() async {
+			final api = ref.read(apiClientProvider);
+			for (final ot in ots) {
+				await api.patchJson(
+					'ot/${ot['id']}/estado',
+					{'estado': estado},
+				);
+			}
+		}, 'Estado actualizado en ${ots.length} OT');
+	}
+
+	Future<void> _batchAnular() async {
+		final ots = _selectedOts;
+		if (ots.isEmpty) return;
+
+		final ok = await showDialog<bool>(
+			context: context,
+			builder: (context) => AlertDialog(
+				title: const Text('Anular OT seleccionadas'),
+				content: Text('¿Anular ${ots.length} orden(es) de trabajo?'),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(context, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						onPressed: () => Navigator.pop(context, true),
+						child: const Text('Anular'),
+					),
+				],
+			),
+		);
+		if (ok != true || !mounted) return;
+
+		await _runBatch(() async {
+			final api = ref.read(apiClientProvider);
+			for (final ot in ots) {
+				await api.postJson(
+					'ot/${ot['id']}/anular',
+					{'motivo': 'Anulación masiva desde toolbar'},
+				);
+			}
+		}, '${ots.length} OT anulada(s)');
+	}
+
+	void _exportSelected() {
+		final ots = _selectedOts;
+		if (ots.isEmpty) return;
+		OtExport.download(ots, suffix: 'seleccion');
+	}
+
+	void _exportFiltradas() {
+		if (_filtradas.isEmpty) return;
+		OtExport.download(_filtradas, suffix: 'listado');
+	}
+
+	Future<void> _derivarOt(Map<String, dynamic> ot) async {
+		try {
+			await ref.read(apiClientProvider).postJson(
+						'ot/${ot['id']}/derivar',
+						{},
+					);
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('OT derivada emitida')),
+			);
+			await _bootstrap(keepSelection: false);
+		} catch (error) {
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text('$error')),
+			);
+		}
+	}
 
 	Future<void> _selectOt(Map<String, dynamic> ot, {bool silent = false}) async {
 		final equipoId = ot['equipo']?['id'] as String?;
@@ -725,13 +996,23 @@ class _OtPageState extends ConsumerState<OtPage> {
 								fechaHasta: _fechaHasta,
 								filtroTipo: _filtroTipo,
 								filtroTecnicoId: _filtroTecnicoId,
+								filtroPrioridad: _filtroPrioridad,
+								filtroSectorId: _filtroSectorId,
+								filtroMotivoId: _filtroMotivoId,
+								filtroNumero: _filtroNumero,
 								tecnicos: _tecnicos,
+								sectores: _sectores,
+								motivos: _motivos,
 								formatDate: _dateFormat.format,
 								onPickDesde: () => _pickFecha(desde: true),
 								onPickHasta: () => _pickFecha(desde: false),
 								onMesActual: _resetMesActual,
 								onTipoChanged: (value) => setState(() => _filtroTipo = value),
 								onTecnicoChanged: (value) => setState(() => _filtroTecnicoId = value),
+								onPrioridadChanged: (value) => setState(() => _filtroPrioridad = value),
+								onSectorChanged: (value) => setState(() => _filtroSectorId = value),
+								onMotivoChanged: (value) => setState(() => _filtroMotivoId = value),
+								onNumeroChanged: (value) => setState(() => _filtroNumero = value),
 								onAplicar: _aplicarFiltros,
 							),
 						),
@@ -754,6 +1035,24 @@ class _OtPageState extends ConsumerState<OtPage> {
 						countFor: _countEstado,
 						onChanged: (value) => setState(() => _filtroEstado = value),
 					),
+					if (_canManage && !widget.misOtOnly) ...[
+						const SizedBox(height: 6),
+						OtListToolbar(
+							selectedCount: _checkedIds.length,
+							totalCount: _filtradas.length,
+							allSelected: _allVisibleSelected,
+							canAnular: _canAnular,
+							enabled: !_batchBusy,
+							onToggleSelectAll: _toggleSelectAllVisible,
+							onClearSelection: _clearChecked,
+							onReasignar: _batchReasignar,
+							onMotivoPendiente: _batchMotivoPendiente,
+							onCambiarEstado: _batchCambiarEstado,
+							onAnular: _batchAnular,
+							onExportar: _exportSelected,
+							onExportarFiltradas: _exportFiltradas,
+						),
+					],
 					Expanded(
 						child: _filtradas.isEmpty
 								? _EmptyListState(
@@ -769,7 +1068,13 @@ class _OtPageState extends ConsumerState<OtPage> {
 													return _OtListTile(
 														ot: ot,
 														selected: _selected?['id'] == ot['id'],
+														checked: _checkedIds.contains(ot['id'] as String),
+														showCheckbox: _canManage && !widget.misOtOnly,
+														formatDate: _formatDate,
 														onTap: () => _selectOt(ot),
+														onCheckChanged: _canManage && !widget.misOtOnly
+																? () => _toggleCheck(ot['id'] as String)
+																: null,
 													);
 												},
 											),
@@ -797,7 +1102,13 @@ class _OtPageState extends ConsumerState<OtPage> {
 								(ot) => _OtListTile(
 									ot: ot,
 									selected: _selected?['id'] == ot['id'],
+									checked: _checkedIds.contains(ot['id'] as String),
+									showCheckbox: _canManage && !widget.misOtOnly,
+									formatDate: _formatDate,
 									onTap: () => _selectOt(ot),
+									onCheckChanged: _canManage && !widget.misOtOnly
+											? () => _toggleCheck(ot['id'] as String)
+											: null,
 								),
 							),
 					if (!_ordenes.any((ot) => ot['estado'] == estado))
@@ -833,6 +1144,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 				),
 				onReabrir: () => _reabrirOt(_selected!),
 				onEmitirNoPeriodica: () => _navegarEmitirNoPeriodicaDesdeOt(_selected!),
+				onDerivar: () => _derivarOt(_selected!),
 				ocultarPdf: widget.misOtOnly,
 			);
 		}
@@ -861,6 +1173,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 				),
 				onReabrir: () => _reabrirOt(ot),
 				onEmitirNoPeriodica: () => _navegarEmitirNoPeriodicaDesdeOt(ot),
+				onDerivar: () => _derivarOt(ot),
 				ocultarPdf: widget.misOtOnly,
 			);
 		}
@@ -1183,13 +1496,23 @@ class _FiltrosPanel extends StatelessWidget {
 		required this.fechaHasta,
 		required this.filtroTipo,
 		required this.filtroTecnicoId,
+		required this.filtroPrioridad,
+		required this.filtroSectorId,
+		required this.filtroMotivoId,
+		required this.filtroNumero,
 		required this.tecnicos,
+		required this.sectores,
+		required this.motivos,
 		required this.formatDate,
 		required this.onPickDesde,
 		required this.onPickHasta,
 		required this.onMesActual,
 		required this.onTipoChanged,
 		required this.onTecnicoChanged,
+		required this.onPrioridadChanged,
+		required this.onSectorChanged,
+		required this.onMotivoChanged,
+		required this.onNumeroChanged,
 		required this.onAplicar,
 	});
 
@@ -1197,13 +1520,23 @@ class _FiltrosPanel extends StatelessWidget {
 	final DateTime fechaHasta;
 	final String? filtroTipo;
 	final String? filtroTecnicoId;
+	final String? filtroPrioridad;
+	final String? filtroSectorId;
+	final String? filtroMotivoId;
+	final String filtroNumero;
 	final List<Map<String, dynamic>> tecnicos;
+	final List<Map<String, dynamic>> sectores;
+	final List<Map<String, dynamic>> motivos;
 	final String Function(DateTime) formatDate;
 	final VoidCallback onPickDesde;
 	final VoidCallback onPickHasta;
 	final VoidCallback onMesActual;
 	final ValueChanged<String?> onTipoChanged;
 	final ValueChanged<String?> onTecnicoChanged;
+	final ValueChanged<String?> onPrioridadChanged;
+	final ValueChanged<String?> onSectorChanged;
+	final ValueChanged<String?> onMotivoChanged;
+	final ValueChanged<String> onNumeroChanged;
 	final VoidCallback onAplicar;
 
 	@override
@@ -1276,6 +1609,74 @@ class _FiltrosPanel extends StatelessWidget {
 							),
 						],
 						onChanged: onTecnicoChanged,
+					),
+					const SizedBox(height: 10),
+					DropdownButtonFormField<String?>(
+						value: filtroPrioridad,
+						isExpanded: true,
+						decoration: const InputDecoration(
+							labelText: 'Prioridad',
+							isDense: true,
+							border: OutlineInputBorder(),
+						),
+						items: const [
+							DropdownMenuItem(value: null, child: Text('Todas')),
+							DropdownMenuItem(value: 'baja', child: Text('Baja')),
+							DropdownMenuItem(value: 'media', child: Text('Media')),
+							DropdownMenuItem(value: 'alta', child: Text('Alta')),
+							DropdownMenuItem(value: 'urgente', child: Text('Urgente')),
+						],
+						onChanged: onPrioridadChanged,
+					),
+					const SizedBox(height: 10),
+					DropdownButtonFormField<String?>(
+						value: filtroSectorId,
+						isExpanded: true,
+						decoration: const InputDecoration(
+							labelText: 'Sector responsable',
+							isDense: true,
+							border: OutlineInputBorder(),
+						),
+						items: [
+							const DropdownMenuItem(value: null, child: Text('Todos los sectores')),
+							...sectores.map(
+								(s) => DropdownMenuItem(
+									value: s['id'] as String,
+									child: Text(s['nombre'] as String),
+								),
+							),
+						],
+						onChanged: onSectorChanged,
+					),
+					const SizedBox(height: 10),
+					DropdownButtonFormField<String?>(
+						value: filtroMotivoId,
+						isExpanded: true,
+						decoration: const InputDecoration(
+							labelText: 'Motivo pendiente',
+							isDense: true,
+							border: OutlineInputBorder(),
+						),
+						items: [
+							const DropdownMenuItem(value: null, child: Text('Todos los motivos')),
+							...motivos.map(
+								(m) => DropdownMenuItem(
+									value: m['id'] as String,
+									child: Text(m['descripcion'] as String),
+								),
+							),
+						],
+						onChanged: onMotivoChanged,
+					),
+					const SizedBox(height: 10),
+					TextField(
+						decoration: const InputDecoration(
+							labelText: 'Nº OT',
+							isDense: true,
+							border: OutlineInputBorder(),
+						),
+						keyboardType: TextInputType.number,
+						onChanged: onNumeroChanged,
 					),
 					const SizedBox(height: 12),
 					Row(
@@ -1392,12 +1793,20 @@ class _OtListTile extends StatelessWidget {
 	const _OtListTile({
 		required this.ot,
 		required this.selected,
+		required this.formatDate,
 		required this.onTap,
+		this.checked = false,
+		this.showCheckbox = false,
+		this.onCheckChanged,
 	});
 
 	final Map<String, dynamic> ot;
 	final bool selected;
+	final bool checked;
+	final bool showCheckbox;
+	final String Function(dynamic) formatDate;
 	final VoidCallback onTap;
+	final VoidCallback? onCheckChanged;
 
 	@override
 	Widget build(BuildContext context) {
@@ -1405,6 +1814,9 @@ class _OtListTile extends StatelessWidget {
 		final ubicacion = ot['ubicacion'] as Map<String, dynamic>? ?? equipo?['ubicacion'];
 		final estado = ot['estado'] as String? ?? '';
 		final tipo = ot['tipo'] as String? ?? '';
+		final prioridad = ot['prioridad'] as String? ?? 'media';
+		final tecnico = ot['tecnicoAsignado'] as Map<String, dynamic>?;
+		final motivo = ot['motivoPendiente'] as Map<String, dynamic>?;
 		final color = OtUi.estadoColor(estado);
 		final isRealizada = estado == 'realizada';
 		final cardBg = switch (estado) {
@@ -1436,8 +1848,17 @@ class _OtListTile extends StatelessWidget {
 							crossAxisAlignment: CrossAxisAlignment.start,
 							children: [
 								Row(
-									crossAxisAlignment: CrossAxisAlignment.start,
 									children: [
+										if (showCheckbox) ...[
+											Checkbox(
+												value: checked,
+												onChanged: (_) => onCheckChanged?.call(),
+												side: const BorderSide(color: Colors.white54),
+												activeColor: AppColors.brandYellow,
+												materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+											),
+											const SizedBox(width: 4),
+										],
 										Expanded(
 											child: Wrap(
 												spacing: 6,
@@ -1452,6 +1873,12 @@ class _OtListTile extends StatelessWidget {
 														color: onCard
 																? Colors.white.withValues(alpha: 0.65)
 																: AppColors.mutedText,
+													),
+													SikaBadge(
+														label: prioridad.toUpperCase(),
+														color: onCard
+																? Colors.white.withValues(alpha: 0.55)
+																: AppColors.secondary,
 													),
 												],
 											),
@@ -1508,6 +1935,39 @@ class _OtListTile extends StatelessWidget {
 										),
 									),
 								],
+								const SizedBox(height: 6),
+								Text(
+									'Prog: ${formatDate(ot['fechaProgramacion'])}'
+											'${ot['fechaEjecucion'] != null ? ' · Ejec: ${formatDate(ot['fechaEjecucion'])}' : ''}',
+									style: TextStyle(
+										color: onCard
+												? Colors.white.withValues(alpha: 0.6)
+												: AppColors.mutedText,
+										fontSize: 11,
+									),
+								),
+								if (tecnico != null)
+									Text(
+										'Recibe: ${tecnico['nombreUsuario']}',
+										style: TextStyle(
+											color: onCard
+													? Colors.white.withValues(alpha: 0.75)
+													: AppColors.mutedText,
+											fontSize: 12,
+											fontWeight: FontWeight.w600,
+										),
+									),
+								if (motivo != null)
+									Text(
+										'Motivo: ${motivo['descripcion']}',
+										style: TextStyle(
+											color: onCard
+													? AppColors.warning.withValues(alpha: 0.9)
+													: AppColors.warning,
+											fontSize: 11,
+											fontWeight: FontWeight.w600,
+										),
+									),
 							],
 						),
 					),
@@ -1534,6 +1994,7 @@ class _OtDetailContent extends StatelessWidget {
 		required this.onAnular,
 		required this.onReabrir,
 		required this.onEmitirNoPeriodica,
+		required this.onDerivar,
 		this.ocultarPdf = false,
 	});
 
@@ -1553,6 +2014,7 @@ class _OtDetailContent extends StatelessWidget {
 	final VoidCallback onAnular;
 	final VoidCallback onReabrir;
 	final VoidCallback onEmitirNoPeriodica;
+	final VoidCallback onDerivar;
 
 	@override
 	Widget build(BuildContext context) {
@@ -1564,6 +2026,7 @@ class _OtDetailContent extends StatelessWidget {
 		final ubicacion = ot['ubicacion'] as Map<String, dynamic>? ?? equipo?['ubicacion'];
 		final procedimiento = ot['procedimiento'] as Map<String, dynamic>?;
 		final tecnico = ot['tecnicoAsignado'] as Map<String, dynamic>?;
+		final motivo = ot['motivoPendiente'] as Map<String, dynamic>?;
 		final historial = (ot['historialEstados'] as List<dynamic>? ?? [])
 				.cast<Map<String, dynamic>>();
 		final checklist = (ot['checklistCompletado'] as List<dynamic>? ?? [])
@@ -1699,6 +2162,13 @@ class _OtDetailContent extends StatelessWidget {
 								label: 'Técnico',
 								value: tecnico?['nombreUsuario'] as String? ?? 'Sin asignar',
 							),
+							if (motivo != null)
+								_InfoTile(
+									icon: Icons.help_outline_rounded,
+									label: 'Motivo pendiente',
+									value: motivo['descripcion'] as String? ?? '',
+									valueColor: AppColors.warning,
+								),
 							if (procedimiento != null)
 								_InfoTile(
 									icon: Icons.description_outlined,
@@ -1847,6 +2317,7 @@ class _OtDetailContent extends StatelessWidget {
 						onAnular: onAnular,
 						onReabrir: onReabrir,
 						onEmitirNoPeriodica: onEmitirNoPeriodica,
+						onDerivar: onDerivar,
 						ocultarPdf: ocultarPdf,
 					),
 			],
@@ -2018,6 +2489,7 @@ class _ActionBar extends StatelessWidget {
 		required this.onAnular,
 		required this.onReabrir,
 		required this.onEmitirNoPeriodica,
+		required this.onDerivar,
 		this.ocultarPdf = false,
 	});
 
@@ -2035,6 +2507,7 @@ class _ActionBar extends StatelessWidget {
 	final VoidCallback onAnular;
 	final VoidCallback onReabrir;
 	final VoidCallback onEmitirNoPeriodica;
+	final VoidCallback onDerivar;
 
 	@override
 	Widget build(BuildContext context) {
@@ -2110,6 +2583,16 @@ class _ActionBar extends StatelessWidget {
 					onPressed: onReabrir,
 					icon: const Icon(Icons.replay_rounded),
 					label: const Text('Reabrir OT'),
+				),
+			);
+		}
+
+		if (canEmitirNoPeriodica && estado == 'realizada') {
+			actions.add(
+				FilledButton.tonalIcon(
+					onPressed: onDerivar,
+					icon: const Icon(Icons.call_split_rounded),
+					label: const Text('OT derivada'),
 				),
 			);
 		}

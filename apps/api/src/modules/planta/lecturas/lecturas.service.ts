@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { EquiposService } from '../equipos/equipos.service';
 import { CreateLecturaDto } from './dto/create-lectura.dto';
+import { ReiniciarLecturaDto } from './dto/reiniciar-lectura.dto';
 
 @Injectable()
 export class LecturasService {
@@ -33,6 +34,27 @@ export class LecturasService {
 				tipo: dto.tipo,
 				valor: dto.valor,
 				notas: dto.notas,
+			},
+		});
+	}
+
+	async reiniciar(
+		equipoId: string,
+		dto: ReiniciarLecturaDto,
+		currentUser: AuthUser,
+	) {
+		if (!currentUser.esAdministrador) {
+			throw new ForbiddenException('Solo administradores pueden reiniciar contadores');
+		}
+
+		await this.equiposService.findOne(equipoId, currentUser);
+		return this.prisma.lectura.create({
+			data: {
+				equipoId,
+				usuarioId: currentUser.id,
+				tipo: dto.tipo,
+				valor: dto.valor ?? 0,
+				notas: dto.notas ?? 'REINICIO CONTADOR',
 			},
 		});
 	}

@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
+import { MotivosOtPendienteController } from './motivos-ot-pendiente/motivos-ot-pendiente.controller';
+import { MotivosOtPendienteService } from './motivos-ot-pendiente/motivos-ot-pendiente.service';
 import { OtController } from './ot/ot.controller';
+import { OtCronService } from './ot/ot-cron.service';
 import { OtService } from './ot/ot.service';
 import { ProcedimientosController } from './procedimientos/procedimientos.controller';
 import { ProcedimientosService } from './procedimientos/procedimientos.service';
@@ -7,12 +11,20 @@ import { SolicitudesTrabajoController } from './solicitudes-trabajo/solicitudes-
 import { SolicitudesTrabajoService } from './solicitudes-trabajo/solicitudes-trabajo.service';
 
 @Module({
+	imports: [ScheduleModule.forRoot()],
 	controllers: [
 		ProcedimientosController,
 		OtController,
+		MotivosOtPendienteController,
 		SolicitudesTrabajoController,
 	],
-	providers: [ProcedimientosService, OtService, SolicitudesTrabajoService],
-	exports: [OtService, ProcedimientosService],
+	providers: [
+		ProcedimientosService,
+		OtService,
+		OtCronService,
+		SolicitudesTrabajoService,
+		MotivosOtPendienteService,
+	],
+	exports: [OtService, ProcedimientosService, MotivosOtPendienteService],
 })
 export class MantenimientoModule {}

@@ -80,8 +80,27 @@ model Sucursal {
 	ordenesTrabajo       OrdenTrabajo[]
 	solicitudesTrabajo   SolicitudTrabajo[]
 	equipoDocumentos     EquipoDocumento[]
+	motivosOtPendiente   MotivoOtPendiente[]
 
 	@@map("sucursales")
+}
+
+model MotivoOtPendiente {
+	id          String   @id @default(uuid()) @db.Uuid
+	sucursalId  String   @map("sucursal_id") @db.Uuid
+	codigo      String   @db.VarChar(30)
+	descripcion String   @db.VarChar(200)
+	activo      Boolean  @default(true)
+	orden       Int      @default(0)
+	createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal       Sucursal       @relation(fields: [sucursalId], references: [id])
+	ordenesTrabajo OrdenTrabajo[]
+
+	@@unique([sucursalId, codigo])
+	@@index([sucursalId, activo])
+	@@map("motivos_ot_pendiente")
 }
 
 model Perfil {
@@ -384,6 +403,7 @@ model OrdenTrabajo {
 	fechaEjecucion            DateTime?         @map("fecha_ejecucion") @db.Date
 	tolerancia                Int               @default(0)
 	prioridad                 PrioridadOt       @default(media)
+	motivoPendienteId         String?           @map("motivo_pendiente_id") @db.Uuid
 	comentarios               String?           @db.Text
 	novedadesFueraDePrograma  String?           @map("novedades_fuera_de_programa") @db.Text
 	checklistCompletado       Json              @default("[]") @map("checklist_completado")
@@ -398,6 +418,7 @@ model OrdenTrabajo {
 	procedimiento     Procedimiento?        @relation(fields: [procedimientoId], references: [id])
 	tecnicoAsignado   Usuario?              @relation("OtTecnico", fields: [tecnicoAsignadoId], references: [id])
 	creador           Usuario?              @relation("OtCreador", fields: [creadorId], references: [id])
+	motivoPendiente   MotivoOtPendiente?    @relation(fields: [motivoPendienteId], references: [id])
 	historialEstados  OtEstadoHistorial[]
 	lecturas          Lectura[]
 	solicitudOrigen   SolicitudTrabajo?     @relation("SolicitudOtGenerada")

@@ -274,6 +274,35 @@ async function assignDerechos(
 	}
 }
 
+async function seedMotivosOtPendiente(sucursalId: string) {
+	const motivos = [
+		{ codigo: 'FALTA_MATERIAL', descripcion: 'Falta de material', orden: 1 },
+		{ codigo: 'FALTA_PERSONAL', descripcion: 'Falta de personal', orden: 2 },
+		{ codigo: 'MAQUINA_EN_USO', descripcion: 'Máquina en uso', orden: 3 },
+		{ codigo: 'CLIMA', descripcion: 'Condiciones climáticas', orden: 4 },
+		{ codigo: 'OTRO', descripcion: 'Otro motivo', orden: 5 },
+	];
+
+	for (const motivo of motivos) {
+		await prisma.motivoOtPendiente.upsert({
+			where: {
+				sucursalId_codigo: { sucursalId, codigo: motivo.codigo },
+			},
+			update: {
+				descripcion: motivo.descripcion,
+				orden: motivo.orden,
+				activo: true,
+			},
+			create: {
+				sucursalId,
+				codigo: motivo.codigo,
+				descripcion: motivo.descripcion,
+				orden: motivo.orden,
+			},
+		});
+	}
+}
+
 async function main() {
 	await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'true', true)`;
 
@@ -290,6 +319,9 @@ async function main() {
 		update: { nombre: 'PLANTA_ROSARIO', activa: true },
 		create: { nombre: 'PLANTA_ROSARIO', codigo: 'ROSARIO' },
 	});
+
+	await seedMotivosOtPendiente(virrey.id);
+	await seedMotivosOtPendiente(rosario.id);
 
 	const perfilTecnico = await prisma.perfil.upsert({
 		where: { id: '11111111-1111-1111-1111-111111111111' },

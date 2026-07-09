@@ -13,6 +13,7 @@ import { AnularOtDto } from './dto/anular-ot.dto';
 import { AsignarOtDto } from './dto/asignar-ot.dto';
 import { CambiarEstadoOtDto } from './dto/cambiar-estado-ot.dto';
 import { CompletarChecklistDto } from './dto/completar-checklist.dto';
+import { DerivarOtDto } from './dto/derivar-ot.dto';
 import { EmitirOtDto } from './dto/emitir-ot.dto';
 import { EmitirOtPeriodicaDto } from './dto/emitir-ot-periodica.dto';
 import { EmitirOtNecesariasDto } from './dto/emitir-ot-necesarias.dto';
@@ -58,6 +59,9 @@ export class OtService {
 						select: { id: true, nombreUsuario: true },
 					},
 				},
+			},
+			motivoPendiente: {
+				select: { id: true, codigo: true, descripcion: true },
 			},
 		};
 	}
@@ -116,7 +120,7 @@ export class OtService {
 		const necesariasAl =
 			this.parseFecha(filters.necesariasAl, true) ?? this.startOfDay(new Date());
 
-		const asociaciones = await this.prisma.procedimientoEquipo.findMany({
+		const asociacionesTiempo = await this.prisma.procedimientoEquipo.findMany({
 			where: {
 				estado: 'activo',
 				equipo: {
@@ -141,9 +145,38 @@ export class OtService {
 			orderBy: [{ procedimiento: { codigo: 'asc' } }, { equipo: { codigo: 'asc' } }],
 		});
 
+		const asociacionesContador = await this.prisma.procedimientoEquipo.findMany({
+			where: {
+				estado: 'activo',
+				equipo: {
+					activo: true,
+					fueraDeServicio: false,
+					sucursalId,
+					id: filters.equipoId,
+					tipoEquipoId: filters.tipoEquipoId,
+				},
+				procedimiento: {
+					activo: true,
+					tipo: 'preventivo',
+					periodicidadTipo: 'contador',
+					periodicidadValor: { not: null },
+					sectorResponsableId: filters.sectorResponsableId,
+				},
+			},
+			include: {
+				procedimiento: { include: { sectorResponsable: true } },
+				equipo: { include: { ubicacion: true, tipoEquipo: true } },
+			},
+			orderBy: [{ procedimiento: { codigo: 'asc' } }, { equipo: { codigo: 'asc' } }],
+		});
+
 		const items = [];
-		for (const asociacion of asociaciones) {
+		for (const asociacion of asociacionesTiempo) {
 			const item = await this.evaluarOtNecesaria(asociacion, necesariasAl);
+			if (item) items.push(item);
+		}
+		for (const asociacion of asociacionesContador) {
+			const item = await this.evaluarOtNecesariaContador(asociacion);
 			if (item) items.push(item);
 		}
 
@@ -267,11 +300,119 @@ export class OtService {
 			procedimientoNombre: procedimiento.nombre,
 			procedimientoTipo: procedimiento.tipo,
 			periodicidadDias: periodicidadValor,
+			periodicidadTipo: 'tiempo',
 			tolerancia: procedimiento.tolerancia,
 			criterioProgramacion: procedimiento.criterioProgramacion,
 			esPrimeraEmision: !historialOt,
 			fechaNecesaria: this.toDateOnlyString(fechaNecesaria),
 			diasAtraso,
+			equipo: asociacion.equipo,
+			sectorResponsable: procedimiento.sectorResponsable,
+		};
+	}
+
+	private lecturaTipoFromProcedimiento(procedimiento: { planillaLecturas: unknown }): string {
+		const planilla = procedimiento.planillaLecturas;
+		if (Array.isArray(planilla) && planilla.length > 0) {
+			const first = planilla[0] as { key?: string };
+			if (first?.key) return first.key;
+		}
+		return 'horas';
+	}
+
+	private async evaluarOtNecesariaContador(
+		asociacion: {
+			id: string;
+			equipoId: string;
+			procedimiento: {
+				id: string;
+				codigo: number;
+				nombre: string;
+				tipo: TipoMantenimiento;
+				periodicidadValor: number | null;
+				tolerancia: number;
+				planillaLecturas: unknown;
+				sectorResponsable: { id: string; nombre: string } | null;
+			};
+			equipo: {
+				id: string;
+				nombre: string;
+				codigo: string;
+				ubicacion: { id: string; nombre: string };
+				tipoEquipo: { id: string; nombre: string };
+			};
+		},
+	) {
+		const procedimiento = asociacion.procedimiento;
+		const umbral = procedimiento.periodicidadValor;
+		if (!umbral) return null;
+
+		const otAbierta = await this.prisma.ordenTrabajo.findFirst({
+			where: {
+				procedimientoId: procedimiento.id,
+				equipoId: asociacion.equipoId,
+				estado: {
+					in: [
+						'necesaria_de_emitir',
+						'pendiente',
+						'pendiente_panol',
+						'en_ejecucion',
+					],
+				},
+			},
+			select: { id: true },
+		});
+		if (otAbierta) return null;
+
+		const tipoLectura = this.lecturaTipoFromProcedimiento(procedimiento);
+		const ultimaLectura = await this.prisma.lectura.findFirst({
+			where: { equipoId: asociacion.equipoId, tipo: tipoLectura },
+			orderBy: { fecha: 'desc' },
+		});
+		if (!ultimaLectura) return null;
+
+		const ultimaRealizada = await this.prisma.ordenTrabajo.findFirst({
+			where: {
+				procedimientoId: procedimiento.id,
+				equipoId: asociacion.equipoId,
+				estado: 'realizada',
+			},
+			orderBy: { fechaEjecucion: 'desc' },
+		});
+
+		let valorReferencia = 0;
+		if (ultimaRealizada?.fechaEjecucion) {
+			const lecturaRef = await this.prisma.lectura.findFirst({
+				where: {
+					equipoId: asociacion.equipoId,
+					tipo: tipoLectura,
+					fecha: { lte: ultimaRealizada.fechaEjecucion },
+				},
+				orderBy: { fecha: 'desc' },
+			});
+			valorReferencia = lecturaRef ? Number(lecturaRef.valor) : 0;
+		}
+
+		const actual = Number(ultimaLectura.valor);
+		const delta = actual - valorReferencia;
+		if (delta < umbral) return null;
+
+		return {
+			asociacionId: asociacion.id,
+			procedimientoId: procedimiento.id,
+			procedimientoCodigo: procedimiento.codigo,
+			procedimientoNombre: procedimiento.nombre,
+			procedimientoTipo: procedimiento.tipo,
+			periodicidadDias: umbral,
+			periodicidadTipo: 'contador',
+			tolerancia: procedimiento.tolerancia,
+			criterioProgramacion: null,
+			esPrimeraEmision: !ultimaRealizada,
+			fechaNecesaria: this.toDateOnlyString(new Date()),
+			diasAtraso: 0,
+			lecturaActual: actual,
+			lecturaDelta: delta,
+			lecturaUmbral: umbral,
 			equipo: asociacion.equipo,
 			sectorResponsable: procedimiento.sectorResponsable,
 		};
@@ -413,6 +554,10 @@ export class OtService {
 			fechaDesde?: string;
 			fechaHasta?: string;
 			misOt?: boolean;
+			prioridad?: string;
+			numero?: string;
+			sectorResponsableId?: string;
+			motivoPendienteId?: string;
 		},
 	) {
 		const sucursalId = resolveSucursalId(currentUser, filters.sucursalId);
@@ -438,6 +583,8 @@ export class OtService {
 			};
 		}
 
+		const numeroOt = filters.numero ? Number.parseInt(filters.numero, 10) : undefined;
+
 		const filtrosBase: Prisma.OrdenTrabajoWhereInput = {
 			sucursalId,
 			estado: estados?.length ? { in: estados } : undefined,
@@ -446,6 +593,12 @@ export class OtService {
 				: filters.tecnicoId,
 			equipoId: filters.equipoId,
 			tipo: filters.tipo as Prisma.EnumTipoMantenimientoFilter | undefined,
+			prioridad: filters.prioridad as Prisma.EnumPrioridadOtFilter | undefined,
+			numero: Number.isFinite(numeroOt) ? numeroOt : undefined,
+			procedimiento: filters.sectorResponsableId
+				? { sectorResponsableId: filters.sectorResponsableId }
+				: undefined,
+			motivoPendienteId: filters.motivoPendienteId,
 		};
 
 		return this.prisma.ordenTrabajo.findMany({
@@ -461,6 +614,9 @@ export class OtService {
 				procedimiento: true,
 				tecnicoAsignado: {
 					select: { id: true, nombreUsuario: true },
+				},
+				motivoPendiente: {
+					select: { id: true, codigo: true, descripcion: true },
 				},
 			},
 			orderBy: [{ fechaProgramacion: 'desc' }, { numero: 'desc' }],
@@ -698,6 +854,50 @@ export class OtService {
 		});
 	}
 
+	async asignarMotivoPendiente(
+		id: string,
+		motivoPendienteId: string | null | undefined,
+		currentUser: AuthUser,
+	) {
+		const ot = await this.findOne(id, currentUser);
+
+		if (!['pendiente', 'en_ejecucion', 'pendiente_panol'].includes(ot.estado)) {
+			throw new BadRequestException(
+				'Solo se puede asignar motivo a OT pendiente o en ejecución',
+			);
+		}
+
+		if (motivoPendienteId) {
+			const motivo = await this.prisma.motivoOtPendiente.findFirst({
+				where: {
+					id: motivoPendienteId,
+					sucursalId: ot.sucursalId,
+					activo: true,
+				},
+			});
+			if (!motivo) {
+				throw new BadRequestException('Motivo de pendiente inválido');
+			}
+		}
+
+		return this.prisma.ordenTrabajo.update({
+			where: { id },
+			data: {
+				motivoPendienteId: motivoPendienteId ?? null,
+				historialEstados: motivoPendienteId
+					? {
+							create: {
+								estado: ot.estado,
+								usuarioId: currentUser.id,
+								comentario: 'Motivo de pendiente actualizado',
+							},
+						}
+					: undefined,
+			},
+			include: this.otInclude(),
+		});
+	}
+
 	private async buildUbicacionPath(ubicacionId: string): Promise<string[]> {
 		const path: string[] = [];
 		let currentId: string | null = ubicacionId;
@@ -924,6 +1124,54 @@ export class OtService {
 			},
 			include: this.otInclude(),
 		});
+	}
+
+	async derivar(id: string, dto: DerivarOtDto, currentUser: AuthUser) {
+		const origen = await this.findOne(id, currentUser);
+		const comentarios =
+				dto.comentarios?.trim() ||
+				`OT derivada de #${origen.numero}`;
+
+		return this.emitir(
+			{
+				equipoId: origen.equipoId,
+				procedimientoId: origen.procedimientoId ?? undefined,
+				tipo: 'correctivo',
+				fechaProgramacion: this.toDateOnlyString(new Date()),
+				prioridad: origen.prioridad,
+				comentarios,
+				sucursalId: origen.sucursalId,
+			},
+			currentUser,
+		);
+	}
+
+	async emitirNecesariasAutomaticas(sucursalId: string) {
+		const sistemaUser = {
+			id: '00000000-0000-0000-0000-000000000001',
+			nombreUsuario: 'sistema',
+			esAdministrador: true,
+			supervisaSucursales: true,
+			sucursalId,
+		} as AuthUser;
+
+		const { items } = await this.listarNecesarias(sistemaUser, { sucursalId });
+		if (items.length === 0) return { emitidas: 0 };
+
+		const hoy = this.toDateOnlyString(new Date());
+		const resultado = await this.emitirNecesarias(
+			{
+				sucursalId,
+				items: items.map((item) => ({
+					procedimientoId: item.procedimientoId,
+					equipoId: item.equipo.id,
+					fechaProgramacion: item.fechaNecesaria ?? hoy,
+				})),
+			},
+			sistemaUser,
+		);
+
+		return { emitidas: resultado.total };
 	}
 
 	private async collectDescendantUbicacionIds(

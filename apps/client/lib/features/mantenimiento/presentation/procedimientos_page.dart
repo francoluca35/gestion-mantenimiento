@@ -624,6 +624,7 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 	int _indMinutos = 0;
 	final _costoCtrl = TextEditingController(text: '0');
 	bool _periodicidadActiva = false;
+	String _periodicidadModo = 'tiempo';
 	final _periodicidadDiasCtrl = TextEditingController(text: '30');
 	String _criterio = 'fecha_finalizacion';
 	final _toleranciaCtrl = TextEditingController(text: '0');
@@ -706,7 +707,8 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 		_costoCtrl.text = '${_toDouble(data['costoEstimado'])}';
 
 		_periodicidadActiva =
-				data['periodicidadTipo'] == 'tiempo' && data['periodicidadValor'] != null;
+				data['periodicidadTipo'] != null && data['periodicidadValor'] != null;
+		_periodicidadModo = data['periodicidadTipo'] as String? ?? 'tiempo';
 		_periodicidadDiasCtrl.text = '${data['periodicidadValor'] ?? 30}';
 		_criterio = data['criterioProgramacion'] as String? ?? 'fecha_finalizacion';
 		_toleranciaCtrl.text = '${data['tolerancia'] ?? 0}';
@@ -800,9 +802,11 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 		};
 
 		if (_periodicidadActiva && _periodicidadHabilitada) {
-			payload['periodicidadTipo'] = 'tiempo';
+			payload['periodicidadTipo'] = _periodicidadModo;
 			payload['periodicidadValor'] = int.parse(_periodicidadDiasCtrl.text);
-			payload['criterioProgramacion'] = _criterio;
+			if (_periodicidadModo == 'tiempo') {
+				payload['criterioProgramacion'] = _criterio;
+			}
 		}
 
 		await widget.onSave(
@@ -1100,14 +1104,16 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 									children: [
 										CheckboxListTile(
 											contentPadding: EdgeInsets.zero,
-											value: _periodicidadActiva,
-											onChanged: (value) =>
-													setState(() => _periodicidadActiva = value ?? false),
+											value: _periodicidadActiva && _periodicidadModo == 'tiempo',
+											onChanged: (value) => setState(() {
+												_periodicidadActiva = value ?? false;
+												if (_periodicidadActiva) _periodicidadModo = 'tiempo';
+											}),
 											title: const Text('Tiempo'),
 											subtitle: const Text('Cada cuántos días debe realizarse'),
 											controlAffinity: ListTileControlAffinity.leading,
 										),
-										if (_periodicidadActiva)
+										if (_periodicidadActiva && _periodicidadModo == 'tiempo')
 											Padding(
 												padding: const EdgeInsets.only(left: 16, bottom: 12),
 												child: Row(
@@ -1139,17 +1145,49 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 											),
 										CheckboxListTile(
 											contentPadding: EdgeInsets.zero,
-											value: false,
-											onChanged: null,
-											title: Text(
-												'Evento (próximamente)',
-												style: TextStyle(
-													color: Theme.of(context).colorScheme.onSurfaceVariant,
-												),
+											value: _periodicidadActiva && _periodicidadModo == 'contador',
+											onChanged: (value) => setState(() {
+												_periodicidadActiva = value ?? false;
+												if (_periodicidadActiva) _periodicidadModo = 'contador';
+											}),
+											title: const Text('Contador'),
+											subtitle: const Text(
+												'Umbral en unidades del contador (horas, km…)',
 											),
 											controlAffinity: ListTileControlAffinity.leading,
 										),
+										if (_periodicidadActiva && _periodicidadModo == 'contador')
+											Padding(
+												padding: const EdgeInsets.only(left: 16, bottom: 12),
+												child: Row(
+													children: [
+														SizedBox(
+															width: 100,
+															child: TextField(
+																controller: _periodicidadDiasCtrl,
+																decoration: const InputDecoration(
+																	labelText: 'Umbral',
+																	border: OutlineInputBorder(),
+																	isDense: true,
+																),
+																keyboardType: TextInputType.number,
+																inputFormatters: [
+																	FilteringTextInputFormatter.digitsOnly,
+																],
+															),
+														),
+														const SizedBox(width: 8),
+														const Expanded(
+															child: Text(
+																'unidades desde la última OT realizada',
+																style: TextStyle(fontSize: 13),
+															),
+														),
+													],
+												),
+											),
 										const SizedBox(height: 8),
+										if (_periodicidadActiva && _periodicidadModo == 'tiempo') ...[
 										Text(
 											'Criterio a utilizar para programar',
 											style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -1189,6 +1227,7 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 												'Cuenta la periodicidad desde la fecha programada',
 											),
 										),
+										],
 									],
 								),
 				),
@@ -1358,6 +1397,9 @@ class _TimeField extends StatelessWidget {
 class _ProcUi {
 	static String periodicidadLabel(Map<String, dynamic> proc) {
 		if (proc['tipo'] == 'preventivo_no_periodico') return 'Sin periodicidad';
+		if (proc['periodicidadTipo'] == 'contador' && proc['periodicidadValor'] != null) {
+			return 'Cada ${proc['periodicidadValor']} u. contador';
+		}
 		if (proc['periodicidadTipo'] == 'tiempo' && proc['periodicidadValor'] != null) {
 			final dias = proc['periodicidadValor'];
 			final criterio = proc['criterioProgramacion'] == 'fecha_inicio'

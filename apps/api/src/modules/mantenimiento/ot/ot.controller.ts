@@ -16,9 +16,11 @@ import { RequiereDerecho } from '../../../common/decorators/requiere-derecho.dec
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { ActualizarEjecucionOtDto } from './dto/actualizar-ejecucion.dto';
 import { AnularOtDto } from './dto/anular-ot.dto';
+import { AsignarMotivoPendienteDto } from './dto/asignar-motivo-pendiente.dto';
 import { AsignarOtDto } from './dto/asignar-ot.dto';
 import { CambiarEstadoOtDto } from './dto/cambiar-estado-ot.dto';
 import { CompletarChecklistDto } from './dto/completar-checklist.dto';
+import { DerivarOtDto } from './dto/derivar-ot.dto';
 import { EmitirOtDto } from './dto/emitir-ot.dto';
 import { EmitirOtPeriodicaDto } from './dto/emitir-ot-periodica.dto';
 import { EmitirOtNecesariasDto } from './dto/emitir-ot-necesarias.dto';
@@ -93,6 +95,10 @@ export class OtController {
 		@Query('fechaDesde') fechaDesde?: string,
 		@Query('fechaHasta') fechaHasta?: string,
 		@Query('misOt') misOt?: string,
+		@Query('prioridad') prioridad?: string,
+		@Query('numero') numero?: string,
+		@Query('sectorResponsableId') sectorResponsableId?: string,
+		@Query('motivoPendienteId') motivoPendienteId?: string,
 	) {
 		return this.otService.findAll(user, {
 			sucursalId,
@@ -104,6 +110,10 @@ export class OtController {
 			fechaDesde,
 			fechaHasta,
 			misOt: misOt === 'true',
+			prioridad,
+			numero,
+			sectorResponsableId,
+			motivoPendienteId,
 		});
 	}
 
@@ -154,6 +164,16 @@ export class OtController {
 		@CurrentUser() user: AuthUser,
 	) {
 		return this.otService.asignar(id, dto, user);
+	}
+
+	@Patch(':id/motivo-pendiente')
+	@RequiereDerecho('programacion.ordenes_trabajo.buscar_y_actualizar')
+	asignarMotivoPendiente(
+		@Param('id', ParseUUIDPipe) id: string,
+		@Body() dto: AsignarMotivoPendienteDto,
+		@CurrentUser() user: AuthUser,
+	) {
+		return this.otService.asignarMotivoPendiente(id, dto.motivoPendienteId, user);
 	}
 
 	@Patch(':id/estado')
@@ -214,5 +234,15 @@ export class OtController {
 		@CurrentUser() user: AuthUser,
 	) {
 		return this.otService.reabrir(id, dto, user);
+	}
+
+	@Post(':id/derivar')
+	@RequiereDerecho('programacion.ordenes_trabajo.emitir_no_periodica')
+	derivar(
+		@Param('id', ParseUUIDPipe) id: string,
+		@Body() dto: DerivarOtDto,
+		@CurrentUser() user: AuthUser,
+	) {
+		return this.otService.derivar(id, dto, user);
 	}
 }

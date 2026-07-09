@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { ComponentesController } from './componentes/componentes.controller';
+import { ComponentesService } from './componentes/componentes.service';
+import { EquipoDocumentosController } from './documentos/equipo-documentos.controller';
+import { EquipoDocumentosService } from './documentos/equipo-documentos.service';
 import { EquiposController } from './equipos/equipos.controller';
 import { EquiposService } from './equipos/equipos.service';
 import { LecturasController } from './lecturas/lecturas.controller';
@@ -14,12 +18,16 @@ import { UbicacionesService } from './ubicaciones/ubicaciones.service';
 		TiposEquipoController,
 		EquiposController,
 		LecturasController,
+		EquipoDocumentosController,
+		ComponentesController,
 	],
 	providers: [
 		UbicacionesService,
 		TiposEquipoService,
 		EquiposService,
 		LecturasService,
+		EquipoDocumentosService,
+		ComponentesService,
 	],
 	exports: [UbicacionesService, EquiposService, TiposEquipoService],
 })

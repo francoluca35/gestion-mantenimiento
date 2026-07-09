@@ -62,6 +62,28 @@ class ApiClient {
 		return _decodeMap(response);
 	}
 
+	Future<void> uploadBytes(
+		String uploadPath,
+		List<int> bytes, {
+		required String contentType,
+		bool auth = true,
+	}) async {
+		final normalized = uploadPath.startsWith('/v1/')
+				? uploadPath.substring(4)
+				: uploadPath.startsWith('/')
+						? uploadPath.substring(1)
+						: uploadPath;
+		final response = await _client.put(
+			_uri(normalized),
+			headers: {
+				...(await _headers(auth: auth)),
+				'Content-Type': contentType,
+			},
+			body: bytes,
+		);
+		_ensureSuccess(response);
+	}
+
 	Future<Map<String, dynamic>> patchJson(
 		String path,
 		Map<String, dynamic> body,
@@ -69,6 +91,19 @@ class ApiClient {
 		final response = await _client.patch(
 			_uri(path),
 			headers: await _headers(),
+			body: jsonEncode(body),
+		);
+		return _decodeMap(response);
+	}
+
+	Future<Map<String, dynamic>> putJson(
+		String path,
+		Map<String, dynamic> body, {
+		bool auth = true,
+	}) async {
+		final response = await _client.put(
+			_uri(path),
+			headers: await _headers(auth: auth),
 			body: jsonEncode(body),
 		);
 		return _decodeMap(response);

@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_user.dart';
+import 'planta_actions.dart';
+import 'planta_clipboard.dart';
+import 'planta_equipo_ficha.dart';
 
 enum _NodeKind { empresa, planta, ubicacion, maquina }
 
@@ -37,11 +40,13 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 
 	String? _sucursalId;
 	String? _plantaNombre;
+	List<Map<String, dynamic>> _sucursales = [];
 	List<Map<String, dynamic>> _ubicacionesTree = [];
 	List<Map<String, dynamic>> _equipos = [];
 	List<Map<String, dynamic>> _tipos = [];
 	_TreeNode? _selected;
 	Map<String, dynamic>? _equipoDetalle;
+	PlantaClipboard? _clipboard;
 	String _search = '';
 	bool _loading = true;
 	String? _error;
@@ -53,6 +58,28 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 
 	bool get _canEditEquipos =>
 			_user?.tieneDerecho('archivos.equipos.agregar') == true;
+
+	bool get _canModificarUbicaciones =>
+			_user?.tieneDerecho('archivos.ubicaciones.modificar_nodo') == true;
+
+	bool get _canBorrarUbicaciones =>
+			_user?.tieneDerecho('archivos.ubicaciones.borrar_nodo') == true;
+
+	bool get _canMoverUbicaciones =>
+			_user?.tieneDerecho('archivos.ubicaciones.mover_nodo') == true;
+
+	bool get _canModificarEquipos =>
+			_user?.tieneDerecho('archivos.equipos.modificar') == true;
+
+	bool get _canMoverEquipos =>
+			_user?.tieneDerecho('archivos.equipos.mover') == true;
+
+	bool get _canCopiarEquipos =>
+			_user?.tieneDerecho('archivos.equipos.copiar') == true ||
+			_user?.esAdministrador == true;
+
+	bool get _canCambiarPlanta =>
+			_user?.esAdministrador == true || _user?.supervisaSucursales == true;
 
 	@override
 	void initState() {
@@ -70,14 +97,20 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 			final api = ref.read(apiClientProvider);
 			final user = _user;
 
-			if (user?.sucursalId == null) {
-				throw Exception(
-					'Tu usuario no tiene planta asignada. Solo se muestra la planta del usuario logueado.',
-				);
+			if (user?.sucursalId == null && !_canCambiarPlanta) {
+				throw Exception('Tu usuario no tiene planta asignada.');
 			}
 
-			_sucursalId = user!.sucursalId;
-			_plantaNombre = user.sucursalNombre ?? 'PLANTA';
+			if (_canCambiarPlanta) {
+				_sucursales = (await api.getList('sucursales')).cast<Map<String, dynamic>>();
+			}
+
+			_sucursalId = user?.sucursalId ?? _sucursales.firstOrNull?['id'] as String?;
+			_plantaNombre = user?.sucursalNombre ??
+					_sucursales.where((s) => s['id'] == _sucursalId).map((s) => s['nombre'] as String).firstOrNull ??
+					'PLANTA';
+
+			if (_sucursalId == null) throw Exception('No hay plantas disponibles');
 
 			final tipos = await api.getList('tipos-equipo');
 			_tipos = tipos.cast<Map<String, dynamic>>();
@@ -216,6 +249,21 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 		return count;
 	}
 
+	List<_TreeNode> _ubicacionesHojaDesde(_TreeNode node) {
+		if (node.kind == _NodeKind.planta || node.kind == _NodeKind.empresa) {
+			return node.children.expand(_ubicacionesHojaDesde).toList();
+		}
+		if (node.kind == _NodeKind.ubicacion) {
+			final hasChildUbic = node.children.any((c) => c.kind == _NodeKind.ubicacion);
+			if (!hasChildUbic) return [node];
+			return node.children
+					.where((c) => c.kind == _NodeKind.ubicacion)
+					.expand(_ubicacionesHojaDesde)
+					.toList();
+		}
+		return [];
+	}
+
 	Future<void> _select(_TreeNode node) async {
 		setState(() {
 			_selected = node;
@@ -234,6 +282,108 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 				);
 			}
 		}
+	}
+
+	Future<void> _onEquipoUpdated() async {
+		final node = _selected;
+		await _reload();
+		if (node?.kind == _NodeKind.maquina) await _select(node!);
+	}
+
+	Future<void> _onSucursalChanged(String? id) async {
+		if (id == null || id == _sucursalId) return;
+		final sucursal = _sucursales.firstWhere((s) => s['id'] == id, orElse: () => {});
+		setState(() {
+			_sucursalId = id;
+			_plantaNombre = sucursal['nombre'] as String? ?? 'PLANTA';
+			_selected = _TreeNode(
+				id: 'planta:$_sucursalId',
+				label: _plantaNombre!,
+				kind: _NodeKind.planta,
+				activo: true,
+			);
+		});
+		await _reload();
+	}
+
+	Set<String> _descendantUbicacionIds(_TreeNode node) {
+		final ids = <String>{node.id.replaceFirst('ubicacion:', '')};
+		for (final child in node.children) {
+			if (child.kind == _NodeKind.ubicacion) ids.addAll(_descendantUbicacionIds(child));
+		}
+		return ids;
+	}
+
+	List<Map<String, String>> _ubicacionesHojaOptions() {
+		return _ubicacionesHojaDesde(_buildExplorerTree())
+				.map((n) => {
+							'id': n.id.replaceFirst('ubicacion:', ''),
+							'label': n.label,
+						})
+				.toList();
+	}
+
+	Future<void> _editUbicacion(_TreeNode node) async {
+		final ok = await showEditUbicacionDialog(
+			context: context,
+			api: ref.read(apiClientProvider),
+			ubicacionId: node.id.replaceFirst('ubicacion:', ''),
+			nombreActual: node.label,
+		);
+		if (ok) await _reload();
+	}
+
+	Future<void> _deleteUbicacion(_TreeNode node) async {
+		final ok = await confirmDeleteUbicacion(
+			context: context,
+			api: ref.read(apiClientProvider),
+			ubicacionId: node.id.replaceFirst('ubicacion:', ''),
+			nombre: node.label,
+		);
+		if (!ok || !mounted) return;
+		setState(() {
+			_selected = _TreeNode(
+				id: 'planta:$_sucursalId',
+				label: _plantaNombre ?? 'PLANTA',
+				kind: _NodeKind.planta,
+				activo: true,
+			);
+		});
+		await _reload();
+	}
+
+	Future<void> _moverUbicacion(_TreeNode node) async {
+		final ok = await showMoverUbicacionDialog(
+			context: context,
+			api: ref.read(apiClientProvider),
+			ubicacionId: node.id.replaceFirst('ubicacion:', ''),
+			ubicacionesTree: _ubicacionesTree,
+			excludeIds: _descendantUbicacionIds(node),
+		);
+		if (ok) await _reload();
+	}
+
+	Future<void> _editEquipo() async {
+		final detalle = _equipoDetalle;
+		if (detalle == null) return;
+		final ok = await showEditEquipoDialog(
+			context: context,
+			api: ref.read(apiClientProvider),
+			detalle: detalle,
+		);
+		if (ok) await _onEquipoUpdated();
+	}
+
+	Future<void> _moverEquipo() async {
+		final detalle = _equipoDetalle;
+		if (detalle == null) return;
+		final ok = await showMoverEquipoDialog(
+			context: context,
+			api: ref.read(apiClientProvider),
+			equipoId: detalle['id'] as String,
+			hojas: _ubicacionesHojaOptions(),
+		);
+		if (ok) await _reload();
 	}
 
 	Future<void> _createUbicacion({String? parentId}) async {
@@ -279,95 +429,235 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 	}
 
 	Future<void> _createMaquina(String ubicacionId, String ubicacionNombre) async {
-		if (_tipos.isEmpty) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('No hay tipos de máquina configurados')),
-			);
-			return;
-		}
-
-		final nombreCtrl = TextEditingController();
-		final codigoCtrl = TextEditingController();
-		var tipoId = _tipos.first['id'] as String;
-
-		final ok = await showDialog<bool>(
+		final ok = await showCreateMaquinaDialog(
 			context: context,
-			builder: (context) => StatefulBuilder(
-				builder: (context, setDialogState) => AlertDialog(
-					title: const Text('Nueva máquina'),
-					content: Column(
-						mainAxisSize: MainAxisSize.min,
-						children: [
-							Align(
-								alignment: Alignment.centerLeft,
-								child: Text(
-									'En: $ubicacionNombre',
-									style: TextStyle(color: Colors.grey.shade600),
-								),
+			api: ref.read(apiClientProvider),
+			sucursalId: _sucursalId!,
+			ubicacionId: ubicacionId,
+			ubicacionNombre: ubicacionNombre,
+			tipos: _tipos,
+		);
+		if (ok) await _reload();
+	}
+
+	bool _isUbicacionHoja(_TreeNode node) {
+		if (node.kind != _NodeKind.ubicacion) return false;
+		return !node.children.any((child) => child.kind == _NodeKind.ubicacion);
+	}
+
+	void _copiarEquipoSeleccionado() {
+		final detalle = _equipoDetalle;
+		final node = _selected;
+		if (detalle == null || node?.kind != _NodeKind.maquina) return;
+		setState(() {
+			_clipboard = PlantaClipboard(
+				equipoId: detalle['id'] as String,
+				nombre: detalle['nombre'] as String,
+				codigo: detalle['codigo'] as String,
+				mode: PlantaClipboardMode.copiar,
+			);
+		});
+		ScaffoldMessenger.of(context).showSnackBar(
+			SnackBar(content: Text('Copiado: ${detalle['nombre']}')),
+		);
+	}
+
+	void _cortarEquipoSeleccionado() {
+		final detalle = _equipoDetalle;
+		final node = _selected;
+		if (detalle == null || node?.kind != _NodeKind.maquina) return;
+		setState(() {
+			_clipboard = PlantaClipboard(
+				equipoId: detalle['id'] as String,
+				nombre: detalle['nombre'] as String,
+				codigo: detalle['codigo'] as String,
+				mode: PlantaClipboardMode.mover,
+			);
+		});
+		ScaffoldMessenger.of(context).showSnackBar(
+			SnackBar(content: Text('Listo para mover: ${detalle['nombre']}')),
+		);
+	}
+
+	Future<void> _pegarClipboard() async {
+		final clipboard = _clipboard;
+		final target = _selected;
+		if (clipboard == null || target == null) return;
+
+		final api = ref.read(apiClientProvider);
+
+		try {
+			if (clipboard.isMove) {
+				if (!_canMoverEquipos) return;
+				if (target.kind != _NodeKind.ubicacion || !_isUbicacionHoja(target)) {
+					throw Exception('Seleccione una ubicación hoja para mover el equipo');
+				}
+				final ubicacionId = target.id.replaceFirst('ubicacion:', '');
+				await api.postJson('equipos/${clipboard.equipoId}/mover', {
+					'ubicacionId': ubicacionId,
+				});
+			} else {
+				if (!_canCopiarEquipos) return;
+				if (target.kind == _NodeKind.maquina) {
+					final targetId = target.id.replaceFirst('maquina:', '');
+					await api.postJson('equipos/$targetId/pegar-componentes', {
+						'sourceEquipoId': clipboard.equipoId,
+					});
+				} else if (target.kind == _NodeKind.ubicacion && _isUbicacionHoja(target)) {
+					final ubicacionId = target.id.replaceFirst('ubicacion:', '');
+					await api.postJson('equipos/${clipboard.equipoId}/duplicar', {
+						'ubicacionId': ubicacionId,
+					});
+				} else {
+					throw Exception('Seleccione un equipo o ubicación hoja para pegar');
+				}
+			}
+
+			if (!mounted) return;
+			setState(() => _clipboard = null);
+			await _reload();
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Operación completada')),
+			);
+		} catch (error) {
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+		}
+	}
+
+	Future<void> _listarEquipos() async {
+		final controller = TextEditingController();
+		var query = '';
+
+		final selectedId = await showDialog<String>(
+			context: context,
+			builder: (ctx) => StatefulBuilder(
+				builder: (context, setDialogState) {
+					final filtered = _equipos.where((equipo) {
+						if (query.trim().isEmpty) return true;
+						final q = query.trim().toLowerCase();
+						final nombre = (equipo['nombre'] as String? ?? '').toLowerCase();
+						final codigo = (equipo['codigo'] as String? ?? '').toLowerCase();
+						return nombre.contains(q) || codigo.contains(q);
+					}).toList();
+
+					return AlertDialog(
+						title: const Text('Listar equipos'),
+						content: SizedBox(
+							width: 420,
+							height: 420,
+							child: Column(
+								children: [
+									TextField(
+										controller: controller,
+										autofocus: true,
+										decoration: const InputDecoration(
+											labelText: 'Buscar por nombre o código',
+											prefixIcon: Icon(Icons.search),
+										),
+										onChanged: (value) => setDialogState(() => query = value),
+									),
+									const SizedBox(height: 12),
+									Expanded(
+										child: filtered.isEmpty
+												? const Center(child: Text('Sin resultados'))
+												: ListView.builder(
+														itemCount: filtered.length,
+														itemBuilder: (context, index) {
+															final equipo = filtered[index];
+															return ListTile(
+																dense: true,
+																title: Text(equipo['nombre'] as String? ?? ''),
+																subtitle: Text(equipo['codigo'] as String? ?? ''),
+																onTap: () => Navigator.pop(
+																	ctx,
+																	equipo['id'] as String,
+																),
+															);
+														},
+													),
+									),
+								],
 							),
-							const SizedBox(height: 12),
-							TextField(
-								controller: nombreCtrl,
-								decoration: const InputDecoration(
-									labelText: 'Nombre',
-									hintText: 'Ej: SILO 103 ARENA FINA L-24',
-								),
-							),
-							const SizedBox(height: 8),
-							TextField(
-								controller: codigoCtrl,
-								decoration: const InputDecoration(
-									labelText: 'Código',
-									hintText: 'Ej: SILO-103',
-								),
-							),
-							const SizedBox(height: 8),
-							DropdownButtonFormField<String>(
-								value: tipoId,
-								items: _tipos
-										.map(
-											(tipo) => DropdownMenuItem(
-												value: tipo['id'] as String,
-												child: Text(tipo['nombre'] as String),
-											),
-										)
-										.toList(),
-								onChanged: (value) {
-									if (value != null) setDialogState(() => tipoId = value);
-								},
-								decoration: const InputDecoration(labelText: 'Tipo'),
+						),
+						actions: [
+							TextButton(
+								onPressed: () => Navigator.pop(ctx),
+								child: const Text('Cerrar'),
 							),
 						],
-					),
-					actions: [
-						TextButton(
-							onPressed: () => Navigator.pop(context, false),
-							child: const Text('Cancelar'),
-						),
-						FilledButton(
-							onPressed: () => Navigator.pop(context, true),
-							child: const Text('Crear'),
-						),
-					],
-				),
+					);
+				},
 			),
 		);
 
-		if (ok != true) return;
+		controller.dispose();
+		if (selectedId == null || !mounted) return;
+
+		final node = _findMaquinaNode(_buildExplorerTree(), selectedId);
+		if (node != null) await _select(node);
+	}
+
+	_TreeNode? _findMaquinaNode(_TreeNode node, String equipoId) {
+		if (node.kind == _NodeKind.maquina && node.id == 'maquina:$equipoId') {
+			return node;
+		}
+		for (final child in node.children) {
+			final found = _findMaquinaNode(child, equipoId);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	Future<void> _onDrop(PlantaDragPayload payload, _TreeNode target) async {
+		final api = ref.read(apiClientProvider);
 
 		try {
-			await ref.read(apiClientProvider).postJson('equipos', {
-				'sucursalId': _sucursalId,
-				'ubicacionId': ubicacionId,
-				'tipoEquipoId': tipoId,
-				'nombre': nombreCtrl.text.trim().toUpperCase(),
-				'codigo': codigoCtrl.text.trim().toUpperCase(),
-			});
+			if (payload.kind == PlantaDragKind.equipo) {
+				if (!_canMoverEquipos) return;
+				if (target.kind != _NodeKind.ubicacion || !_isUbicacionHoja(target)) {
+					throw Exception('Soltar sobre una ubicación hoja');
+				}
+				final ubicacionId = target.id.replaceFirst('ubicacion:', '');
+				await api.postJson('equipos/${payload.id}/mover', {
+					'ubicacionId': ubicacionId,
+				});
+			} else {
+				if (!_canMoverUbicaciones) return;
+				final ubicacionId = payload.id;
+				final parentId = switch (target.kind) {
+					_NodeKind.planta => null,
+					_NodeKind.ubicacion => target.id.replaceFirst('ubicacion:', ''),
+					_ => throw Exception('Destino inválido para ubicación'),
+				};
+				await api.postJson('ubicaciones/$ubicacionId/mover', {
+					if (parentId != null) 'parentId': parentId,
+				});
+			}
+
+			if (!mounted) return;
 			await _reload();
 		} catch (error) {
 			if (!mounted) return;
 			ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
 		}
+	}
+
+	bool get _canPegar {
+		final clipboard = _clipboard;
+		final target = _selected;
+		if (clipboard == null || target == null) return false;
+
+		if (clipboard.isMove) {
+			return _canMoverEquipos &&
+					target.kind == _NodeKind.ubicacion &&
+					_isUbicacionHoja(target);
+		}
+
+		if (!_canCopiarEquipos) return false;
+		if (target.kind == _NodeKind.maquina) return true;
+		return target.kind == _NodeKind.ubicacion && _isUbicacionHoja(target);
 	}
 
 	void _onAddPressed() {
@@ -441,7 +731,7 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 	Widget build(BuildContext context) {
 		final scheme = Theme.of(context).colorScheme;
 		final isDark = Theme.of(context).brightness == Brightness.dark;
-		final explorerBg = isDark ? const Color(0xFF111827) : Colors.white;
+		final explorerBg = isDark ? AppColors.explorerPanel : Colors.white;
 		final pageBg = isDark ? AppColors.backgroundDark : const Color(0xFFF1F5F9);
 
 		if (_loading) {
@@ -510,6 +800,10 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 																		selectedId: _selected?.id,
 																		depth: 0,
 																		onSelect: _select,
+																		onDrop: _onDrop,
+																		canDragEquipo: _canMoverEquipos,
+																		canDragUbicacion: _canMoverUbicaciones,
+																		isUbicacionHoja: _isUbicacionHoja,
 																	),
 																)
 																.toList(),
@@ -531,6 +825,18 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 									onRefresh: _bootstrap,
 									showAdd: _showAddButton,
 									onAdd: _onAddPressed,
+									sucursales: _canCambiarPlanta ? _sucursales : const [],
+									sucursalId: _sucursalId,
+									onSucursalChanged: _canCambiarPlanta ? _onSucursalChanged : null,
+									showEquipoToolbar: _selected?.kind == _NodeKind.maquina,
+									canCopiar: _canCopiarEquipos,
+									canCortar: _canMoverEquipos,
+									canPegar: _canPegar,
+									clipboardLabel: _clipboard?.nombre,
+									onCopiar: _copiarEquipoSeleccionado,
+									onCortar: _cortarEquipoSeleccionado,
+									onPegar: _pegarClipboard,
+									onListar: _listarEquipos,
 								),
 								Expanded(
 									child: ListView(
@@ -548,11 +854,18 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 												equipoDetalle: _equipoDetalle,
 												plantaNombre: _plantaNombre ?? '',
 												empresaNombre: _empresaNombre,
+												sucursalId: _sucursalId,
 												emptyTree: _ubicacionesTree.isEmpty,
 												canEdit: _canEditUbicaciones,
 												onCreateFirstUbicacion: _canEditUbicaciones
 														? () => _createUbicacion()
 														: null,
+												onEquipoUpdated: _onEquipoUpdated,
+												onEditUbicacion: _canModificarUbicaciones ? _editUbicacion : null,
+												onDeleteUbicacion: _canBorrarUbicaciones ? _deleteUbicacion : null,
+												onMoverUbicacion: _canMoverUbicaciones ? _moverUbicacion : null,
+												onEditEquipo: _canModificarEquipos ? (_) => _editEquipo() : null,
+												onMoverEquipo: _canMoverEquipos ? (_) => _moverEquipo() : null,
 											),
 										],
 									),
@@ -572,12 +885,36 @@ class _TopBar extends StatelessWidget {
 		required this.onRefresh,
 		required this.showAdd,
 		required this.onAdd,
+		this.sucursales = const [],
+		this.sucursalId,
+		this.onSucursalChanged,
+		this.showEquipoToolbar = false,
+		this.canCopiar = false,
+		this.canCortar = false,
+		this.canPegar = false,
+		this.clipboardLabel,
+		this.onCopiar,
+		this.onCortar,
+		this.onPegar,
+		this.onListar,
 	});
 
 	final String plantaNombre;
 	final VoidCallback onRefresh;
 	final bool showAdd;
 	final VoidCallback onAdd;
+	final List<Map<String, dynamic>> sucursales;
+	final String? sucursalId;
+	final ValueChanged<String?>? onSucursalChanged;
+	final bool showEquipoToolbar;
+	final bool canCopiar;
+	final bool canCortar;
+	final bool canPegar;
+	final String? clipboardLabel;
+	final VoidCallback? onCopiar;
+	final VoidCallback? onCortar;
+	final Future<void> Function()? onPegar;
+	final Future<void> Function()? onListar;
 
 	@override
 	Widget build(BuildContext context) {
@@ -601,22 +938,73 @@ class _TopBar extends StatelessWidget {
 								),
 					),
 					const SizedBox(width: 12),
-					Container(
-						padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-						decoration: BoxDecoration(
-							color: AppColors.primary.withValues(alpha: 0.1),
-							borderRadius: BorderRadius.circular(999),
-						),
-						child: Text(
-							plantaNombre,
-							style: const TextStyle(
-								color: AppColors.primary,
-								fontWeight: FontWeight.w600,
-								fontSize: 12,
+					if (sucursales.isNotEmpty && onSucursalChanged != null)
+						DropdownButtonHideUnderline(
+							child: DropdownButton<String>(
+								value: sucursalId,
+								items: sucursales
+										.map(
+											(s) => DropdownMenuItem(
+												value: s['id'] as String,
+												child: Text(s['nombre'] as String),
+											),
+										)
+										.toList(),
+								onChanged: onSucursalChanged,
+							),
+						)
+					else
+						Container(
+							padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+							decoration: BoxDecoration(
+								color: AppColors.primary.withValues(alpha: 0.1),
+								borderRadius: BorderRadius.circular(999),
+							),
+							child: Text(
+								plantaNombre,
+								style: const TextStyle(
+									color: AppColors.primary,
+									fontWeight: FontWeight.w600,
+									fontSize: 12,
+								),
 							),
 						),
-					),
+					if (clipboardLabel != null) ...[
+						const SizedBox(width: 12),
+						Tooltip(
+							message: 'Portapapeles: $clipboardLabel',
+							child: Icon(
+								Icons.content_paste_go_outlined,
+								size: 18,
+								color: AppColors.primary.withValues(alpha: 0.8),
+							),
+						),
+					],
 					const Spacer(),
+					if (onListar != null)
+						IconButton(
+							onPressed: onListar,
+							icon: const Icon(Icons.list_alt_outlined),
+							tooltip: 'Listar equipos',
+						),
+					if (showEquipoToolbar && canCopiar && onCopiar != null)
+						IconButton(
+							onPressed: onCopiar,
+							icon: const Icon(Icons.content_copy_outlined),
+							tooltip: 'Copiar equipo',
+						),
+					if (showEquipoToolbar && canCortar && onCortar != null)
+						IconButton(
+							onPressed: onCortar,
+							icon: const Icon(Icons.content_cut_outlined),
+							tooltip: 'Cortar (mover)',
+						),
+					if (canPegar && onPegar != null)
+						IconButton(
+							onPressed: onPegar,
+							icon: const Icon(Icons.content_paste_outlined),
+							tooltip: 'Pegar',
+						),
 					IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh)),
 					if (showAdd) ...[
 						const SizedBox(width: 8),
@@ -723,18 +1111,35 @@ class _StatCard extends StatelessWidget {
 	}
 }
 
-class _ExplorerTile extends StatelessWidget {
+class _ExplorerTile extends StatefulWidget {
 	const _ExplorerTile({
 		required this.node,
 		required this.selectedId,
 		required this.depth,
 		required this.onSelect,
+		required this.onDrop,
+		required this.canDragEquipo,
+		required this.canDragUbicacion,
+		required this.isUbicacionHoja,
 	});
 
 	final _TreeNode node;
 	final String? selectedId;
 	final int depth;
 	final void Function(_TreeNode node) onSelect;
+	final Future<void> Function(PlantaDragPayload payload, _TreeNode target) onDrop;
+	final bool canDragEquipo;
+	final bool canDragUbicacion;
+	final bool Function(_TreeNode node) isUbicacionHoja;
+
+	@override
+	State<_ExplorerTile> createState() => _ExplorerTileState();
+}
+
+class _ExplorerTileState extends State<_ExplorerTile> {
+	bool _isDragOver = false;
+
+	_TreeNode get node => widget.node;
 
 	IconData get _icon {
 		switch (node.kind) {
@@ -749,56 +1154,150 @@ class _ExplorerTile extends StatelessWidget {
 		}
 	}
 
+	PlantaDragPayload? _dragPayloadForNode() {
+		if (node.kind == _NodeKind.maquina && widget.canDragEquipo) {
+			return PlantaDragPayload(
+				kind: PlantaDragKind.equipo,
+				id: node.id.replaceFirst('maquina:', ''),
+				label: node.label,
+			);
+		}
+		if (node.kind == _NodeKind.ubicacion && widget.canDragUbicacion) {
+			return PlantaDragPayload(
+				kind: PlantaDragKind.ubicacion,
+				id: node.id.replaceFirst('ubicacion:', ''),
+				label: node.label,
+			);
+		}
+		return null;
+	}
+
+	bool _acceptsDrop(PlantaDragPayload? payload) {
+		if (payload == null) return false;
+
+		if (payload.kind == PlantaDragKind.equipo) {
+			return node.kind == _NodeKind.ubicacion && widget.isUbicacionHoja(node);
+		}
+
+		if (payload.kind == PlantaDragKind.ubicacion) {
+			if (node.kind == _NodeKind.planta) return true;
+			if (node.kind == _NodeKind.ubicacion) {
+				return payload.id != node.id.replaceFirst('ubicacion:', '');
+			}
+		}
+
+		return false;
+	}
+
+	bool get _isDropTarget =>
+			node.kind == _NodeKind.planta ||
+			node.kind == _NodeKind.ubicacion;
+
+	Widget _buildTileContent(bool selected, bool isDark) {
+		final scheme = Theme.of(context).colorScheme;
+		final dragOver = _isDragOver;
+
+		return Material(
+			color: dragOver
+					? AppColors.explorerSelected.withValues(alpha: 0.85)
+					: selected
+							? (isDark
+									? AppColors.explorerSelected
+									: AppColors.primary.withValues(alpha: 0.12))
+							: Colors.transparent,
+			borderRadius: BorderRadius.circular(10),
+			child: InkWell(
+				borderRadius: BorderRadius.circular(10),
+				onTap: () => widget.onSelect(node),
+				child: Padding(
+					padding: EdgeInsets.fromLTRB(8.0 + widget.depth * 14, 10, 8, 10),
+					child: Row(
+						children: [
+							Icon(_icon, size: 18, color: scheme.onSurfaceVariant),
+							const SizedBox(width: 8),
+							Container(
+								width: 8,
+								height: 8,
+								decoration: BoxDecoration(
+									shape: BoxShape.circle,
+									color: node.activo ? AppColors.success : AppColors.warning,
+								),
+							),
+							const SizedBox(width: 8),
+							Expanded(
+								child: Text(
+									node.label,
+									style: TextStyle(
+										fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+										fontSize: 13,
+									),
+								),
+							),
+						],
+					),
+				),
+			),
+		);
+	}
+
 	@override
 	Widget build(BuildContext context) {
-		final selected = selectedId == node.id;
-		final scheme = Theme.of(context).colorScheme;
+		final selected = widget.selectedId == node.id;
+		final payload = _dragPayloadForNode();
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+
+		Widget rowContent = _buildTileContent(selected, isDark);
+
+		if (payload != null) {
+			rowContent = LongPressDraggable<PlantaDragPayload>(
+				data: payload,
+				feedback: Material(
+					elevation: 4,
+					borderRadius: BorderRadius.circular(8),
+					color: isDark ? AppColors.cardElevated : null,
+					child: Padding(
+						padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+						child: Text(payload.label, style: const TextStyle(fontSize: 13)),
+					),
+				),
+				childWhenDragging: Opacity(opacity: 0.35, child: rowContent),
+				child: rowContent,
+			);
+		}
+
+		Widget row = rowContent;
+
+		if (_isDropTarget) {
+			final inner = rowContent;
+			row = DragTarget<PlantaDragPayload>(
+				onWillAcceptWithDetails: (details) => _acceptsDrop(details.data),
+				onLeave: (_) {
+					if (_isDragOver) setState(() => _isDragOver = false);
+				},
+				onMove: (_) {
+					if (!_isDragOver) setState(() => _isDragOver = true);
+				},
+				onAcceptWithDetails: (details) async {
+					setState(() => _isDragOver = false);
+					await widget.onDrop(details.data, node);
+				},
+				builder: (context, candidate, rejected) => inner,
+			);
+		}
 
 		return Column(
 			children: [
-				Material(
-					color: selected
-							? AppColors.primary.withValues(alpha: 0.12)
-							: Colors.transparent,
-					borderRadius: BorderRadius.circular(10),
-					child: InkWell(
-						borderRadius: BorderRadius.circular(10),
-						onTap: () => onSelect(node),
-						child: Padding(
-							padding: EdgeInsets.fromLTRB(8.0 + depth * 14, 10, 8, 10),
-							child: Row(
-								children: [
-									Icon(_icon, size: 18, color: scheme.onSurfaceVariant),
-									const SizedBox(width: 8),
-									Container(
-										width: 8,
-										height: 8,
-										decoration: BoxDecoration(
-											shape: BoxShape.circle,
-											color: node.activo ? AppColors.success : AppColors.warning,
-										),
-									),
-									const SizedBox(width: 8),
-									Expanded(
-										child: Text(
-											node.label,
-											style: TextStyle(
-												fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-												fontSize: 13,
-											),
-										),
-									),
-								],
-							),
-						),
-					),
-				),
+				row,
 				...node.children.map(
 					(child) => _ExplorerTile(
 						node: child,
-						selectedId: selectedId,
-						depth: depth + 1,
-						onSelect: onSelect,
+						selectedId: widget.selectedId,
+						depth: widget.depth + 1,
+						onSelect: widget.onSelect,
+						onDrop: widget.onDrop,
+						canDragEquipo: widget.canDragEquipo,
+						canDragUbicacion: widget.canDragUbicacion,
+						isUbicacionHoja: widget.isUbicacionHoja,
 					),
 				),
 			],
@@ -812,18 +1311,32 @@ class _DetailPanel extends StatelessWidget {
 		required this.equipoDetalle,
 		required this.plantaNombre,
 		required this.empresaNombre,
+		this.sucursalId,
 		required this.emptyTree,
 		required this.canEdit,
 		required this.onCreateFirstUbicacion,
+		this.onEquipoUpdated,
+		this.onEditUbicacion,
+		this.onDeleteUbicacion,
+		this.onMoverUbicacion,
+		this.onEditEquipo,
+		this.onMoverEquipo,
 	});
 
 	final _TreeNode? selected;
 	final Map<String, dynamic>? equipoDetalle;
 	final String plantaNombre;
 	final String empresaNombre;
+	final String? sucursalId;
 	final bool emptyTree;
 	final bool canEdit;
 	final VoidCallback? onCreateFirstUbicacion;
+	final Future<void> Function()? onEquipoUpdated;
+	final Future<void> Function(_TreeNode node)? onEditUbicacion;
+	final Future<void> Function(_TreeNode node)? onDeleteUbicacion;
+	final Future<void> Function(_TreeNode node)? onMoverUbicacion;
+	final Future<void> Function(_TreeNode node)? onEditEquipo;
+	final Future<void> Function(_TreeNode node)? onMoverEquipo;
 
 	@override
 	Widget build(BuildContext context) {
@@ -884,6 +1397,48 @@ class _DetailPanel extends StatelessWidget {
 									),
 								),
 							),
+							if (node.kind == _NodeKind.ubicacion &&
+									(onEditUbicacion != null ||
+											onDeleteUbicacion != null ||
+											onMoverUbicacion != null))
+								PopupMenuButton<String>(
+									onSelected: (action) async {
+										switch (action) {
+											case 'edit':
+												await onEditUbicacion?.call(node);
+											case 'move':
+												await onMoverUbicacion?.call(node);
+											case 'delete':
+												await onDeleteUbicacion?.call(node);
+										}
+									},
+									itemBuilder: (context) => [
+										if (onEditUbicacion != null)
+											const PopupMenuItem(value: 'edit', child: Text('Editar')),
+										if (onMoverUbicacion != null)
+											const PopupMenuItem(value: 'move', child: Text('Mover')),
+										if (onDeleteUbicacion != null)
+											const PopupMenuItem(value: 'delete', child: Text('Eliminar')),
+									],
+								),
+							if (node.kind == _NodeKind.maquina &&
+									(onEditEquipo != null || onMoverEquipo != null))
+								PopupMenuButton<String>(
+									onSelected: (action) async {
+										switch (action) {
+											case 'edit':
+												await onEditEquipo?.call(node);
+											case 'move':
+												await onMoverEquipo?.call(node);
+										}
+									},
+									itemBuilder: (context) => [
+										if (onEditEquipo != null)
+											const PopupMenuItem(value: 'edit', child: Text('Editar')),
+										if (onMoverEquipo != null)
+											const PopupMenuItem(value: 'move', child: Text('Mover')),
+									],
+								),
 						],
 					),
 					const SizedBox(height: 16),
@@ -893,15 +1448,22 @@ class _DetailPanel extends StatelessWidget {
 							onCreate: onCreateFirstUbicacion,
 						)
 					else if (node.kind == _NodeKind.maquina)
-						_MaquinaInfo(detalle: equipoDetalle ?? node.raw ?? {})
-					else if (node.kind == _NodeKind.ubicacion)
-						_UbicacionInfo(node: node)
-					else if (node.kind == _NodeKind.planta)
-						Text(
-							'Seleccioná una ubicación, sector o máquina en el explorador. '
-							'Usá Agregar para crear ubicaciones bajo esta planta.',
-							style: Theme.of(context).textTheme.bodyMedium,
+						PlantaEquipoFicha(
+							detalle: equipoDetalle ?? node.raw ?? {},
+							sucursalId: sucursalId,
+							onUpdated: onEquipoUpdated,
 						)
+					else if (node.kind == _NodeKind.ubicacion) ...[
+						_UbicacionInfo(node: node),
+						const SizedBox(height: 16),
+						_AlcanceProcedimientosSection(
+							ubicacionId: node.raw?['id'] as String?,
+						),
+					]
+					else if (node.kind == _NodeKind.planta && !emptyTree)
+						_AlcanceProcedimientosSection(sucursalId: sucursalId)
+					else if (node.kind == _NodeKind.planta && emptyTree)
+						const SizedBox.shrink()
 					else
 						Text(
 							'SIKA es la empresa. La planta del usuario logueado aparece debajo.',
@@ -982,48 +1544,83 @@ class _UbicacionInfo extends StatelessWidget {
 	}
 }
 
-class _MaquinaInfo extends StatelessWidget {
-	const _MaquinaInfo({required this.detalle});
+class _AlcanceProcedimientosSection extends ConsumerStatefulWidget {
+	const _AlcanceProcedimientosSection({this.sucursalId, this.ubicacionId});
 
-	final Map<String, dynamic> detalle;
+	final String? sucursalId;
+	final String? ubicacionId;
+
+	@override
+	ConsumerState<_AlcanceProcedimientosSection> createState() =>
+			_AlcanceProcedimientosSectionState();
+}
+
+class _AlcanceProcedimientosSectionState extends ConsumerState<_AlcanceProcedimientosSection> {
+	List<Map<String, dynamic>> _items = [];
+	bool _loading = true;
+	String? _error;
+
+	@override
+	void initState() {
+		super.initState();
+		_load();
+	}
+
+	@override
+	void didUpdateWidget(covariant _AlcanceProcedimientosSection oldWidget) {
+		super.didUpdateWidget(oldWidget);
+		if (oldWidget.sucursalId != widget.sucursalId ||
+				oldWidget.ubicacionId != widget.ubicacionId) {
+			_load();
+		}
+	}
+
+	Future<void> _load() async {
+		setState(() {
+			_loading = true;
+			_error = null;
+		});
+		try {
+			final q = widget.ubicacionId != null
+					? 'ubicacionId=${widget.ubicacionId}'
+					: 'sucursalId=${widget.sucursalId}';
+			final data = await ref.read(apiClientProvider).getList(
+				'ubicaciones/alcance/procedimientos?$q',
+			);
+			if (mounted) setState(() => _items = data.cast<Map<String, dynamic>>());
+		} catch (error) {
+			if (mounted) setState(() => _error = error.toString());
+		} finally {
+			if (mounted) setState(() => _loading = false);
+		}
+	}
 
 	@override
 	Widget build(BuildContext context) {
-		final tipo = detalle['tipoEquipo'] as Map<String, dynamic>?;
-		final ubicacion = detalle['ubicacion'] as Map<String, dynamic>?;
-		final campos = detalle['detalle'] as Map<String, dynamic>? ?? {};
-
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.start,
 			children: [
-				Wrap(
-					spacing: 12,
-					runSpacing: 12,
-					children: [
-						_InfoChip(label: 'Código', value: '${detalle['codigo'] ?? '-'}'),
-						_InfoChip(label: 'Tipo', value: '${tipo?['nombre'] ?? '-'}'),
-						_InfoChip(label: 'Ubicación', value: '${ubicacion?['nombre'] ?? '-'}'),
-						_InfoChip(
-							label: 'Estado',
-							value: (detalle['fueraDeServicio'] as bool? ?? false)
-									? 'Fuera de servicio'
-									: 'Operativo',
-						),
-					],
+				Text(
+					'Procedimientos por alcance',
+					style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
 				),
-				if (campos.isNotEmpty) ...[
-					const SizedBox(height: 16),
-					Text('Detalle', style: Theme.of(context).textTheme.titleSmall),
-					const SizedBox(height: 8),
-					...campos.entries.map(
-						(entry) => ListTile(
+				const SizedBox(height: 8),
+				if (_loading)
+					const LinearProgressIndicator(minHeight: 2)
+				else if (_error != null)
+					Text(_error!, style: const TextStyle(color: AppColors.danger))
+				else if (_items.isEmpty)
+					const Text('Sin procedimientos asociados a este alcance')
+				else
+					..._items.map((item) {
+						final proc = item['procedimiento'] as Map<String, dynamic>?;
+						return ListTile(
 							dense: true,
 							contentPadding: EdgeInsets.zero,
-							title: Text(entry.key),
-							subtitle: Text('${entry.value}'),
-						),
-					),
-				],
+							title: Text(proc?['nombre'] as String? ?? ''),
+							subtitle: Text('#${proc?['codigo'] ?? ''}'),
+						);
+					}),
 			],
 		);
 	}

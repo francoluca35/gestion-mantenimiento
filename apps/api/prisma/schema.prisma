@@ -13,6 +13,57 @@ enum SupervisaSolicitudesOt {
 	todas
 }
 
+enum TipoMantenimiento {
+	preventivo
+	preventivo_no_periodico
+	predictivo
+	correctivo
+	mejora
+}
+
+enum CriterioProgramacion {
+	fecha_inicio
+	fecha_finalizacion
+}
+
+enum EstadoOt {
+	necesaria_de_emitir
+	pendiente
+	pendiente_panol
+	en_ejecucion
+	realizada
+	anulada
+}
+
+enum PrioridadOt {
+	baja
+	media
+	alta
+	urgente
+}
+
+enum PeriodicidadTipo {
+	tiempo
+	contador
+}
+
+enum TipoAlcanceProcedimiento {
+	ubicacion
+	planta
+}
+
+enum EstadoProcedimientoEquipo {
+	activo
+	suspendido
+	baja
+}
+
+enum EstadoSolicitudTrabajo {
+	pendiente
+	conformada
+	rechazada
+}
+
 model Sucursal {
 	id        String   @id @default(uuid()) @db.Uuid
 	nombre    String   @db.VarChar(100)
@@ -21,9 +72,14 @@ model Sucursal {
 	createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 	updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-	usuarios    Usuario[]
-	ubicaciones Ubicacion[]
-	equipos     Equipo[]
+	usuarios             Usuario[]
+	ubicaciones          Ubicacion[]
+	equipos              Equipo[]
+	procedimientos       Procedimiento[]
+	procedimientoAlcances ProcedimientoAlcance[]
+	ordenesTrabajo       OrdenTrabajo[]
+	solicitudesTrabajo   SolicitudTrabajo[]
+	equipoDocumentos     EquipoDocumento[]
 
 	@@map("sucursales")
 }
@@ -88,10 +144,28 @@ model Usuario {
 
 	sucursal Sucursal?  @relation(fields: [sucursalId], references: [id])
 	perfil   Perfil?    @relation(fields: [perfilId], references: [id])
-	sesiones Sesion[]
-	lecturas Lectura[]
+	sesiones              Sesion[]
+	dispositivosFcm      DispositivoFcm[]
+	lecturas              Lectura[]
+	ordenesAsignadas      OrdenTrabajo[]      @relation("OtTecnico")
+	ordenesCreadas        OrdenTrabajo[]      @relation("OtCreador")
+	historialOt           OtEstadoHistorial[]
+	historialEquipo       HistorialEquipo[]
+	documentosEquipo      EquipoDocumento[]
 
 	@@map("usuarios")
+}
+
+model DispositivoFcm {
+	id        String   @id @default(uuid()) @db.Uuid
+	token     String   @unique @map("token") @db.VarChar(500)
+	usuarioId String   @map("usuario_id") @db.Uuid
+	createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+	usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+	@@index([usuarioId])
+	@@map("dispositivos_fcm")
 }
 
 model Sesion {
@@ -121,7 +195,10 @@ model Ubicacion {
 	sucursal Sucursal   @relation(fields: [sucursalId], references: [id])
 	parent   Ubicacion? @relation("UbicacionTree", fields: [parentId], references: [id])
 	children Ubicacion[] @relation("UbicacionTree")
-	equipos  Equipo[]
+	equipos              Equipo[]
+	ordenesTrabajo       OrdenTrabajo[]
+	procedimientosSector Procedimiento[] @relation("ProcedimientoSector")
+	procedimientoAlcances ProcedimientoAlcance[]
 
 	@@index([sucursalId, parentId])
 	@@map("ubicaciones")
@@ -158,8 +235,12 @@ model Equipo {
 	sucursal   Sucursal    @relation(fields: [sucursalId], references: [id])
 	ubicacion  Ubicacion   @relation(fields: [ubicacionId], references: [id])
 	tipoEquipo TipoEquipo  @relation(fields: [tipoEquipoId], references: [id])
-	componentes Componente[]
-	lecturas   Lectura[]
+	componentes           Componente[]
+	lecturas              Lectura[]
+	documentos            EquipoDocumento[]
+	procedimientosEquipo  ProcedimientoEquipo[]
+	ordenesTrabajo        OrdenTrabajo[]
+	historial             HistorialEquipo[]
 
 	@@unique([sucursalId, codigo])
 	@@index([ubicacionId])
@@ -185,14 +266,197 @@ model Lectura {
 	id        String   @id @default(uuid()) @db.Uuid
 	equipoId  String   @map("equipo_id") @db.Uuid
 	usuarioId String?  @map("usuario_id") @db.Uuid
+	otId      String?  @map("ot_id") @db.Uuid
 	tipo      String   @db.VarChar(50)
 	valor     Decimal  @db.Decimal(15, 2)
 	fecha     DateTime @default(now()) @db.Timestamptz(6)
 	notas     String?  @db.Text
 
-	equipo  Equipo   @relation(fields: [equipoId], references: [id], onDelete: Cascade)
-	usuario Usuario? @relation(fields: [usuarioId], references: [id])
+	equipo  Equipo        @relation(fields: [equipoId], references: [id], onDelete: Cascade)
+	usuario Usuario?      @relation(fields: [usuarioId], references: [id])
+	ot      OrdenTrabajo? @relation(fields: [otId], references: [id])
 
 	@@index([equipoId, fecha])
 	@@map("lecturas")
+}
+
+model EquipoDocumento {
+	id          String   @id @default(uuid()) @db.Uuid
+	equipoId    String   @map("equipo_id") @db.Uuid
+	sucursalId  String   @map("sucursal_id") @db.Uuid
+	nombre      String   @db.VarChar(200)
+	tipo        String   @default("otro") @db.VarChar(30)
+	storageKey  String   @map("storage_key") @db.VarChar(500)
+	contentType String?  @map("content_type") @db.VarChar(100)
+	tamano      Int?
+	activo      Boolean  @default(true)
+	createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	creadorId   String?  @map("creador_id") @db.Uuid
+
+	equipo   Equipo   @relation(fields: [equipoId], references: [id], onDelete: Cascade)
+	sucursal Sucursal @relation(fields: [sucursalId], references: [id])
+	creador  Usuario? @relation(fields: [creadorId], references: [id])
+
+	@@index([equipoId])
+	@@map("equipo_documentos")
+}
+
+model Procedimiento {
+	id                       String                 @id @default(uuid()) @db.Uuid
+	codigo                   Int                    @unique @default(autoincrement())
+	sucursalId               String                 @map("sucursal_id") @db.Uuid
+	sectorResponsableId      String?                @map("sector_responsable_id") @db.Uuid
+	nombre                   String                 @db.VarChar(200)
+	tipo                     TipoMantenimiento
+	descripcion              String?                @db.Text
+	planillaLecturas         Json                   @default("[]") @map("planilla_lecturas")
+	observaciones            String?                @db.Text
+	periodicidadTipo         PeriodicidadTipo?      @map("periodicidad_tipo")
+	periodicidadValor        Int?                   @map("periodicidad_valor")
+	criterioProgramacion     CriterioProgramacion?  @map("criterio_programacion")
+	tolerancia               Int                    @default(0)
+	duracionEstimada         Int?                   @map("duracion_estimada")
+	hsHombre                 Decimal?               @map("hs_hombre") @db.Decimal(8, 2)
+	cantOperarios            Int?                   @map("cant_operarios")
+	indisponibilidadEstimada Int?                   @map("indisponibilidad_estimada")
+	costoEstimado            Decimal?               @map("costo_estimado") @db.Decimal(15, 2)
+	versionActual            Int                    @default(1) @map("version_actual")
+	activo                   Boolean                @default(true)
+	createdAt                DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt                DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal          Sucursal              @relation(fields: [sucursalId], references: [id])
+	sectorResponsable Ubicacion?            @relation("ProcedimientoSector", fields: [sectorResponsableId], references: [id])
+	equipos           ProcedimientoEquipo[]
+	alcances          ProcedimientoAlcance[]
+	ordenes           OrdenTrabajo[]
+
+	@@index([sucursalId, activo])
+	@@map("procedimientos")
+}
+
+model ProcedimientoEquipo {
+	id               String                    @id @default(uuid()) @db.Uuid
+	procedimientoId  String                    @map("procedimiento_id") @db.Uuid
+	equipoId         String                    @map("equipo_id") @db.Uuid
+	estado           EstadoProcedimientoEquipo @default(activo)
+	fechaAsociacion  DateTime                  @default(now()) @map("fecha_asociacion") @db.Date
+	ultimaEmision    DateTime?                 @map("ultima_emision") @db.Date
+
+	procedimiento Procedimiento @relation(fields: [procedimientoId], references: [id], onDelete: Cascade)
+	equipo        Equipo        @relation(fields: [equipoId], references: [id], onDelete: Cascade)
+
+	@@unique([procedimientoId, equipoId])
+	@@map("procedimiento_equipos")
+}
+
+model ProcedimientoAlcance {
+	id                String                    @id @default(uuid()) @db.Uuid
+	procedimientoId   String                    @map("procedimiento_id") @db.Uuid
+	tipo              TipoAlcanceProcedimiento
+	ubicacionId       String?                   @map("ubicacion_id") @db.Uuid
+	sucursalAlcanceId String?                   @map("sucursal_alcance_id") @db.Uuid
+	estado            EstadoProcedimientoEquipo @default(activo)
+	fechaAsociacion   DateTime                  @default(now()) @map("fecha_asociacion") @db.Date
+	ultimaEmision     DateTime?                 @map("ultima_emision") @db.Date
+
+	procedimiento   Procedimiento @relation(fields: [procedimientoId], references: [id], onDelete: Cascade)
+	ubicacion       Ubicacion?    @relation(fields: [ubicacionId], references: [id])
+	sucursalAlcance Sucursal?     @relation(fields: [sucursalAlcanceId], references: [id])
+
+	@@unique([procedimientoId, ubicacionId])
+	@@unique([procedimientoId, sucursalAlcanceId])
+	@@map("procedimiento_alcances")
+}
+
+model OrdenTrabajo {
+	id                        String            @id @default(uuid()) @db.Uuid
+	numero                    Int               @unique @default(autoincrement())
+	sucursalId                String            @map("sucursal_id") @db.Uuid
+	ubicacionId               String            @map("ubicacion_id") @db.Uuid
+	equipoId                  String            @map("equipo_id") @db.Uuid
+	procedimientoId           String?           @map("procedimiento_id") @db.Uuid
+	tipo                      TipoMantenimiento
+	estado                    EstadoOt          @default(pendiente)
+	tecnicoAsignadoId         String?           @map("tecnico_asignado_id") @db.Uuid
+	creadorId                 String?           @map("creador_id") @db.Uuid
+	fechaProgramacion         DateTime          @map("fecha_programacion") @db.Date
+	fechaEjecucion            DateTime?         @map("fecha_ejecucion") @db.Date
+	tolerancia                Int               @default(0)
+	prioridad                 PrioridadOt       @default(media)
+	comentarios               String?           @db.Text
+	novedadesFueraDePrograma  String?           @map("novedades_fuera_de_programa") @db.Text
+	checklistCompletado       Json              @default("[]") @map("checklist_completado")
+	firmaDigital              String?           @map("firma_digital") @db.Text
+	fotos                     Json              @default("[]")
+	createdAt                 DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt                 DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal          Sucursal              @relation(fields: [sucursalId], references: [id])
+	ubicacion         Ubicacion             @relation(fields: [ubicacionId], references: [id])
+	equipo            Equipo                @relation(fields: [equipoId], references: [id])
+	procedimiento     Procedimiento?        @relation(fields: [procedimientoId], references: [id])
+	tecnicoAsignado   Usuario?              @relation("OtTecnico", fields: [tecnicoAsignadoId], references: [id])
+	creador           Usuario?              @relation("OtCreador", fields: [creadorId], references: [id])
+	historialEstados  OtEstadoHistorial[]
+	lecturas          Lectura[]
+	solicitudOrigen   SolicitudTrabajo?     @relation("SolicitudOtGenerada")
+	historialEquipo   HistorialEquipo[]
+
+	@@index([sucursalId, estado])
+	@@index([tecnicoAsignadoId, estado])
+	@@index([equipoId])
+	@@map("ordenes_trabajo")
+}
+
+model OtEstadoHistorial {
+	id         String   @id @default(uuid()) @db.Uuid
+	otId       String   @map("ot_id") @db.Uuid
+	estado     EstadoOt
+	usuarioId  String?  @map("usuario_id") @db.Uuid
+	comentario String?  @db.Text
+	createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+	ot      OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
+	usuario Usuario?     @relation(fields: [usuarioId], references: [id])
+
+	@@index([otId, createdAt])
+	@@map("ot_estado_historial")
+}
+
+model SolicitudTrabajo {
+	id            String                 @id @default(uuid()) @db.Uuid
+	sucursalId    String                 @map("sucursal_id") @db.Uuid
+	solicitante   String                 @db.VarChar(200)
+	descripcion   String                 @db.Text
+	urgente       Boolean                @default(false)
+	estado        EstadoSolicitudTrabajo @default(pendiente)
+	calificacion  String?                @db.VarChar(20)
+	observaciones String?                @db.Text
+	otGeneradaId  String?                @unique @map("ot_generada_id") @db.Uuid
+	createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt     DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal   Sucursal      @relation(fields: [sucursalId], references: [id])
+	otGenerada OrdenTrabajo? @relation("SolicitudOtGenerada", fields: [otGeneradaId], references: [id])
+
+	@@index([sucursalId, estado])
+	@@map("solicitudes_trabajo")
+}
+
+model HistorialEquipo {
+	id          String   @id @default(uuid()) @db.Uuid
+	equipoId    String   @map("equipo_id") @db.Uuid
+	otId        String?  @map("ot_id") @db.Uuid
+	tipoEvento  String   @map("tipo_evento") @db.VarChar(50)
+	descripcion String   @db.Text
+	fecha       DateTime @default(now()) @db.Timestamptz(6)
+	usuarioId   String?  @map("usuario_id") @db.Uuid
+
+	equipo  Equipo        @relation(fields: [equipoId], references: [id], onDelete: Cascade)
+	ot      OrdenTrabajo? @relation(fields: [otId], references: [id])
+	usuario Usuario?      @relation(fields: [usuarioId], references: [id])
+
+	@@index([equipoId, fecha])
+	@@map("historial_equipo")
 }

@@ -1,4 +1,5 @@
 import {
+	BadRequestException,
 	Injectable,
 	UnauthorizedException,
 } from '@nestjs/common';
@@ -10,6 +11,7 @@ import { PrismaService } from '../../../database/prisma.service';
 import { PermisosService } from '../permisos/permisos.service';
 import { AuthUser, JwtPayload } from './auth.types';
 import { LoginDto } from './dto/login.dto';
+import { CambiarClaveDto } from './dto/cambiar-clave.dto';
 
 @Injectable()
 export class AuthService {
@@ -124,6 +126,61 @@ export class AuthService {
 
 	async validateUserById(userId: string): Promise<AuthUser> {
 		return this.me(userId);
+	}
+
+	async cambiarClave(userId: string, dto: CambiarClaveDto) {
+		const usuario = await this.prisma.usuario.findUnique({
+			where: { id: userId },
+		});
+
+		if (!usuario || !usuario.activo) {
+			throw new UnauthorizedException('Sesión inválida');
+		}
+
+		const valid = await bcrypt.compare(dto.claveActual, usuario.claveHash);
+		if (!valid) {
+			throw new UnauthorizedException('La clave actual es incorrecta');
+		}
+
+		if (dto.claveActual === dto.claveNueva) {
+			throw new BadRequestException('La clave nueva debe ser distinta a la actual');
+		}
+
+		await this.prisma.usuario.update({
+			where: { id: userId },
+			data: { claveHash: await bcrypt.hash(dto.claveNueva, 10) },
+		});
+
+		await this.prisma.sesion.updateMany({
+			where: { usuarioId: userId, revocada: false },
+			data: { revocada: true },
+		});
+
+		return { ok: true };
+	}
+
+	async listarSesiones(userId: string) {
+		const sesiones = await this.prisma.sesion.findMany({
+			where: { usuarioId: userId },
+			orderBy: { createdAt: 'desc' },
+			take: 20,
+			select: {
+				id: true,
+				createdAt: true,
+				expiresAt: true,
+				revocada: true,
+			},
+		});
+
+		return sesiones;
+	}
+
+	async revocarTodasLasSesiones(userId: string) {
+		await this.prisma.sesion.updateMany({
+			where: { usuarioId: userId, revocada: false },
+			data: { revocada: true },
+		});
+		return { ok: true };
 	}
 
 	private async issueTokens(user: AuthUser) {

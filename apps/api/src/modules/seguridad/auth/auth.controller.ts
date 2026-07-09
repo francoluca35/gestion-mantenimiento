@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Public } from '../../../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import type { AuthUser } from './auth.types';
+import { CambiarClaveDto } from './dto/cambiar-clave.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 
@@ -30,5 +31,20 @@ export class AuthController {
 	@Get('me')
 	me(@CurrentUser() user: AuthUser) {
 		return this.authService.me(user.id);
+	}
+
+	@Patch('clave')
+	cambiarClave(@CurrentUser() user: AuthUser, @Body() dto: CambiarClaveDto) {
+		return this.authService.cambiarClave(user.id, dto);
+	}
+
+	@Get('sesiones')
+	listarSesiones(@CurrentUser() user: AuthUser) {
+		return this.authService.listarSesiones(user.id);
+	}
+
+	@Post('sesiones/revocar-todas')
+	revocarSesiones(@CurrentUser() user: AuthUser) {
+		return this.authService.revocarTodasLasSesiones(user.id);
 	}
 }

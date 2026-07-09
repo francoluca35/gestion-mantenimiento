@@ -2,117 +2,266 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../components/sika_logo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 
-class HomePage extends ConsumerWidget {
+class HomePage extends ConsumerStatefulWidget {
 	const HomePage({super.key});
 
 	@override
-	Widget build(BuildContext context, WidgetRef ref) {
+	ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+	Map<String, dynamic>? _resumenOt;
+
+	@override
+	void initState() {
+		super.initState();
+		WidgetsBinding.instance.addPostFrameCallback((_) => _loadResumen());
+	}
+
+	Future<void> _loadResumen() async {
+		final user = ref.read(authControllerProvider).session?.usuario;
+		final canOt =
+				user?.tieneDerecho('programacion.ordenes_trabajo.buscar_y_actualizar') == true;
+
+		if (!canOt) return;
+
+		try {
+			final now = DateTime.now();
+			final desde = DateTime(now.year, now.month, 1);
+			final hasta = DateTime(now.year, now.month + 1, 0);
+			final query =
+					'?fechaDesde=${desde.year}-${desde.month.toString().padLeft(2, '0')}-${desde.day.toString().padLeft(2, '0')}'
+					'&fechaHasta=${hasta.year}-${hasta.month.toString().padLeft(2, '0')}-${hasta.day.toString().padLeft(2, '0')}';
+			final resumen = await ref.read(apiClientProvider).getJson('ot/resumen$query');
+			if (mounted) setState(() => _resumenOt = resumen);
+		} catch (_) {}
+	}
+
+	@override
+	Widget build(BuildContext context) {
 		final user = ref.watch(authControllerProvider).session?.usuario;
 		final canConfig = user?.tieneDerecho('configuracion.usuarios.listar') == true ||
 				user?.esAdministrador == true;
 		final canPlanta = user?.tieneDerecho('archivos.equipos.listar') == true ||
 				user?.esAdministrador == true;
+		final canOt =
+				user?.tieneDerecho('programacion.ordenes_trabajo.buscar_y_actualizar') == true ||
+				user?.esAdministrador == true;
 		final planta = user?.sucursalNombre ?? 'Sin planta';
 		final perfil = user?.perfilNombre ??
 				(user?.esAdministrador == true ? 'Administrador' : 'Usuario');
 
-		return ListView(
-			padding: const EdgeInsets.all(24),
-			children: [
-				_WelcomeBanner(
-					nombre: user?.nombreUsuario ?? '',
-					perfil: perfil,
-					planta: planta,
-				),
-				const SizedBox(height: 24),
-				Text(
-					'Accesos rápidos',
-					style: Theme.of(context).textTheme.titleMedium?.copyWith(
-								fontWeight: FontWeight.w700,
-							),
-				),
-				const SizedBox(height: 12),
-				LayoutBuilder(
-					builder: (context, constraints) {
-						final wide = constraints.maxWidth >= 900;
-						final cards = <Widget>[
-							if (canPlanta)
-								_ModuleCard(
-									title: 'Gestión de equipos',
-									subtitle: 'Ubicaciones, sectores y máquinas de tu planta',
-									icon: Icons.precision_manufacturing_rounded,
-									color: AppColors.primary,
-									badge: planta,
-									onTap: () => context.go('/planta'),
-								),
-							_ModuleCard(
-								title: 'Órdenes de trabajo',
-								subtitle: 'Emitir, asignar y cerrar OT — próximo módulo',
-								icon: Icons.assignment_rounded,
-								color: const Color(0xFF7C3AED),
-								badge: 'Próximamente',
-								onTap: () => context.go('/ot'),
-							),
-							if (canConfig)
-								_ModuleCard(
-									title: 'Configuración',
-									subtitle: 'Usuarios, perfiles y permisos',
-									icon: Icons.settings_rounded,
-									color: AppColors.secondary,
-									onTap: () => context.go('/config'),
-								),
-						];
+		final otPendientes = _resumenOt?['pendientes'] ?? 0;
+		final otEnEjecucion = _resumenOt?['enEjecucion'] ?? 0;
 
-						if (wide) {
-							return Row(
-								crossAxisAlignment: CrossAxisAlignment.start,
-								children: cards
-										.map(
-											(card) => Expanded(
-												child: Padding(
-													padding: const EdgeInsets.only(right: 12),
-													child: card,
+		return LayoutBuilder(
+			builder: (context, constraints) {
+				final wide = constraints.maxWidth >= 900;
+
+				return ListView(
+					padding: const EdgeInsets.fromLTRB(32, 28, 32, 40),
+					children: [
+						_WelcomeBanner(
+							nombre: user?.nombreUsuario ?? '',
+							perfil: perfil,
+							planta: planta,
+						),
+						const SizedBox(height: 32),
+						Text(
+							'Accesos rápidos',
+							style: Theme.of(context).textTheme.titleLarge?.copyWith(
+										fontWeight: FontWeight.w700,
+										color: Colors.white,
+									),
+						),
+						const SizedBox(height: 16),
+						if (wide)
+							IntrinsicHeight(
+								child: Row(
+									crossAxisAlignment: CrossAxisAlignment.stretch,
+									children: [
+										if (canPlanta)
+											Expanded(
+												child: _ModuleCard(
+													title: 'Gestión de equipos',
+													subtitle: 'Ubicaciones, sectores y máquinas de tu planta',
+													icon: Icons.precision_manufacturing_rounded,
+													watermarkIcon: Icons.precision_manufacturing_outlined,
+													color: AppColors.brandYellow,
+													badge: planta,
+													onTap: () => context.go('/planta'),
 												),
 											),
-										)
-										.toList(),
-							);
-						}
-
-						return Column(
-							children: cards
-									.map(
-										(card) => Padding(
-											padding: const EdgeInsets.only(bottom: 12),
-											child: card,
+										if (canPlanta && canOt) const SizedBox(width: 20),
+										if (canOt)
+											Expanded(
+												child: _ModuleCard(
+													title: 'Órdenes de trabajo',
+													subtitle: 'Emitir, asignar y cerrar OT',
+													icon: Icons.assignment_rounded,
+													watermarkIcon: Icons.assignment_outlined,
+													color: AppColors.accent,
+													badge: otPendientes > 0
+															? '$otPendientes pendientes'
+															: 'Activo',
+													onTap: () => context.go('/ot'),
+												),
+											),
+										if (canConfig && (canPlanta || canOt)) const SizedBox(width: 20),
+										if (canConfig)
+											Expanded(
+												child: _ModuleCard(
+													title: 'Configuración',
+													subtitle: 'Usuarios, perfiles y permisos',
+													icon: Icons.settings_rounded,
+													watermarkIcon: Icons.settings_outlined,
+													color: AppColors.secondaryLight,
+													onTap: () => context.go('/config'),
+												),
+											),
+									],
+								),
+							)
+						else
+							Column(
+								children: [
+									if (canPlanta)
+										_ModuleCard(
+											title: 'Gestión de equipos',
+											subtitle: 'Ubicaciones, sectores y máquinas de tu planta',
+											icon: Icons.precision_manufacturing_rounded,
+											watermarkIcon: Icons.precision_manufacturing_outlined,
+											color: AppColors.brandYellow,
+											badge: planta,
+											onTap: () => context.go('/planta'),
 										),
-									)
-									.toList(),
-						);
-					},
-				),
-				const SizedBox(height: 24),
-				Text(
-					'Estado del sistema',
-					style: Theme.of(context).textTheme.titleMedium?.copyWith(
-								fontWeight: FontWeight.w700,
+									if (canPlanta && canOt) const SizedBox(height: 16),
+									if (canOt)
+										_ModuleCard(
+											title: 'Órdenes de trabajo',
+											subtitle: 'Emitir, asignar y cerrar OT',
+											icon: Icons.assignment_rounded,
+											watermarkIcon: Icons.assignment_outlined,
+											color: AppColors.accent,
+											badge: otPendientes > 0
+													? '$otPendientes pendientes'
+													: 'Activo',
+											onTap: () => context.go('/ot'),
+										),
+									if (canConfig && (canPlanta || canOt)) const SizedBox(height: 16),
+									if (canConfig)
+										_ModuleCard(
+											title: 'Configuración',
+											subtitle: 'Usuarios, perfiles y permisos',
+											icon: Icons.settings_rounded,
+											watermarkIcon: Icons.settings_outlined,
+											color: AppColors.secondaryLight,
+											onTap: () => context.go('/config'),
+										),
+								],
 							),
-				),
-				const SizedBox(height: 12),
-				const Wrap(
-					spacing: 12,
-					runSpacing: 12,
-					children: [
-						_StatusPill(label: 'Seguridad', value: 'Activo', color: AppColors.success),
-						_StatusPill(label: 'Planta', value: 'Activo', color: AppColors.success),
-						_StatusPill(label: 'OT', value: 'Pendiente', color: AppColors.warning),
-						_StatusPill(label: 'Pañol', value: 'Pendiente', color: AppColors.secondary),
+						const SizedBox(height: 36),
+						Text(
+							'Estado del sistema',
+							style: Theme.of(context).textTheme.titleLarge?.copyWith(
+										fontWeight: FontWeight.w700,
+										color: Colors.white,
+									),
+						),
+						const SizedBox(height: 16),
+						wide
+								? Row(
+										children: [
+											Expanded(
+												child: _StatusCard(
+													icon: Icons.shield_outlined,
+													label: 'Seguridad',
+													value: 'Activo',
+													color: AppColors.success,
+												),
+											),
+											const SizedBox(width: 16),
+											Expanded(
+												child: _StatusCard(
+													icon: Icons.factory_outlined,
+													label: 'Planta',
+													value: 'Activo',
+													color: AppColors.success,
+												),
+											),
+											const SizedBox(width: 16),
+											Expanded(
+												child: _StatusCard(
+													icon: Icons.assignment_outlined,
+													label: 'OT',
+													value: canOt
+															? '$otPendientes pend. · $otEnEjecucion activas'
+															: 'Sin acceso',
+													color: canOt ? AppColors.success : AppColors.secondaryLight,
+												),
+											),
+											const SizedBox(width: 16),
+											Expanded(
+												child: _StatusCard(
+													icon: Icons.inventory_2_outlined,
+													label: 'Pañol',
+													value: 'Pendiente',
+													color: AppColors.warning,
+												),
+											),
+										],
+									)
+								: Wrap(
+										spacing: 12,
+										runSpacing: 12,
+										children: [
+											_StatusCard(
+												icon: Icons.shield_outlined,
+												label: 'Seguridad',
+												value: 'Activo',
+												color: AppColors.success,
+												compact: true,
+											),
+											_StatusCard(
+												icon: Icons.factory_outlined,
+												label: 'Planta',
+												value: 'Activo',
+												color: AppColors.success,
+												compact: true,
+											),
+											_StatusCard(
+												icon: Icons.assignment_outlined,
+												label: 'OT',
+												value: canOt
+														? '$otPendientes pend. · $otEnEjecucion activas'
+														: 'Sin acceso',
+												color: canOt ? AppColors.success : AppColors.secondaryLight,
+												compact: true,
+											),
+											_StatusCard(
+												icon: Icons.inventory_2_outlined,
+												label: 'Pañol',
+												value: 'Pendiente',
+												color: AppColors.warning,
+												compact: true,
+											),
+										],
+									),
+						const SizedBox(height: 48),
+						const Center(
+							child: SikaLogo(
+								size: 36,
+								showTagline: true,
+								taglineColor: AppColors.accent,
+							),
+						),
 					],
-				),
-			],
+				);
+			},
 		);
 	}
 }
@@ -130,55 +279,95 @@ class _WelcomeBanner extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		return Container(
-			padding: const EdgeInsets.all(24),
-			decoration: BoxDecoration(
-				gradient: const LinearGradient(
-					colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
-					begin: Alignment.topLeft,
-					end: Alignment.bottomRight,
-				),
-				borderRadius: BorderRadius.circular(20),
-			),
-			child: Row(
+		return ClipRRect(
+			borderRadius: BorderRadius.circular(20),
+			child: Stack(
 				children: [
-					Expanded(
-						child: Column(
+					Container(
+						width: double.infinity,
+						padding: const EdgeInsets.fromLTRB(32, 32, 32, 28),
+						decoration: const BoxDecoration(
+							gradient: LinearGradient(
+								colors: [AppColors.brandYellow, AppColors.brandRed],
+								begin: Alignment.centerLeft,
+								end: Alignment.centerRight,
+							),
+						),
+						child: Row(
 							crossAxisAlignment: CrossAxisAlignment.start,
 							children: [
-								Text(
-									'Hola, $nombre',
-									style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-												color: Colors.white,
-												fontWeight: FontWeight.w700,
+								Expanded(
+									child: Column(
+										crossAxisAlignment: CrossAxisAlignment.start,
+										children: [
+											Text(
+												'Hola, $nombre',
+												style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+															color: Colors.white,
+															fontWeight: FontWeight.w800,
+														),
 											),
-								),
-								const SizedBox(height: 8),
-								Text(
-									perfil,
-									style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
-								),
-								if (planta.isNotEmpty) ...[
-									const SizedBox(height: 4),
-									Text(
-										planta,
-										style: TextStyle(
-											color: Colors.white.withValues(alpha: 0.7),
-											fontSize: 13,
-										),
+											const SizedBox(height: 8),
+											Text(
+												perfil,
+												style: TextStyle(
+													color: Colors.white.withValues(alpha: 0.92),
+													fontSize: 16,
+													fontWeight: FontWeight.w500,
+												),
+											),
+											if (planta.isNotEmpty) ...[
+												const SizedBox(height: 8),
+												Row(
+													children: [
+														Icon(
+															Icons.location_on_outlined,
+															size: 16,
+															color: Colors.white.withValues(alpha: 0.85),
+														),
+														const SizedBox(width: 4),
+														Text(
+															planta,
+															style: TextStyle(
+																color: Colors.white.withValues(alpha: 0.85),
+																fontSize: 14,
+																fontWeight: FontWeight.w500,
+															),
+														),
+													],
+												),
+											],
+										],
 									),
-								],
+								),
+								const SizedBox(width: 16),
+								Container(
+									width: 56,
+									height: 56,
+									decoration: BoxDecoration(
+										color: Colors.white.withValues(alpha: 0.2),
+										borderRadius: BorderRadius.circular(16),
+									),
+									child: const Icon(
+										Icons.factory_rounded,
+										color: Colors.white,
+										size: 28,
+									),
+								),
 							],
 						),
 					),
-					Container(
-						width: 56,
-						height: 56,
-						decoration: BoxDecoration(
-							color: Colors.white.withValues(alpha: 0.15),
-							borderRadius: BorderRadius.circular(16),
+					Positioned(
+						right: 80,
+						top: -20,
+						bottom: -20,
+						child: Opacity(
+							opacity: 0.18,
+							child: CustomPaint(
+								size: const Size(140, 140),
+								painter: const _SikaTrianglePainter(),
+							),
 						),
-						child: const Icon(Icons.factory_rounded, color: Colors.white, size: 28),
 					),
 				],
 			),
@@ -186,11 +375,29 @@ class _WelcomeBanner extends StatelessWidget {
 	}
 }
 
+class _SikaTrianglePainter extends CustomPainter {
+	const _SikaTrianglePainter();
+
+	@override
+	void paint(Canvas canvas, Size size) {
+		final path = Path()
+				..moveTo(size.width * 0.5, 0)
+				..lineTo(size.width, size.height)
+				..lineTo(0, size.height)
+				..close();
+		canvas.drawPath(path, Paint()..color = Colors.white);
+	}
+
+	@override
+	bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 class _ModuleCard extends StatelessWidget {
 	const _ModuleCard({
 		required this.title,
 		required this.subtitle,
 		required this.icon,
+		required this.watermarkIcon,
 		required this.color,
 		this.badge,
 		this.onTap,
@@ -199,6 +406,7 @@ class _ModuleCard extends StatelessWidget {
 	final String title;
 	final String subtitle;
 	final IconData icon;
+	final IconData watermarkIcon;
 	final Color color;
 	final String? badge;
 	final VoidCallback? onTap;
@@ -206,75 +414,103 @@ class _ModuleCard extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		return Material(
-			color: Theme.of(context).colorScheme.surface,
+			color: AppColors.cardDark,
 			borderRadius: BorderRadius.circular(20),
 			child: InkWell(
 				borderRadius: BorderRadius.circular(20),
 				onTap: onTap,
 				child: Container(
-					padding: const EdgeInsets.all(20),
+					constraints: const BoxConstraints(minHeight: 200),
+					padding: const EdgeInsets.all(24),
 					decoration: BoxDecoration(
 						borderRadius: BorderRadius.circular(20),
-						border: Border.all(
-							color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
-						),
+						border: Border.all(color: const Color(0xFF2E2E2E)),
 					),
-					child: Column(
-						crossAxisAlignment: CrossAxisAlignment.start,
+					child: Stack(
+						clipBehavior: Clip.none,
 						children: [
-							Row(
+							Positioned(
+								right: -8,
+								bottom: -8,
+								child: Icon(
+									watermarkIcon,
+									size: 120,
+									color: Colors.white.withValues(alpha: 0.04),
+								),
+							),
+							Column(
+								crossAxisAlignment: CrossAxisAlignment.start,
 								children: [
-									Container(
-										width: 44,
-										height: 44,
-										decoration: BoxDecoration(
-											color: color.withValues(alpha: 0.12),
-											borderRadius: BorderRadius.circular(12),
-										),
-										child: Icon(icon, color: color),
-									),
-									const Spacer(),
-									if (badge != null)
-										Container(
-											padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-											decoration: BoxDecoration(
-												color: color.withValues(alpha: 0.1),
-												borderRadius: BorderRadius.circular(999),
+									Row(
+										children: [
+											Container(
+												width: 48,
+												height: 48,
+												decoration: BoxDecoration(
+													color: color.withValues(alpha: 0.15),
+													borderRadius: BorderRadius.circular(14),
+												),
+												child: Icon(icon, color: color, size: 26),
 											),
-											child: Text(
-												badge!,
+											const Spacer(),
+											if (badge != null)
+												Container(
+													padding: const EdgeInsets.symmetric(
+														horizontal: 12,
+														vertical: 5,
+													),
+													decoration: BoxDecoration(
+														color: color.withValues(alpha: 0.12),
+														borderRadius: BorderRadius.circular(999),
+														border: Border.all(
+															color: color.withValues(alpha: 0.35),
+														),
+													),
+													child: Text(
+														badge!,
+														style: TextStyle(
+															color: color,
+															fontSize: 11,
+															fontWeight: FontWeight.w700,
+														),
+													),
+												),
+										],
+									),
+									const SizedBox(height: 20),
+									Text(
+										title,
+										style: const TextStyle(
+											color: Colors.white,
+											fontWeight: FontWeight.w700,
+											fontSize: 18,
+										),
+									),
+									const SizedBox(height: 8),
+									Text(
+										subtitle,
+										style: TextStyle(
+											color: Colors.white.withValues(alpha: 0.55),
+											fontSize: 14,
+											height: 1.4,
+										),
+									),
+									const SizedBox(height: 20),
+									Row(
+										mainAxisSize: MainAxisSize.min,
+										children: [
+											Text(
+												'Abrir',
 												style: TextStyle(
 													color: color,
-													fontSize: 11,
-													fontWeight: FontWeight.w600,
+													fontWeight: FontWeight.w700,
+													fontSize: 14,
 												),
 											),
-										),
-								],
-							),
-							const SizedBox(height: 16),
-							Text(
-								title,
-								style: Theme.of(context).textTheme.titleMedium?.copyWith(
-											fontWeight: FontWeight.w700,
-										),
-							),
-							const SizedBox(height: 6),
-							Text(
-								subtitle,
-								style: Theme.of(context).textTheme.bodySmall?.copyWith(
-											color: Theme.of(context).colorScheme.onSurfaceVariant,
-										),
-							),
-							const SizedBox(height: 16),
-							Row(
-								children: [
-									Text(
-										'Abrir',
-										style: TextStyle(color: color, fontWeight: FontWeight.w600),
+											const SizedBox(width: 4),
+											Icon(Icons.arrow_forward_rounded, size: 16, color: color),
+										],
 									),
-									const SizedBox(width: 4),
-									Icon(Icons.arrow_forward_rounded, size: 16, color: color),
 								],
 							),
 						],
@@ -285,39 +521,65 @@ class _ModuleCard extends StatelessWidget {
 	}
 }
 
-class _StatusPill extends StatelessWidget {
-	const _StatusPill({
+class _StatusCard extends StatelessWidget {
+	const _StatusCard({
+		required this.icon,
 		required this.label,
 		required this.value,
 		required this.color,
+		this.compact = false,
 	});
 
+	final IconData icon;
 	final String label;
 	final String value;
 	final Color color;
+	final bool compact;
 
 	@override
 	Widget build(BuildContext context) {
 		return Container(
-			padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+			width: compact ? 160 : null,
+			padding: const EdgeInsets.all(20),
 			decoration: BoxDecoration(
-				color: Theme.of(context).colorScheme.surface,
-				borderRadius: BorderRadius.circular(14),
-				border: Border.all(
-					color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
-				),
+				color: AppColors.cardDark,
+				borderRadius: BorderRadius.circular(16),
+				border: Border.all(color: const Color(0xFF2E2E2E)),
 			),
-			child: Row(
-				mainAxisSize: MainAxisSize.min,
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
 				children: [
-					Container(
-						width: 8,
-						height: 8,
-						decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+					Icon(icon, color: Colors.white.withValues(alpha: 0.7), size: 22),
+					const SizedBox(height: 12),
+					Text(
+						label,
+						style: const TextStyle(
+							color: Colors.white,
+							fontWeight: FontWeight.w700,
+							fontSize: 15,
+						),
 					),
-					const SizedBox(width: 8),
-					Text('$label · ', style: const TextStyle(fontWeight: FontWeight.w500)),
-					Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+					const SizedBox(height: 8),
+					Row(
+						children: [
+							Container(
+								width: 8,
+								height: 8,
+								decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+							),
+							const SizedBox(width: 8),
+							Expanded(
+								child: Text(
+									value,
+									style: TextStyle(
+										color: color,
+										fontWeight: FontWeight.w600,
+										fontSize: 13,
+									),
+								),
+							),
+						],
+					),
 				],
 			),
 		);

@@ -1,6 +1,8 @@
 # Client — Flutter (Android + Web)
 
-Un solo código Dart para técnicos (Android) y admin/gerencia (Web).
+Un solo código Dart para **todos los roles** (técnico, supervisor, admin, gerencia, pañolero). La UI se adapta al ancho de pantalla y a los permisos del usuario.
+
+Ver [`docs/00-estado-proyecto.md`](../../docs/00-estado-proyecto.md).
 
 ## Arranque
 
@@ -34,7 +36,7 @@ lib/
 
 Layout adaptativo:
 
-- **Mobile:** bottom navigation, cards, flujo lineal
-- **Desktop:** NavigationRail + panel principal
+- **Móvil (<600px):** bottom nav + flujo lineal por rol
+- **Desktop (≥900px):** sidebar + panel principal + detalle lateral
 
 Ver [07-pantallas.md](../../docs/07-pantallas.md) y [08-ui-ux.md](../../docs/08-ui-ux.md).

@@ -12,8 +12,10 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { RequiereDerecho } from '../../../common/decorators/requiere-derecho.decorator';
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { CreateEquipoDto } from './dto/create-equipo.dto';
+import { DuplicarEquipoDto } from './dto/duplicar-equipo.dto';
 import { FueraServicioDto } from './dto/fuera-servicio.dto';
 import { MoverEquipoDto } from './dto/mover-equipo.dto';
+import { PegarEquipoDto } from './dto/pegar-equipo.dto';
 import { UpdateEquipoDto } from './dto/update-equipo.dto';
 import { EquiposService } from './equipos.service';
 
@@ -34,6 +36,24 @@ export class EquiposController {
 			ubicacionId,
 			tipoEquipoId,
 		});
+	}
+
+	@Get(':id/historial')
+	@RequiereDerecho('archivos.equipos.listar')
+	getHistorial(
+		@Param('id', ParseUUIDPipe) id: string,
+		@CurrentUser() user: AuthUser,
+	) {
+		return this.equiposService.getHistorial(id, user);
+	}
+
+	@Get(':id/procedimientos')
+	@RequiereDerecho('archivos.equipos.listar')
+	getProcedimientos(
+		@Param('id', ParseUUIDPipe) id: string,
+		@CurrentUser() user: AuthUser,
+	) {
+		return this.equiposService.getProcedimientos(id, user);
 	}
 
 	@Get(':id')
@@ -76,5 +96,25 @@ export class EquiposController {
 		@CurrentUser() user: AuthUser,
 	) {
 		return this.equiposService.marcarFueraDeServicio(id, dto.fuera, user);
+	}
+
+	@Post(':id/duplicar')
+	@RequiereDerecho('archivos.equipos.copiar')
+	duplicar(
+		@Param('id', ParseUUIDPipe) id: string,
+		@Body() dto: DuplicarEquipoDto,
+		@CurrentUser() user: AuthUser,
+	) {
+		return this.equiposService.duplicar(id, dto, user);
+	}
+
+	@Post(':id/pegar-componentes')
+	@RequiereDerecho('archivos.equipos.copiar')
+	pegarComponentes(
+		@Param('id', ParseUUIDPipe) id: string,
+		@Body() dto: PegarEquipoDto,
+		@CurrentUser() user: AuthUser,
+	) {
+		return this.equiposService.pegarComoComponentes(id, dto, user);
 	}
 }

@@ -3,12 +3,12 @@ import {
 	ArrayMinSize,
 	IsArray,
 	IsBoolean,
-	IsUUID,
 	ValidateNested,
 } from 'class-validator';
+import { IsAppUuid } from '../../../../common/decorators/is-app-uuid.decorator';
 
 class PerfilDerechoItemDto {
-	@IsUUID()
+	@IsAppUuid()
 	derechoId!: string;
 
 	@IsBoolean()

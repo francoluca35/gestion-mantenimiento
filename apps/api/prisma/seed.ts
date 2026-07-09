@@ -85,6 +85,7 @@ const ARBOL_DERECHOS: DerechoNode[] = [
 							'emitir_no_periodica',
 							'buscar_y_actualizar',
 							'anular',
+							'reabrir',
 							'reimprimir',
 							'ver_reportes_estado',
 							'ver_historico',
@@ -274,6 +275,8 @@ async function assignDerechos(
 }
 
 async function main() {
+	await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'true', true)`;
+
 	const derechoMap = await seedDerechos(ARBOL_DERECHOS);
 
 	const virrey = await prisma.sucursal.upsert({
@@ -354,7 +357,7 @@ async function main() {
 
 	await assignDerechos(
 		perfilAdminSucursal.id,
-		['configuracion'],
+		['configuracion', 'archivos', 'programacion'],
 		derechoMap,
 		true,
 	);
@@ -473,22 +476,326 @@ async function main() {
 		},
 	});
 
-	// Planta vacía: solo SIKA → PLANTA_VIRREY. El usuario crea ubicaciones/sectores/máquinas.
+	// Demo planta Virrey + M3
+	await prisma.historialEquipo.deleteMany({
+		where: { equipo: { sucursalId: virrey.id } },
+	});
+	await prisma.otEstadoHistorial.deleteMany({
+		where: { ot: { sucursalId: virrey.id } },
+	});
+	await prisma.solicitudTrabajo.deleteMany({ where: { sucursalId: virrey.id } });
+	await prisma.ordenTrabajo.deleteMany({ where: { sucursalId: virrey.id } });
+	await prisma.procedimientoEquipo.deleteMany({
+		where: { procedimiento: { sucursalId: virrey.id } },
+	});
+	await prisma.procedimiento.deleteMany({ where: { sucursalId: virrey.id } });
 	await prisma.lectura.deleteMany({
 		where: { equipo: { sucursalId: virrey.id } },
 	});
 	await prisma.equipo.deleteMany({ where: { sucursalId: virrey.id } });
 	await prisma.ubicacion.deleteMany({ where: { sucursalId: virrey.id } });
+
+	const tecnico = await prisma.usuario.findUnique({
+		where: { nombreUsuario: 'tecnico' },
+	});
+	const supervisor = await prisma.usuario.findUnique({
+		where: { nombreUsuario: 'supervisor' },
+	});
+
+	const silosExternos = await prisma.ubicacion.create({
+		data: {
+			id: '66666666-6666-6666-6666-666666666601',
+			sucursalId: virrey.id,
+			nombre: 'Silos Externos',
+			orden: 1,
+		},
+	});
+
+	const sectorLosa = await prisma.ubicacion.create({
+		data: {
+			id: '66666666-6666-6666-6666-666666666602',
+			sucursalId: virrey.id,
+			parentId: silosExternos.id,
+			nombre: 'Sector Losa',
+			orden: 1,
+		},
+	});
+
+	const molienda = await prisma.ubicacion.create({
+		data: {
+			id: '66666666-6666-6666-6666-666666666603',
+			sucursalId: virrey.id,
+			nombre: 'Molienda',
+			orden: 2,
+		},
+	});
+
+	const silo103 = await prisma.equipo.create({
+		data: {
+			id: '66666666-6666-6666-6666-666666666611',
+			sucursalId: virrey.id,
+			ubicacionId: sectorLosa.id,
+			tipoEquipoId: '55555555-5555-5555-5555-555555555501',
+			nombre: 'Silo 103',
+			codigo: 'SILO-103',
+			detalle: { capacidad: '120 m³' },
+		},
+	});
+
+	const silo104 = await prisma.equipo.create({
+		data: {
+			id: '66666666-6666-6666-6666-666666666612',
+			sucursalId: virrey.id,
+			ubicacionId: sectorLosa.id,
+			tipoEquipoId: '55555555-5555-5555-5555-555555555501',
+			nombre: 'Silo 104',
+			codigo: 'SILO-104',
+			detalle: { capacidad: '120 m³' },
+		},
+	});
+
+	const mol01 = await prisma.equipo.create({
+		data: {
+			id: '66666666-6666-6666-6666-666666666613',
+			sucursalId: virrey.id,
+			ubicacionId: molienda.id,
+			tipoEquipoId: '55555555-5555-5555-5555-555555555501',
+			nombre: 'Molino 01',
+			codigo: 'MOL-01',
+			detalle: { potencia: '250 kW' },
+		},
+	});
+
+	const procLubricacion = await prisma.procedimiento.create({
+		data: {
+			id: '77777777-7777-7777-7777-777777777701',
+			codigo: 1000,
+			sucursalId: virrey.id,
+			sectorResponsableId: molienda.id,
+			nombre: 'Lubricación preventiva silo',
+			tipo: 'preventivo',
+			descripcion: 'Engrase de rodamientos y revisión de niveles',
+			planillaLecturas: [
+				{ key: 'inspeccion_visual', label: 'Inspección visual', done: false },
+				{ key: 'engrase', label: 'Puntos de engrase', done: false },
+				{ key: 'horas', label: 'Registrar horas', done: false },
+			],
+			periodicidadTipo: 'tiempo',
+			periodicidadValor: 30,
+			criterioProgramacion: 'fecha_finalizacion',
+			tolerancia: 5,
+			duracionEstimada: 180,
+			hsHombre: 3,
+			cantOperarios: 1,
+			indisponibilidadEstimada: 60,
+			costoEstimado: 0,
+		},
+	});
+
+	const procCorrectivo = await prisma.procedimiento.create({
+		data: {
+			id: '77777777-7777-7777-7777-777777777702',
+			codigo: 1001,
+			sucursalId: virrey.id,
+			sectorResponsableId: molienda.id,
+			nombre: 'Revisión correctiva molienda',
+			tipo: 'correctivo',
+			descripcion: 'Diagnóstico por vibración anormal',
+			planillaLecturas: [
+				{ key: 'vibracion', label: 'Medir vibración', done: false },
+				{ key: 'temperatura', label: 'Temperatura rodamientos', done: false },
+			],
+			duracionEstimada: 240,
+			hsHombre: 4,
+			cantOperarios: 2,
+			indisponibilidadEstimada: 120,
+		},
+	});
+
+	await prisma.procedimientoEquipo.createMany({
+		data: [
+			{ procedimientoId: procLubricacion.id, equipoId: silo103.id },
+			{ procedimientoId: procLubricacion.id, equipoId: silo104.id },
+			{ procedimientoId: procCorrectivo.id, equipoId: mol01.id },
+		],
+	});
+
+	const hoy = new Date();
+	const ayer = new Date(hoy);
+	ayer.setDate(ayer.getDate() - 1);
+
+	const hace40Dias = new Date(hoy);
+	hace40Dias.setDate(hace40Dias.getDate() - 40);
+	const hace41Dias = new Date(hoy);
+	hace41Dias.setDate(hace41Dias.getDate() - 41);
+
+	const otPendiente = await prisma.ordenTrabajo.create({
+		data: {
+			id: '88888888-8888-8888-8888-888888888801',
+			numero: 1001,
+			sucursalId: virrey.id,
+			ubicacionId: sectorLosa.id,
+			equipoId: silo103.id,
+			procedimientoId: procLubricacion.id,
+			tipo: 'preventivo',
+			estado: 'pendiente',
+			tecnicoAsignadoId: tecnico?.id,
+			creadorId: supervisor?.id,
+			fechaProgramacion: hoy,
+			prioridad: 'media',
+			comentarios: 'Mantenimiento mensual programado',
+			historialEstados: {
+				create: [
+					{
+						estado: 'pendiente',
+						usuarioId: supervisor?.id,
+						comentario: 'OT emitida',
+					},
+				],
+			},
+		},
+	});
+
+	const otEnEjecucion = await prisma.ordenTrabajo.create({
+		data: {
+			id: '88888888-8888-8888-8888-888888888802',
+			numero: 1002,
+			sucursalId: virrey.id,
+			ubicacionId: molienda.id,
+			equipoId: mol01.id,
+			procedimientoId: procCorrectivo.id,
+			tipo: 'correctivo',
+			estado: 'en_ejecucion',
+			tecnicoAsignadoId: tecnico?.id,
+			creadorId: supervisor?.id,
+			fechaProgramacion: ayer,
+			prioridad: 'alta',
+			comentarios: 'Vibración detectada en turno noche',
+			historialEstados: {
+				create: [
+					{
+						estado: 'pendiente',
+						usuarioId: supervisor?.id,
+						comentario: 'OT emitida',
+					},
+					{
+						estado: 'en_ejecucion',
+						usuarioId: tecnico?.id,
+						comentario: 'Técnico inició ejecución',
+					},
+				],
+			},
+		},
+	});
+
+	const hace5Dias = new Date(hoy);
+	hace5Dias.setDate(hace5Dias.getDate() - 5);
+	const hace3Dias = new Date(hoy);
+	hace3Dias.setDate(hace3Dias.getDate() - 3);
+
+	await prisma.ordenTrabajo.create({
+		data: {
+			id: '88888888-8888-8888-8888-888888888803',
+			numero: 1003,
+			sucursalId: virrey.id,
+			ubicacionId: sectorLosa.id,
+			equipoId: silo104.id,
+			procedimientoId: procLubricacion.id,
+			tipo: 'preventivo',
+			estado: 'realizada',
+			tecnicoAsignadoId: tecnico?.id,
+			creadorId: supervisor?.id,
+			fechaProgramacion: hace5Dias,
+			fechaEjecucion: hace3Dias,
+			prioridad: 'baja',
+			firmaDigital: 'demo-firma-base64',
+			historialEstados: {
+				create: [
+					{
+						estado: 'pendiente',
+						usuarioId: supervisor?.id,
+						comentario: 'OT emitida',
+					},
+					{
+						estado: 'en_ejecucion',
+						usuarioId: tecnico?.id,
+						comentario: 'Inicio de trabajo',
+					},
+					{
+						estado: 'realizada',
+						usuarioId: tecnico?.id,
+						comentario: 'OT cerrada con firma',
+					},
+				],
+			},
+		},
+	});
+
+	await prisma.historialEquipo.createMany({
+		data: [
+			{
+				equipoId: silo103.id,
+				otId: otPendiente.id,
+				tipoEvento: 'ot_emitida',
+				descripcion: 'OT #1001 emitida',
+				usuarioId: supervisor?.id,
+			},
+			{
+				equipoId: mol01.id,
+				otId: otEnEjecucion.id,
+				tipoEvento: 'ot_emitida',
+				descripcion: 'OT #1002 emitida',
+				usuarioId: supervisor?.id,
+			},
+		],
+	});
+
+	await prisma.solicitudTrabajo.create({
+		data: {
+			id: '99999999-9999-9999-9999-999999999901',
+			sucursalId: virrey.id,
+			solicitante: 'Operador turno mañana',
+			descripcion: 'Ruido anormal en cinta de alimentación del silo 103',
+			urgente: true,
+			estado: 'pendiente',
+		},
+	});
+
+	await prisma.solicitudTrabajo.create({
+		data: {
+			id: '99999999-9999-9999-9999-999999999902',
+			sucursalId: virrey.id,
+			solicitante: 'Jefe de planta',
+			descripcion: 'Revisión de filtros en molienda',
+			urgente: false,
+			estado: 'conformada',
+		},
+	});
+
+	// Rosario vacío
+	await prisma.historialEquipo.deleteMany({
+		where: { equipo: { sucursalId: rosario.id } },
+	});
+	await prisma.otEstadoHistorial.deleteMany({
+		where: { ot: { sucursalId: rosario.id } },
+	});
+	await prisma.solicitudTrabajo.deleteMany({ where: { sucursalId: rosario.id } });
+	await prisma.ordenTrabajo.deleteMany({ where: { sucursalId: rosario.id } });
+	await prisma.procedimientoEquipo.deleteMany({
+		where: { procedimiento: { sucursalId: rosario.id } },
+	});
+	await prisma.procedimiento.deleteMany({ where: { sucursalId: rosario.id } });
 	await prisma.lectura.deleteMany({
 		where: { equipo: { sucursalId: rosario.id } },
 	});
 	await prisma.equipo.deleteMany({ where: { sucursalId: rosario.id } });
 	await prisma.ubicacion.deleteMany({ where: { sucursalId: rosario.id } });
 
-	console.log('Seed M1 + M2 completado');
+	console.log('Seed M1 + M2 + M3 completado');
 	console.log(`Sucursales: ${virrey.codigo}, ${rosario.codigo}`);
 	console.log('Usuarios demo (clave: Sika123!): admin, tecnico, panolero, supervisor, admin.virrey');
-	console.log('Árbol planta vacío: SIKA → PLANTA_VIRREY (crear ubicaciones desde la app)');
+	console.log('Demo Virrey: Silos Externos → Sector Losa → SILO-103/104, Molienda → MOL-01');
+	console.log('Demo OT: #1001 pendiente, #1002 en ejecución, #1003 realizada');
 }
 
 main()

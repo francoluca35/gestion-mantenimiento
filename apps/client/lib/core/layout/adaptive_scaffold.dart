@@ -32,8 +32,8 @@ class AdaptiveScaffold extends StatelessWidget {
 		final width = MediaQuery.sizeOf(context).width;
 		final isDesktop = Breakpoints.isDesktop(width);
 		final isDark = Theme.of(context).brightness == Brightness.dark;
-		final pageBg = isDark ? AppColors.backgroundDark : const Color(0xFFF1F5F9);
-		final sideBg = isDark ? const Color(0xFF111827) : Colors.white;
+		final pageBg = AppColors.backgroundDark;
+		final sideBg = AppColors.explorerPanel;
 		final scheme = Theme.of(context).colorScheme;
 
 		if (isDesktop) {

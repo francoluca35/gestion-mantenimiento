@@ -72,6 +72,7 @@ export class UsuariosService {
 				claveHash,
 				email: dto.email,
 				sucursalId: dto.sucursalId,
+				sectorId: dto.sectorId,
 				perfilId: dto.perfilId,
 				esAdministrador: dto.esAdministrador ?? false,
 				supervisaSucursales: dto.supervisaSucursales ?? false,
@@ -123,6 +124,10 @@ export class UsuariosService {
 			data.perfil = dto.perfilId
 				? { connect: { id: dto.perfilId } }
 				: { disconnect: true };
+		}
+
+		if (dto.sectorId !== undefined) {
+			data.sectorId = dto.sectorId;
 		}
 
 		if (dto.montoMaximoOc !== undefined) {
@@ -184,6 +189,7 @@ export class UsuariosService {
 		nombreUsuario: string;
 		email: string | null;
 		sucursalId: string | null;
+		sectorId: string | null;
 		perfilId: string | null;
 		esAdministrador: boolean;
 		supervisaSucursales: boolean;
@@ -199,6 +205,7 @@ export class UsuariosService {
 			nombreUsuario: usuario.nombreUsuario,
 			email: usuario.email,
 			sucursalId: usuario.sucursalId,
+			sectorId: usuario.sectorId,
 			perfilId: usuario.perfilId,
 			esAdministrador: usuario.esAdministrador,
 			supervisaSucursales: usuario.supervisaSucursales,

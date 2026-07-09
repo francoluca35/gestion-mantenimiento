@@ -112,12 +112,19 @@ Cloudflare Tunnel → HTTPS
 
 ## Flutter
 
-Un solo proyecto (`apps/client`) compila a:
+Un solo proyecto (`apps/client`) compila a **Web** y **Android**.
 
-- **Android** — técnicos / pañoleros
-- **Web** — admin / gerencia (layout desktop)
+**Todos los roles** (técnico, supervisor, admin, gerencia, pañolero) pueden usar ambas plataformas. El acceso a módulos lo define el perfil de derechos, no el dispositivo.
 
-Layout adaptativo:
+| Target | Uso típico | Layout |
+|--------|------------|--------|
+| **Web** | Oficina, pantallas grandes | Sidebar + tablas + panel detalle |
+| **Android** | Planta, supervisión en movimiento | Bottom nav + flujo lineal |
 
-- Mobile: bottom nav + flujo lineal
-- Desktop: sidebar (NavigationRail) + panel principal
+Layout adaptativo (breakpoints 600 / 900 / 1200 px):
+
+- **Móvil (<600px):** bottom nav + flujo lineal por rol
+- **Tablet (600–900px):** rail compacto o split según pantalla
+- **Desktop (≥900px):** sidebar expandido + panel principal + detalle lateral
+
+Estado: pantallas con lógica `wide` implementada; shell global móvil (`AdaptiveScaffold`) pendiente — ver [`00-estado-proyecto.md`](00-estado-proyecto.md).

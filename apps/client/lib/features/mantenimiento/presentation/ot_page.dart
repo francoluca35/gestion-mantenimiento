@@ -84,6 +84,17 @@ class _OtPageState extends ConsumerState<OtPage> {
 		);
 	}
 
+	/// Técnico: ventana amplia para no “perder” OT abiertas fuera del mes.
+	static (DateTime, DateTime) _rangoMisOt() {
+		final now = DateTime.now();
+		final desde = now.subtract(const Duration(days: 365));
+		final hasta = now.add(const Duration(days: 60));
+		return (
+			DateTime(desde.year, desde.month, desde.day),
+			DateTime(hasta.year, hasta.month, hasta.day),
+		);
+	}
+
 	AuthUser? get _user => ref.read(authControllerProvider).session?.usuario;
 
 	bool get _canAnular =>
@@ -116,12 +127,16 @@ class _OtPageState extends ConsumerState<OtPage> {
 	@override
 	void initState() {
 		super.initState();
-		final (desde, hasta) = _rangoMesActual();
+		final (desde, hasta) =
+				widget.misOtOnly ? _rangoMisOt() : _rangoMesActual();
 		_fechaDesde = desde;
 		_fechaHasta = hasta;
 		if (widget.modo == OtModo.necesarias) {
 			_filtroEstado = 'necesaria_de_emitir';
 			_showFiltros = true;
+		}
+		if (widget.misOtOnly) {
+			_filtroEstado = null; // muestra abiertas + cerradas del rango
 		}
 		WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
 	}
@@ -280,7 +295,8 @@ class _OtPageState extends ConsumerState<OtPage> {
 	Future<void> _aplicarFiltros() => _bootstrap();
 
 	void _resetMesActual() {
-		final (desde, hasta) = _rangoMesActual();
+		final (desde, hasta) =
+				widget.misOtOnly ? _rangoMisOt() : _rangoMesActual();
 		setState(() {
 			_fechaDesde = desde;
 			_fechaHasta = hasta;
@@ -894,6 +910,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 			children: [
 				_TecnicoTopBar(
 					userName: _user?.nombreUsuario ?? '',
+					onRefresh: () => _bootstrap(keepSelection: true),
 					onPerfil: () => context.go('/perfil'),
 					onLogout: () async {
 						await ref.read(authControllerProvider.notifier).logout();
@@ -1113,30 +1130,44 @@ class _OtPageState extends ConsumerState<OtPage> {
 						),
 					],
 					Expanded(
-						child: _filtradas.isEmpty
-								? _EmptyListState(
-										hasFiltro: _filtroEstado != null || _search.isNotEmpty,
-									)
-								: _filtroEstado == null && _search.isEmpty
-										? _buildGroupedList()
-										: ListView.builder(
-												padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-												itemCount: _filtradas.length,
-												itemBuilder: (context, index) {
-													final ot = _filtradas[index];
-													return _OtListTile(
-														ot: ot,
-														selected: _selected?['id'] == ot['id'],
-														checked: _checkedIds.contains(ot['id'] as String),
-														showCheckbox: _canManage && !widget.misOtOnly,
-														formatDate: _formatDate,
-														onTap: () => _selectOt(ot),
-														onCheckChanged: _canManage && !widget.misOtOnly
-																? () => _toggleCheck(ot['id'] as String)
-																: null,
-													);
-												},
-											),
+						child: RefreshIndicator(
+							color: AppColors.brandYellow,
+							onRefresh: () => _bootstrap(keepSelection: true),
+							child: _filtradas.isEmpty
+									? ListView(
+											physics: const AlwaysScrollableScrollPhysics(),
+											children: [
+												SizedBox(
+													height: 280,
+													child: _EmptyListState(
+														hasFiltro: _filtroEstado != null || _search.isNotEmpty,
+														misOt: widget.misOtOnly,
+													),
+												),
+											],
+										)
+									: _filtroEstado == null && _search.isEmpty
+											? _buildGroupedList()
+											: ListView.builder(
+													physics: const AlwaysScrollableScrollPhysics(),
+													padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+													itemCount: _filtradas.length,
+													itemBuilder: (context, index) {
+														final ot = _filtradas[index];
+														return _OtListTile(
+															ot: ot,
+															selected: _selected?['id'] == ot['id'],
+															checked: _checkedIds.contains(ot['id'] as String),
+															showCheckbox: _canManage && !widget.misOtOnly,
+															formatDate: _formatDate,
+															onTap: () => _selectOt(ot),
+															onCheckChanged: _canManage && !widget.misOtOnly
+																	? () => _toggleCheck(ot['id'] as String)
+																	: null,
+														);
+													},
+												),
+						),
 					),
 				],
 			),
@@ -1152,6 +1183,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 		];
 
 		return ListView(
+			physics: const AlwaysScrollableScrollPhysics(),
 			padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
 			children: [
 				for (final (estado, emptyMsg, icon) in secciones) ...[
@@ -1303,11 +1335,13 @@ class _OtPageState extends ConsumerState<OtPage> {
 class _TecnicoTopBar extends StatelessWidget {
 	const _TecnicoTopBar({
 		required this.userName,
+		required this.onRefresh,
 		required this.onPerfil,
 		required this.onLogout,
 	});
 
 	final String userName;
+	final VoidCallback onRefresh;
 	final VoidCallback onPerfil;
 	final VoidCallback onLogout;
 
@@ -1321,7 +1355,7 @@ class _TecnicoTopBar extends StatelessWidget {
 				bottom: false,
 				child: Container(
 					height: 56,
-					padding: const EdgeInsets.symmetric(horizontal: 16),
+					padding: const EdgeInsets.symmetric(horizontal: 8),
 					decoration: BoxDecoration(
 						border: Border(
 							bottom: BorderSide(
@@ -1331,6 +1365,7 @@ class _TecnicoTopBar extends StatelessWidget {
 					),
 					child: Row(
 						children: [
+							const SizedBox(width: 8),
 							Text(
 								'SIKA',
 								style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1349,6 +1384,11 @@ class _TecnicoTopBar extends StatelessWidget {
 												fontWeight: FontWeight.w500,
 											),
 								),
+							),
+							IconButton(
+								tooltip: 'Actualizar',
+								onPressed: onRefresh,
+								icon: const Icon(Icons.refresh_rounded),
 							),
 							IconButton(
 								tooltip: 'Perfil',
@@ -2806,9 +2846,13 @@ class _EstadoChip extends StatelessWidget {
 }
 
 class _EmptyListState extends StatelessWidget {
-	const _EmptyListState({required this.hasFiltro});
+	const _EmptyListState({
+		required this.hasFiltro,
+		this.misOt = false,
+	});
 
 	final bool hasFiltro;
+	final bool misOt;
 
 	@override
 	Widget build(BuildContext context) {
@@ -2825,14 +2869,20 @@ class _EmptyListState extends StatelessWidget {
 						),
 						const SizedBox(height: 12),
 						Text(
-							hasFiltro ? 'Sin resultados' : 'No hay OT',
+							hasFiltro
+									? 'Sin resultados'
+									: misOt
+											? 'No tenés OT asignadas'
+											: 'No hay OT',
 							style: const TextStyle(fontWeight: FontWeight.w600),
 						),
 						const SizedBox(height: 4),
 						Text(
 							hasFiltro
 									? 'Probá con otro filtro o búsqueda'
-									: 'Las órdenes aparecerán acá',
+									: misOt
+											? 'Cuando te asignen una orden, va a aparecer acá. Deslizá hacia abajo para actualizar.'
+											: 'Las órdenes aparecerán acá',
 							style: TextStyle(
 								fontSize: 13,
 								color: Theme.of(context).colorScheme.onSurfaceVariant,

@@ -97,6 +97,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 														prefixIcon: Icon(Icons.person_outline_rounded),
 													),
 													textInputAction: TextInputAction.next,
+													autofillHints: const [AutofillHints.username],
 													validator: (v) =>
 															(v == null || v.trim().isEmpty) ? 'Requerido' : null,
 												),
@@ -109,6 +110,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 														prefixIcon: Icon(Icons.lock_outline_rounded),
 													),
 													obscureText: true,
+													autofillHints: const [AutofillHints.password],
 													onFieldSubmitted: (_) => _submit(),
 													validator: (v) =>
 															(v == null || v.isEmpty) ? 'Requerido' : null,

@@ -43,7 +43,7 @@ Estado actual: **módulo cerrado para desarrollo** (~95%).
 
 | Ítem | Prioridad | Notas |
 |------|-----------|-------|
-| FCM push real en Android | Media | Config `.env` Firebase |
+| FCM push real en Android | Alta | `PushService` + handlers Flutter; configurar `FIREBASE_*` |
 | Gantt programación | P2 | Mejor en M6 |
 | Búsqueda avanzada procedimientos | — | ✅ Sprint 1: filtros tipo/sector/periodicidad/tipo equipo + texto |
 | Toolbar procedimientos + export CSV | — | ✅ Sprint 1 |

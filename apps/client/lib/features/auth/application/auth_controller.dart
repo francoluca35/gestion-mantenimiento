@@ -131,12 +131,19 @@ class AuthController extends StateNotifier<AuthState> {
 
 	Future<void> logout() async {
 		final refreshToken = state.session?.refreshToken;
+		final fcmToken = _prefs.getString(_fcmTokenKey);
+		try {
+			if (fcmToken != null && fcmToken.isNotEmpty) {
+				await _api.deleteJson('dispositivos/fcm/${Uri.encodeComponent(fcmToken)}');
+			}
+		} catch (_) {}
 		try {
 			if (refreshToken != null) {
 				await _repository.logout(refreshToken);
 			}
 		} catch (_) {}
 		await _clearTokens();
+		await _prefs.remove(_fcmTokenKey);
 		state = state.copyWith(clearSession: true, clearError: true);
 	}
 
@@ -145,27 +152,37 @@ class AuthController extends StateNotifier<AuthState> {
 		await _prefs.remove(_refreshTokenKey);
 	}
 
+	/// Registra o actualiza el token FCM del dispositivo (Android).
+	Future<void> registerFcmToken(String token) async {
+		if (kIsWeb) return;
+		final trimmed = token.trim();
+		if (trimmed.length < 10) return;
+
+		final usuarioId = state.session?.usuario.id;
+		if (usuarioId == null || usuarioId.isEmpty) return;
+
+		final lastToken = _prefs.getString(_fcmTokenKey);
+		if (token == lastToken) return;
+
+		try {
+			await _api.postJson('dispositivos/fcm', {'token': trimmed});
+			await _prefs.setString(_fcmTokenKey, trimmed);
+		} catch (_) {
+			// Notificaciones no deben romper la sesión.
+		}
+	}
+
 	Future<void> _maybeRegisterFcmToken() async {
 		if (kIsWeb) return;
 
 		final usuarioId = state.session?.usuario.id;
 		if (usuarioId == null || usuarioId.isEmpty) return;
 
-		final lastToken = _prefs.getString(_fcmTokenKey);
-
 		try {
-			// Android suele no requerir permisos explícitos, pero igual pedimos si aplica.
 			await FirebaseMessaging.instance.requestPermission();
 			final token = await FirebaseMessaging.instance.getToken();
 			if (token == null || token.isEmpty) return;
-			if (token == lastToken) return;
-
-			await _api.postJson(
-				'dispositivos/fcm',
-				{'token': token},
-			);
-
-			await _prefs.setString(_fcmTokenKey, token);
+			await registerFcmToken(token);
 		} catch (_) {
 			// Notificaciones no deben romper login/bootstrapping.
 		}

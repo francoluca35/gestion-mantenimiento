@@ -109,7 +109,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | # | Captura | Función SGwing | Ruta / API | Estado | Prioridad |
 |---|---------|----------------|------------|--------|-----------|
 | 30 | `sgwing-30` | Mapa para elegir ámbito de OT periódicas | `/ot/necesarias` | ✅ | — |
-| 31 | `sgwing-31` | Lupa → próximas; emitir lote; técnico; push; PDF; select all | `/ot/necesarias` | 🟡 | push diferido |
+| 31 | `sgwing-31` | Lupa → próximas; emitir lote; técnico; push; PDF; select all | `/ot/necesarias` | ✅ | resumen push por técnico |
 | 32 | `sgwing-32` | Al seleccionar OT, mapa lateral sector/máquina | `/ot` | ✅ | — |
 
 ---
@@ -118,7 +118,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 
 | Mejora | Pantallas | Estado | Prioridad |
 |--------|-----------|--------|-----------|
-| Notificar técnico al asignar “recibe” | 25, 31 | 🟡 diferido | Código listo; FCM Android + service account |
+| Notificar técnico al asignar “recibe” | 25, 31 | ✅ | `PushService` + FCM Android; requiere `FIREBASE_*` |
 | PDF para tercerizados / impresión selectiva | 12, 31 | ✅ HTML | Plantilla SGwing imprimible |
 | Colores OT: verde / rojo / amarillo | 17 | ✅ | `ot_ui.dart` |
 | Mapa contextual en búsqueda y detalle OT | 16, 32 | ✅ | `PlantaMapPanel` en `/ot` |

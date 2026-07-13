@@ -32,7 +32,12 @@ class SignaturePadState extends State<SignaturePad> {
 				_activePointer = null;
 			});
 
-	Future<String?> exportBase64() async {
+	/// Exporta PNG para documentos: trazo negro sobre fondo transparente
+	/// (independiente del color del pad en pantalla / tema oscuro).
+	Future<String?> exportBase64({
+		Color exportStrokeColor = const Color(0xFF000000),
+		Color exportBackgroundColor = const Color(0x00000000),
+	}) async {
 		if (isEmpty) return null;
 
 		final box = context.findRenderObject() as RenderBox?;
@@ -42,18 +47,13 @@ class SignaturePadState extends State<SignaturePad> {
 		final height = box.size.height;
 		if (width <= 0 || height <= 0) return null;
 
-		final scheme = Theme.of(context).colorScheme;
-		final strokeColor = widget.strokeColor ?? scheme.onSurface;
-		final backgroundColor =
-				widget.backgroundColor ?? scheme.surfaceContainerHighest;
-
 		final recorder = ui.PictureRecorder();
 		final canvas = Canvas(recorder, Offset.zero & Size(width, height));
 		_SignaturePainter(
 			strokes: _strokes,
-			strokeColor: strokeColor,
+			strokeColor: exportStrokeColor,
 			strokeWidth: widget.strokeWidth,
-			backgroundColor: backgroundColor,
+			backgroundColor: exportBackgroundColor,
 		).paint(canvas, Size(width, height));
 
 		final picture = recorder.endRecording();
@@ -129,7 +129,9 @@ class _SignaturePainter extends CustomPainter {
 
 	@override
 	void paint(Canvas canvas, Size size) {
-		canvas.drawRect(Offset.zero & size, Paint()..color = backgroundColor);
+		if (backgroundColor.a > 0) {
+			canvas.drawRect(Offset.zero & size, Paint()..color = backgroundColor);
+		}
 
 		final paint = Paint()
 				..color = strokeColor

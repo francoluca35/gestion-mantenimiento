@@ -66,6 +66,11 @@ class _ContadoresPageState extends ConsumerState<ContadoresPage> {
 	}
 
 	Future<void> _reiniciarContador(String equipoId, String tipo) async {
+		if (_esAdmin) {
+			final claveOk = await _confirmarClaveAdmin();
+			if (claveOk != true || !mounted) return;
+		}
+
 		final ok = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => AlertDialog(
@@ -97,6 +102,67 @@ class _ContadoresPageState extends ConsumerState<ContadoresPage> {
 		} catch (error) {
 			if (!mounted) return;
 			ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+		}
+	}
+
+	Future<bool?> _confirmarClaveAdmin() async {
+		final user = ref.read(authControllerProvider).session?.usuario;
+		if (user == null) return false;
+
+		final claveCtrl = TextEditingController();
+		final result = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				title: const Text('Confirmar clave de administrador'),
+				content: Column(
+					mainAxisSize: MainAxisSize.min,
+					crossAxisAlignment: CrossAxisAlignment.stretch,
+					children: [
+						Text(
+							'Ingresá tu contraseña para reiniciar el contador.',
+							style: TextStyle(
+								color: Theme.of(context).colorScheme.onSurfaceVariant,
+								fontSize: 13,
+							),
+						),
+						const SizedBox(height: 12),
+						TextField(
+							controller: claveCtrl,
+							autofocus: true,
+							obscureText: true,
+							decoration: const InputDecoration(
+								labelText: 'Contraseña',
+								border: OutlineInputBorder(),
+							),
+							onSubmitted: (_) => Navigator.pop(ctx, true),
+						),
+					],
+				),
+				actions: [
+					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+					FilledButton(
+						onPressed: () => Navigator.pop(ctx, true),
+						child: const Text('Confirmar'),
+					),
+				],
+			),
+		);
+		final clave = claveCtrl.text;
+		claveCtrl.dispose();
+		if (result != true || !mounted) return false;
+
+		try {
+			await ref.read(apiClientProvider).postJson('auth/login', {
+				'nombreUsuario': user.nombreUsuario,
+				'clave': clave,
+			});
+			return true;
+		} catch (_) {
+			if (!mounted) return false;
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Clave incorrecta')),
+			);
+			return false;
 		}
 	}
 

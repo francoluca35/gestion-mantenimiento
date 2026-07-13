@@ -16,7 +16,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 |--------|-----------|---------|---------------------|
 | Procedimientos | 01–07 | 🟡 ~85% | Versiones (07), reserva materiales (04) |
 | Equipos | 08–15 | ✅ ~95% | Repuestos por equipo (M4) |
-| OT / Programación | 16–32 | 🟡 ~75% | Filtros avanzados, columnas extendidas (P1) |
+| OT / Programación | 16–32 | ✅ ~90% | Gantt, OT derivada (P2) |
 
 ---
 
@@ -82,10 +82,10 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 |---|---------|----------------|------------|--------|-----------|
 | 16 | `sgwing-16` | Buscar OT con **mapa**; lupa por planta/sector | `/ot` | ✅ | — |
 | 17 | `sgwing-17` | Colores: verde realizada, rojo pendiente, amarillo ejecución | `/ot` | ✅ | — |
-| 18–21 | `sgwing-18`–`21` | Toolbars OT (acciones múltiples) | `/ot` | 🟡 | P1 |
-| 20 | `sgwing-20` | Columnas extendidas (motivo, recibe, GUT, HH real…) | `/ot` | 🟡 | P1 |
-| 22 | `sgwing-22` | Filtros: fechas, sector, tipo equipo, motivo, recibe… | `/ot` | 🟡 | P1 |
-| — | — | Listar OT (vista previa / imprimir) | — | ❌ | P1 |
+| 18–21 | `sgwing-18`–`21` | Toolbars OT (acciones múltiples) | `/ot` + `OtListToolbar` | ✅ | — |
+| 20 | `sgwing-20` | Columnas extendidas (motivo, recibe, GUT, HH real…) | listado + detalle + CSV | ✅ | — |
+| 22 | `sgwing-22` | Filtros: fechas, sector, tipo equipo, motivo, recibe… | `_FiltrosPanel` | ✅ | — |
+| — | — | Listar OT (vista previa / imprimir) | `OtPrint` + toolbar | ✅ | — |
 
 ### Programación avanzada (23–25)
 
@@ -93,7 +93,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 |---|---------|----------------|------------|--------|-----------|
 | 23 | `sgwing-23` | Diagrama de Gantt | — | ❌ | P2 |
 | 24 | `sgwing-24` | OT derivada | — | ❌ | P2 |
-| 25 | `sgwing-25` | OT no periódica: sector/equipo, fechas, recibe, responsable | `/ot/emitir-no-periodica` | 🟡 | P1 |
+| 25 | `sgwing-25` | OT no periódica: sector/equipo, fechas, recibe, responsable | `/ot/emitir-no-periodica` | ✅ | — |
 
 ### Solicitudes y contadores (26–29)
 
@@ -102,7 +102,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | 26 | `sgwing-26` | Listado solicitudes + acciones | `/solicitudes` | 🟡 | P2 |
 | 27 | `sgwing-27` | Detalle solicitud | `/solicitudes` | ✅ | — |
 | 28 | `sgwing-28` | Estado / conformidad | `/solicitudes` | ✅ | — |
-| 29 | `sgwing-29` | Contadores: gráfico, reiniciar (clave admin) | `/contadores` | 🟡 | P1 |
+| 29 | `sgwing-29` | Contadores: gráfico, reiniciar (clave admin) | `/contadores` | ✅ | — |
 
 ### OT necesarias (30–32)
 

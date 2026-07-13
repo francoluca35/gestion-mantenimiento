@@ -47,6 +47,7 @@ class _EmitirOtNoPeriodicaPageState extends ConsumerState<EmitirOtNoPeriodicaPag
 	_PrioridadOt _prioridad = _PrioridadOt.media;
 	String? _tecnicoId;
 	DateTime _fechaProgramacion = DateTime.now();
+	DateTime? _fechaLimite;
 	final _comentariosCtrl = TextEditingController();
 
 	@override
@@ -130,6 +131,27 @@ class _EmitirOtNoPeriodicaPageState extends ConsumerState<EmitirOtNoPeriodicaPag
 		}
 	}
 
+	Future<void> _pickFechaLimite() async {
+		final picked = await showDatePicker(
+			context: context,
+			initialDate: _fechaLimite ?? _fechaProgramacion.add(const Duration(days: 7)),
+			firstDate: _fechaProgramacion,
+			lastDate: DateTime(2035),
+		);
+		if (picked != null && mounted) {
+			setState(() => _fechaLimite = picked);
+		}
+	}
+
+	int? _toleranciaDias() {
+		final limite = _fechaLimite;
+		if (limite == null) return null;
+		final diff = limite.difference(
+			DateTime(_fechaProgramacion.year, _fechaProgramacion.month, _fechaProgramacion.day),
+		).inDays;
+		return diff > 0 ? diff : 0;
+	}
+
 	Future<void> _emitir() async {
 		if (_equipoId == null) return;
 
@@ -160,6 +182,7 @@ class _EmitirOtNoPeriodicaPageState extends ConsumerState<EmitirOtNoPeriodicaPag
 				if (_tecnicoId != null) 'tecnicoAsignadoId': _tecnicoId,
 				if (tieneRecibe) 'notificarAsignacion': notificarSegunAccion(accion),
 				'fechaProgramacion': _toApiDate(_fechaProgramacion),
+				if (_toleranciaDias() != null) 'tolerancia': _toleranciaDias(),
 				if (_comentariosCtrl.text.isNotEmpty) 'comentarios': _comentariosCtrl.text,
 			});
 			if (!mounted) return;
@@ -307,11 +330,41 @@ class _EmitirOtNoPeriodicaPageState extends ConsumerState<EmitirOtNoPeriodicaPag
 									borderRadius: BorderRadius.circular(8),
 									child: InputDecorator(
 										decoration: const InputDecoration(
-											labelText: 'Fecha de programación',
+											labelText: 'Fecha de inicio',
 											border: OutlineInputBorder(),
 											suffixIcon: Icon(Icons.calendar_today_rounded, size: 18),
 										),
 										child: Text(_dateFormat.format(_fechaProgramacion)),
+									),
+								),
+								const SizedBox(height: 16),
+								InkWell(
+									onTap: _pickFechaLimite,
+									borderRadius: BorderRadius.circular(8),
+									child: InputDecorator(
+										decoration: InputDecoration(
+											labelText: 'Fecha límite (opcional)',
+											helperText: _fechaLimite != null
+													? 'Tolerancia: ${_toleranciaDias() ?? 0} días'
+													: 'Ventana de ejecución permitida',
+											border: const OutlineInputBorder(),
+											suffixIcon: Row(
+												mainAxisSize: MainAxisSize.min,
+												children: [
+													if (_fechaLimite != null)
+														IconButton(
+															icon: const Icon(Icons.clear_rounded, size: 18),
+															onPressed: () => setState(() => _fechaLimite = null),
+														),
+													const Icon(Icons.event_rounded, size: 18),
+												],
+											),
+										),
+										child: Text(
+											_fechaLimite != null
+													? _dateFormat.format(_fechaLimite!)
+													: 'Sin fecha límite',
+										),
 									),
 								),
 								const SizedBox(height: 16),

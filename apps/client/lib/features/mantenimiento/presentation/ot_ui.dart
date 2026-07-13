@@ -74,4 +74,16 @@ class OtUi {
 			_ => AppColors.secondary,
 		};
 	}
+
+	/// Duración estimada del procedimiento (GUT / HH planificada).
+	static String formatDuracionMinutos(dynamic minutos) {
+		if (minutos == null) return '—';
+		final total = minutos is num ? minutos.toInt() : int.tryParse('$minutos');
+		if (total == null || total <= 0) return '—';
+		final h = total ~/ 60;
+		final m = total % 60;
+		if (h > 0 && m > 0) return '${h}h ${m}m';
+		if (h > 0) return '${h}h';
+		return '${m}m';
+	}
 }

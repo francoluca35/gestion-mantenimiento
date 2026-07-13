@@ -311,7 +311,12 @@ td, th {
 	padding: 4px;
 	margin-top: 4px;
 }
-.firma-img { max-height: 48px; max-width: 180px; }
+.firma-img {
+	max-height: 48px;
+	max-width: 180px;
+	background: transparent;
+	display: block;
+}
 .bottom-pair { display: flex; gap: 8px; margin-top: 8px; }
 .bottom-pair > div { flex: 1; }
 .label-inline { font-size: 9pt; font-weight: 700; }

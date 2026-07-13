@@ -16,6 +16,7 @@ import 'ot_firma_sheet.dart';
 import 'ot_list_toolbar.dart';
 import 'ot_motivo_pendiente_dialog.dart';
 import 'ot_pdf.dart';
+import 'ot_print.dart';
 import 'ot_ui.dart';
 
 enum OtModo { buscar, necesarias }
@@ -52,7 +53,9 @@ class _OtPageState extends ConsumerState<OtPage> {
 	String? _filtroPrioridad;
 	String? _filtroSectorId;
 	String? _filtroMotivoId;
+	String? _filtroTipoEquipoId;
 	String _filtroNumero = '';
+	List<Map<String, dynamic>> _tiposEquipo = [];
 	List<Map<String, dynamic>> _sectores = [];
 	List<Map<String, dynamic>> _motivos = [];
 	final Set<String> _checkedIds = {};
@@ -150,6 +153,9 @@ class _OtPageState extends ConsumerState<OtPage> {
 		if (_filtroMotivoId != null) {
 			params.add('motivoPendienteId=$_filtroMotivoId');
 		}
+		if (_filtroTipoEquipoId != null) {
+			params.add('tipoEquipoId=$_filtroTipoEquipoId');
+		}
 		if (_filtroNumero.trim().isNotEmpty) {
 			params.add('numero=${Uri.encodeComponent(_filtroNumero.trim())}');
 		}
@@ -245,6 +251,12 @@ class _OtPageState extends ConsumerState<OtPage> {
 				final tree = await api.getList('ubicaciones/tree?sucursalId=${user!.sucursalId}');
 				_sectores = _flattenUbicaciones(tree.cast<Map<String, dynamic>>());
 			}
+			try {
+				_tiposEquipo =
+						(await api.getList('tipos-equipo')).cast<Map<String, dynamic>>();
+			} catch (_) {
+				_tiposEquipo = [];
+			}
 
 			if (!mounted) return;
 			final lista = ordenes.cast<Map<String, dynamic>>();
@@ -278,6 +290,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 			_filtroPrioridad = null;
 			_filtroSectorId = null;
 			_filtroMotivoId = null;
+			_filtroTipoEquipoId = null;
 			_filtroNumero = '';
 			_search = '';
 		});
@@ -545,6 +558,46 @@ class _OtPageState extends ConsumerState<OtPage> {
 	void _exportFiltradas() {
 		if (_filtradas.isEmpty) return;
 		OtExport.download(_filtradas, suffix: 'listado');
+	}
+
+	void _imprimirListado() {
+		final ots = _checkedIds.isNotEmpty ? _selectedOts : _filtradas;
+		if (ots.isEmpty) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('No hay OT para imprimir')),
+			);
+			return;
+		}
+		final periodo =
+				'${_dateFormat.format(_fechaDesde)} — ${_dateFormat.format(_fechaHasta)}';
+		OtPrint.previewList(
+			titulo: _tituloListado,
+			periodo: periodo,
+			ordenes: ots,
+			filtroExtra: _checkedIds.isNotEmpty ? '${ots.length} seleccionadas' : null,
+		);
+	}
+
+	Future<void> _imprimirPdfSeleccion() async {
+		final ots = _selectedOts;
+		if (ots.isEmpty) return;
+		setState(() => _batchBusy = true);
+		try {
+			for (final ot in ots) {
+				await abrirPdfOt(ref, ot['id'] as String);
+			}
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text('${ots.length} PDF abierto(s)')),
+			);
+		} catch (error) {
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text('$error')),
+			);
+		} finally {
+			if (mounted) setState(() => _batchBusy = false);
+		}
 	}
 
 	Future<void> _derivarOt(Map<String, dynamic> ot) async {
@@ -999,10 +1052,12 @@ class _OtPageState extends ConsumerState<OtPage> {
 								filtroPrioridad: _filtroPrioridad,
 								filtroSectorId: _filtroSectorId,
 								filtroMotivoId: _filtroMotivoId,
+								filtroTipoEquipoId: _filtroTipoEquipoId,
 								filtroNumero: _filtroNumero,
 								tecnicos: _tecnicos,
 								sectores: _sectores,
 								motivos: _motivos,
+								tiposEquipo: _tiposEquipo,
 								formatDate: _dateFormat.format,
 								onPickDesde: () => _pickFecha(desde: true),
 								onPickHasta: () => _pickFecha(desde: false),
@@ -1012,6 +1067,8 @@ class _OtPageState extends ConsumerState<OtPage> {
 								onPrioridadChanged: (value) => setState(() => _filtroPrioridad = value),
 								onSectorChanged: (value) => setState(() => _filtroSectorId = value),
 								onMotivoChanged: (value) => setState(() => _filtroMotivoId = value),
+								onTipoEquipoChanged: (value) =>
+										setState(() => _filtroTipoEquipoId = value),
 								onNumeroChanged: (value) => setState(() => _filtroNumero = value),
 								onAplicar: _aplicarFiltros,
 							),
@@ -1051,6 +1108,8 @@ class _OtPageState extends ConsumerState<OtPage> {
 							onAnular: _batchAnular,
 							onExportar: _exportSelected,
 							onExportarFiltradas: _exportFiltradas,
+							onImprimir: _imprimirListado,
+							onImprimirPdf: _checkedIds.isNotEmpty ? _imprimirPdfSeleccion : null,
 						),
 					],
 					Expanded(
@@ -1499,10 +1558,12 @@ class _FiltrosPanel extends StatelessWidget {
 		required this.filtroPrioridad,
 		required this.filtroSectorId,
 		required this.filtroMotivoId,
+		required this.filtroTipoEquipoId,
 		required this.filtroNumero,
 		required this.tecnicos,
 		required this.sectores,
 		required this.motivos,
+		required this.tiposEquipo,
 		required this.formatDate,
 		required this.onPickDesde,
 		required this.onPickHasta,
@@ -1512,6 +1573,7 @@ class _FiltrosPanel extends StatelessWidget {
 		required this.onPrioridadChanged,
 		required this.onSectorChanged,
 		required this.onMotivoChanged,
+		required this.onTipoEquipoChanged,
 		required this.onNumeroChanged,
 		required this.onAplicar,
 	});
@@ -1523,10 +1585,12 @@ class _FiltrosPanel extends StatelessWidget {
 	final String? filtroPrioridad;
 	final String? filtroSectorId;
 	final String? filtroMotivoId;
+	final String? filtroTipoEquipoId;
 	final String filtroNumero;
 	final List<Map<String, dynamic>> tecnicos;
 	final List<Map<String, dynamic>> sectores;
 	final List<Map<String, dynamic>> motivos;
+	final List<Map<String, dynamic>> tiposEquipo;
 	final String Function(DateTime) formatDate;
 	final VoidCallback onPickDesde;
 	final VoidCallback onPickHasta;
@@ -1536,6 +1600,7 @@ class _FiltrosPanel extends StatelessWidget {
 	final ValueChanged<String?> onPrioridadChanged;
 	final ValueChanged<String?> onSectorChanged;
 	final ValueChanged<String?> onMotivoChanged;
+	final ValueChanged<String?> onTipoEquipoChanged;
 	final ValueChanged<String> onNumeroChanged;
 	final VoidCallback onAplicar;
 
@@ -1668,6 +1733,31 @@ class _FiltrosPanel extends StatelessWidget {
 						],
 						onChanged: onMotivoChanged,
 					),
+					if (tiposEquipo.isNotEmpty) ...[
+						const SizedBox(height: 10),
+						DropdownButtonFormField<String?>(
+							value: filtroTipoEquipoId,
+							isExpanded: true,
+							decoration: const InputDecoration(
+								labelText: 'Tipo de equipo',
+								isDense: true,
+								border: OutlineInputBorder(),
+							),
+							items: [
+								const DropdownMenuItem(
+									value: null,
+									child: Text('Todos los tipos de equipo'),
+								),
+								...tiposEquipo.map(
+									(t) => DropdownMenuItem(
+										value: t['id'] as String,
+										child: Text(t['nombre'] as String),
+									),
+								),
+							],
+							onChanged: onTipoEquipoChanged,
+						),
+					],
 					const SizedBox(height: 10),
 					TextField(
 						decoration: const InputDecoration(
@@ -1817,6 +1907,8 @@ class _OtListTile extends StatelessWidget {
 		final prioridad = ot['prioridad'] as String? ?? 'media';
 		final tecnico = ot['tecnicoAsignado'] as Map<String, dynamic>?;
 		final motivo = ot['motivoPendiente'] as Map<String, dynamic>?;
+		final procedimiento = ot['procedimiento'] as Map<String, dynamic>?;
+		final gut = OtUi.formatDuracionMinutos(procedimiento?['duracionEstimada']);
 		final color = OtUi.estadoColor(estado);
 		final isRealizada = estado == 'realizada';
 		final cardBg = switch (estado) {
@@ -1966,6 +2058,16 @@ class _OtListTile extends StatelessWidget {
 													: AppColors.warning,
 											fontSize: 11,
 											fontWeight: FontWeight.w600,
+										),
+									),
+								if (gut != '—')
+									Text(
+										'GUT est.: $gut',
+										style: TextStyle(
+											color: onCard
+													? Colors.white.withValues(alpha: 0.55)
+													: AppColors.mutedText,
+											fontSize: 11,
 										),
 									),
 							],
@@ -2174,6 +2276,12 @@ class _OtDetailContent extends StatelessWidget {
 									icon: Icons.description_outlined,
 									label: 'Procedimiento',
 									value: procedimiento['nombre'] as String? ?? '',
+								),
+							if (procedimiento?['duracionEstimada'] != null)
+								_InfoTile(
+									icon: Icons.schedule_rounded,
+									label: 'GUT estimada',
+									value: OtUi.formatDuracionMinutos(procedimiento!['duracionEstimada']),
 								),
 						];
 

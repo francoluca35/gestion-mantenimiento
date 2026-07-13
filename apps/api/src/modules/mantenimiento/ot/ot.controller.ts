@@ -99,6 +99,7 @@ export class OtController {
 		@Query('numero') numero?: string,
 		@Query('sectorResponsableId') sectorResponsableId?: string,
 		@Query('motivoPendienteId') motivoPendienteId?: string,
+		@Query('tipoEquipoId') tipoEquipoId?: string,
 	) {
 		return this.otService.findAll(user, {
 			sucursalId,
@@ -114,6 +115,7 @@ export class OtController {
 			numero,
 			sectorResponsableId,
 			motivoPendienteId,
+			tipoEquipoId,
 		});
 	}
 

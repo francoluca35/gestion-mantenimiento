@@ -2,12 +2,13 @@ import {
 	IsBoolean,
 	IsDateString,
 	IsEnum,
+	IsInt,
 	IsNotEmpty,
 	IsOptional,
 	IsString,
 	MaxLength,
-} from 'class-validator';
-import { IsAppUuid } from '../../../../common/decorators/is-app-uuid.decorator';
+	Min,
+} from 'class-validator';import { IsAppUuid } from '../../../../common/decorators/is-app-uuid.decorator';
 import { PrioridadOt, TipoMantenimiento } from '@prisma/client';
 
 export class EmitirOtDto {
@@ -43,4 +44,9 @@ export class EmitirOtDto {
 	@IsOptional()
 	@IsBoolean()
 	notificarAsignacion?: boolean;
+
+	@IsOptional()
+	@IsInt()
+	@Min(0)
+	tolerancia?: number;
 }

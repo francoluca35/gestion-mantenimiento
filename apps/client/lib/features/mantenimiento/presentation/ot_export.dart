@@ -25,6 +25,7 @@ class OtExport {
 			'Procedimiento',
 			'Técnico',
 			'Motivo pendiente',
+			'GUT estimada',
 			'Fecha programación',
 			'Fecha ejecución',
 		];
@@ -47,6 +48,7 @@ class OtExport {
 				procedimiento?['nombre'],
 				tecnico?['nombreUsuario'],
 				motivo?['descripcion'],
+				OtUi.formatDuracionMinutos(procedimiento?['duracionEstimada']),
 				_formatDate(ot['fechaProgramacion']),
 				_formatDate(ot['fechaEjecucion']),
 			].map(_csvCell).join(',');

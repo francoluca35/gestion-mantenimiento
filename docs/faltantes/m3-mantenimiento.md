@@ -12,7 +12,7 @@ Estado actual: **módulo cerrado para desarrollo** (~95%).
 ### Backend
 
 - Ciclo de vida OT completo (emitir, asignar, ejecutar, checklist, firma, anular, reabrir)
-- `GET /ot` con filtros: fechas, estado, tipo, técnico, equipo, ubicación, **prioridad, nº OT, sector**
+- `GET /ot` con filtros: fechas, estado, tipo, técnico, equipo, ubicación, **prioridad, nº OT, sector, motivo, tipo equipo**
 - `GET /ot/necesarias` por **tiempo** y **contador/umbral**
 - `POST /ot/necesarias/emitir` + **cron diario** (`OtCronService`, 6:00 AM)
 - `PATCH /ot/:id/motivo-pendiente` — asignar motivo de pendiente
@@ -29,12 +29,12 @@ Estado actual: **módulo cerrado para desarrollo** (~95%).
 
 | Ruta | Estado |
 |------|--------|
-| `/ot` | Filtros avanzados, columnas extendidas, mapa, derivar OT, **toolbar masivo**, **export CSV** |
+| `/ot` | Filtros avanzados, GUT estimada, mapa, derivar OT, **toolbar masivo**, **export CSV**, **vista previa / imprimir** |
 | `/ot/necesarias` | Mapa, select-all, técnico por fila, vista previa |
-| `/ot/emitir-no-periodica` | Formulario completo |
+| `/ot/emitir-no-periodica` | Equipo en mapa, fechas inicio/límite, recibe, PDF |
 | `/solicitudes` | Master-detail + conformidad |
 | `/procedimientos` | Periodicidad tiempo **y contador** |
-| `/contadores` | Gráfico por equipo + reinicio admin |
+| `/contadores` | Gráfico por equipo + reinicio con clave admin |
 | `/mis-ot` | Flujo técnico móvil |
 
 ---

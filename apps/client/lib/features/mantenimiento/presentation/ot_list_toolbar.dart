@@ -16,6 +16,8 @@ class OtListToolbar extends StatelessWidget {
 		required this.onAnular,
 		required this.onExportar,
 		required this.onExportarFiltradas,
+		this.onImprimir,
+		this.onImprimirPdf,
 		this.canAnular = false,
 		this.enabled = true,
 	});
@@ -33,6 +35,8 @@ class OtListToolbar extends StatelessWidget {
 	final VoidCallback onAnular;
 	final VoidCallback onExportar;
 	final VoidCallback onExportarFiltradas;
+	final VoidCallback? onImprimir;
+	final VoidCallback? onImprimirPdf;
 
 	@override
 	Widget build(BuildContext context) {
@@ -106,6 +110,20 @@ class OtListToolbar extends StatelessWidget {
 											enabled: enabled && hasSelection,
 											danger: true,
 											onPressed: onAnular,
+										),
+									if (onImprimirPdf != null)
+										_ToolbarButton(
+											icon: Icons.picture_as_pdf_outlined,
+											label: 'PDF selección',
+											enabled: enabled && hasSelection,
+											onPressed: onImprimirPdf!,
+										),
+									if (onImprimir != null)
+										_ToolbarButton(
+											icon: Icons.print_outlined,
+											label: hasSelection ? 'Imprimir sel.' : 'Vista previa',
+											enabled: enabled,
+											onPressed: onImprimir!,
 										),
 									_ToolbarButton(
 										icon: Icons.download_rounded,

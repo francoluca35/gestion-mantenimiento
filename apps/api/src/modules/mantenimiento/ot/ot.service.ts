@@ -558,6 +558,7 @@ export class OtService {
 			numero?: string;
 			sectorResponsableId?: string;
 			motivoPendienteId?: string;
+			tipoEquipoId?: string;
 		},
 	) {
 		const sucursalId = resolveSucursalId(currentUser, filters.sucursalId);
@@ -599,6 +600,9 @@ export class OtService {
 				? { sectorResponsableId: filters.sectorResponsableId }
 				: undefined,
 			motivoPendienteId: filters.motivoPendienteId,
+			equipo: filters.tipoEquipoId
+				? { tipoEquipoId: filters.tipoEquipoId }
+				: undefined,
 		};
 
 		return this.prisma.ordenTrabajo.findMany({
@@ -739,6 +743,7 @@ export class OtService {
 				creadorId: currentUser.id,
 				fechaProgramacion: new Date(dto.fechaProgramacion),
 				prioridad: dto.prioridad ?? 'media',
+				tolerancia: dto.tolerancia ?? 0,
 				comentarios: dto.comentarios,
 				historialEstados: {
 					create: {

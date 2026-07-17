@@ -14,7 +14,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 typedef FcmTokenCallback = Future<void> Function(String token);
 typedef FcmOpenCallback = void Function(String? otNumero);
-typedef FcmForegroundCallback = void Function(String title, String body);
+typedef FcmForegroundCallback = void Function(
+	String title,
+	String body,
+	String? otNumero,
+);
 
 /// Push FCM para Android (web queda fuera de alcance en Sprint 4).
 class FcmService {
@@ -55,7 +59,7 @@ class FcmService {
 		FirebaseMessaging.onMessage.listen((message) {
 			final title = message.notification?.title ?? 'OT asignada';
 			final body = message.notification?.body ?? 'Tenés una nueva orden de trabajo';
-			_onForeground?.call(title, body);
+			_onForeground?.call(title, body, message.data['otNumero']);
 		});
 
 		FirebaseMessaging.onMessageOpenedApp.listen((message) {

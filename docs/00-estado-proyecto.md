@@ -2,7 +2,7 @@
 
 Documento maestro: **qué hay**, **qué falta** y **qué mejorar**.
 
-**Última actualización:** 2026-07-09
+**Última actualización:** 2026-07-16
 
 ---
 
@@ -12,11 +12,11 @@ Documento maestro: **qué hay**, **qué falta** y **qué mejorar**.
 |------|---------------|-------|
 | **M1 Seguridad** | 🟢 ~92% | RLS, CRUD UI, editor derechos, perfil clave/sesiones, e2e |
 | **M2 Planta** | 🟢 ~90% | CRUD UI, documentos, lecturas, mover/editar, e2e |
-| **M3 Mantenimiento** | 🟡 ~80% | **Ola 2 cerrada (web)** — smoke test API 12/12; FCM diferido |
+| **M3 Mantenimiento** | 🟢 ~90% | Ola 2 + Sprints 1–3; FCM en Sprint 4 (código listo) |
 | **M4 Pañol** | ❌ 0% | Fase 2 |
 | **M5 Compras** | ❌ 0% | Fase 2 |
 | **M6 Indicadores** | ❌ ~5% | Solo resumen OT en home |
-| **M7 Notificaciones** | 🟡 ~40% | Código FCM listo; push real diferido (Android + service account) |
+| **M7 Notificaciones** | 🟡 ~80% | Push FCM + deep-link Mis OT; falta validar E2E en Android |
 | **Paridad SGwing** | 🟡 ~58% | 32 capturas en `docs/images/` |
 | **Paridad SGMWin manual** | 🟡 ~45% | Ver `MATRIZ-PARIDAD.md` |
 | **Shell adaptativo móvil** | 🟡 ~75% | Bottom nav por rol, sidebars colapsables con flecha |
@@ -88,7 +88,7 @@ Documento maestro: **qué hay**, **qué falta** y **qué mejorar**.
 
 | Diferido post-Ola 2 | Detalle |
 |---------------------|---------|
-| FCM push real | Service account en `.env` + prueba en Android |
+| FCM push real | ✅ código + env; falta validar E2E en Android |
 | PDF binario | Puppeteer → `.pdf` descargable (opcional; HTML ya imprimible) |
 | Animaciones finas | Transiciones mapa y colapso paneles |
 
@@ -115,7 +115,7 @@ Ver [`faltantes/sgwing-paridad.md`](faltantes/sgwing-paridad.md) Sprint A–B.
 | 2 | Mapa en `/ot/necesarias` + vista previa + técnico por fila | ✅ | sgwing-30, 31 |
 | 3 | Colores OT: verde / rojo / amarillo | ✅ | sgwing-17 |
 | 4 | PDF de OT | ✅ plantilla SGwing | sgwing-12, 31 |
-| 5 | Push al asignar técnico | 🟡 diferido | sgwing-25, 31 (M7) — código listo |
+| 5 | Push al asignar técnico | 🟡 código listo | sgwing-25, 31 (M7) — validar en Android |
 | 6 | Procedimientos filtrados por nodo planta/sector en `/planta` | ✅ | sgwing-14 |
 | 7 | **Shell móvil** — bottom nav + sidebars colapsables | ✅ | `08-ui-ux.md` |
 | 8 | Flujo Android técnico (Mis OT → checklist → firma → cerrar) | ✅ | A-01–A-11 |

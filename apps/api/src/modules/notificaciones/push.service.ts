@@ -1,9 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import { PrismaService } from '../../database/prisma.service';
-
-// firebase-admin tipado laxo: el default export varía entre ESM/CJS.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const admin = require('firebase-admin') as any;
 
 @Injectable()
 export class PushService implements OnModuleInit {
@@ -57,12 +55,15 @@ export class PushService implements OnModuleInit {
 			return { sent: 0, failed: 0, disabled: !this.ready };
 		}
 
+		// Estilo bandeja Android: título en negrita + cuerpo (como WhatsApp/Messenger).
 		const title =
-			numeros.length === 1 ? `OT #${numeros[0]}` : `${numeros.length} OT asignadas`;
+			numeros.length === 1
+				? `OT #${numeros[0]}`
+				: `${numeros.length} órdenes asignadas`;
 		const body =
 			numeros.length === 1
-				? 'Nueva orden de trabajo asignada'
-				: `Te asignaron las OT ${numeros.map((n) => `#${n}`).join(', ')}`;
+				? 'Te asignaron una nueva orden de trabajo 🔧 Abrila en Mis OT'
+				: `Te asignaron ${numeros.map((n) => `#${n}`).join(', ')} 🔧 Revisalas en Mis OT`;
 
 		if (!this.ready) {
 			this.logger.log(
@@ -71,16 +72,11 @@ export class PushService implements OnModuleInit {
 			return { sent: 0, failed: 0, disabled: true };
 		}
 
-		const tokens = dispositivos.map((d: { token: string }) => d.token);
+		const tokens = dispositivos.map((d) => d.token);
 
 		try {
-			const messaging = admin.messaging();
-			const send =
-				typeof messaging.sendEachForMulticast === 'function'
-					? messaging.sendEachForMulticast.bind(messaging)
-					: messaging.sendMulticast.bind(messaging);
-
-			const response = await send({
+			const messaging = getMessaging();
+			const response = await messaging.sendEachForMulticast({
 				tokens,
 				notification: { title, body },
 				data: {
@@ -94,19 +90,23 @@ export class PushService implements OnModuleInit {
 					notification: {
 						channelId: 'ot_asignadas',
 						clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+						icon: 'ic_stat_notification',
+						color: '#FFB11B',
+						defaultSound: true,
+						defaultVibrateTimings: true,
 					},
 				},
 			});
 
-			await this.pruneInvalidTokens(dispositivos, response.responses ?? []);
+			await this.pruneInvalidTokens(dispositivos, response.responses);
 
 			this.logger.log(
 				`[push] ${title} → ${tecnico?.nombreUsuario ?? tecnicoId} — ok ${response.successCount} / fail ${response.failureCount}`,
 			);
 
 			return {
-				sent: response.successCount as number,
-				failed: response.failureCount as number,
+				sent: response.successCount,
+				failed: response.failureCount,
 				disabled: false,
 			};
 		} catch (error) {
@@ -120,18 +120,27 @@ export class PushService implements OnModuleInit {
 
 		const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
 		const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
-		const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
+		let privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
 
 		if (!projectId || !clientEmail || !privateKeyRaw) {
 			this.ready = false;
 			return;
 		}
 
+		// Quitar comillas si dotenv las dejó literales
+		privateKeyRaw = privateKeyRaw.trim();
+		if (
+			(privateKeyRaw.startsWith('"') && privateKeyRaw.endsWith('"')) ||
+			(privateKeyRaw.startsWith("'") && privateKeyRaw.endsWith("'"))
+		) {
+			privateKeyRaw = privateKeyRaw.slice(1, -1);
+		}
+
 		const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
 
-		if (!admin.apps?.length) {
-			admin.initializeApp({
-				credential: admin.credential.cert({
+		if (getApps().length === 0) {
+			initializeApp({
+				credential: cert({
 					projectId,
 					clientEmail,
 					privateKey,

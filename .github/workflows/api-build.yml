@@ -1,0 +1,36 @@
+name: API build
+
+on:
+  push:
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/api-build.yml'
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/api-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Prisma generate
+        run: npx prisma generate
+      - name: Nest build
+        run: npm run build
+
+  # Smoke E2E necesita API + Postgres + seed vivos.
+  # Correr local: cd apps/api && npm run smoke
+  # En CI full con Docker queda diferido (Playwright UI también).

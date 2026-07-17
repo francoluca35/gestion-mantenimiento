@@ -24,6 +24,12 @@ class _FcmBootstrapState extends ConsumerState<FcmBootstrap> {
 		WidgetsBinding.instance.addPostFrameCallback((_) => _start());
 	}
 
+	String _misOtPath(String? otNumero) {
+		final n = otNumero?.trim();
+		if (n == null || n.isEmpty) return '/mis-ot';
+		return '/mis-ot?numero=${Uri.encodeQueryComponent(n)}';
+	}
+
 	Future<void> _start() async {
 		if (_started) return;
 		final auth = ref.read(authControllerProvider);
@@ -33,11 +39,11 @@ class _FcmBootstrapState extends ConsumerState<FcmBootstrap> {
 		await FcmService.instance.init(
 			onToken: (token) =>
 					ref.read(authControllerProvider.notifier).registerFcmToken(token),
-			onOpen: (_) {
+			onOpen: (otNumero) {
 				final router = GoRouter.maybeOf(context);
-				router?.go('/mis-ot');
+				router?.go(_misOtPath(otNumero));
 			},
-			onForeground: (title, body) {
+			onForeground: (title, body, otNumero) {
 				rootScaffoldMessengerKey.currentState?.showSnackBar(
 					SnackBar(
 						content: Text('$title\n$body'),
@@ -45,7 +51,7 @@ class _FcmBootstrapState extends ConsumerState<FcmBootstrap> {
 							label: 'Ver',
 							onPressed: () {
 								final router = GoRouter.maybeOf(context);
-								router?.go('/mis-ot');
+								router?.go(_misOtPath(otNumero));
 							},
 						),
 						duration: const Duration(seconds: 6),

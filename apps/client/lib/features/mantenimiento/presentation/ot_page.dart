@@ -26,10 +26,14 @@ class OtPage extends ConsumerStatefulWidget {
 		super.key,
 		this.modo = OtModo.buscar,
 		this.misOtOnly = false,
+		this.numeroInicial,
 	});
 
 	final OtModo modo;
 	final bool misOtOnly;
+
+	/// Si viene (p. ej. deep-link FCM), selecciona esa OT tras cargar.
+	final String? numeroInicial;
 
 	@override
 	ConsumerState<OtPage> createState() => _OtPageState();
@@ -281,6 +285,21 @@ class _OtPageState extends ConsumerState<OtPage> {
 				_tecnicos = tecnicos;
 				_motivos = motivos;
 			});
+
+			final targetNumero = widget.numeroInicial?.trim();
+			if (targetNumero != null && targetNumero.isNotEmpty) {
+				Map<String, dynamic>? match;
+				for (final ot in lista) {
+					if ('${ot['numero']}' == targetNumero) {
+						match = ot;
+						break;
+					}
+				}
+				if (match != null) {
+					await _selectOt(match, silent: true);
+					return;
+				}
+			}
 
 			if (lista.isNotEmpty && MediaQuery.sizeOf(context).width >= 900) {
 				await _selectOt(lista.first, silent: true);

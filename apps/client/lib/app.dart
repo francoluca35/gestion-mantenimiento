@@ -135,7 +135,13 @@ final _routerProvider = Provider<GoRouter>((ref) {
 					),
 					GoRoute(
 						path: '/mis-ot',
-						pageBuilder: (context, state) => _fadePage(state, const MisOtPage()),
+						pageBuilder: (context, state) {
+							final numero = state.uri.queryParameters['numero'];
+							return _fadePage(
+								state,
+								MisOtPage(numeroInicial: numero),
+							);
+						},
 					),
 					GoRoute(
 						path: '/ot/necesarias',

@@ -16,7 +16,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 |--------|-----------|---------|---------------------|
 | Procedimientos | 01–07 | 🟡 ~85% | Versiones (07), reserva materiales (04) |
 | Equipos | 08–15 | ✅ ~95% | Repuestos por equipo (M4) |
-| OT / Programación | 16–32 | ✅ ~90% | Gantt, OT derivada (P2) |
+| OT / Programación | 16–32 | ✅ ~92% | Gantt (P2); OT derivada ✅ |
 
 ---
 
@@ -92,7 +92,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | # | Captura | Función SGwing | Ruta / API | Estado | Prioridad |
 |---|---------|----------------|------------|--------|-----------|
 | 23 | `sgwing-23` | Diagrama de Gantt | — | ❌ | P2 |
-| 24 | `sgwing-24` | OT derivada | — | ❌ | P2 |
+| 24 | `sgwing-24` | OT derivada | `POST /ot/:id/derivar` | ✅ | — |
 | 25 | `sgwing-25` | OT no periódica: sector/equipo, fechas, recibe, responsable | `/ot/emitir-no-periodica` | ✅ | — |
 
 ### Solicitudes y contadores (26–29)
@@ -164,7 +164,7 @@ Orden sugerido para máximo impacto operativo en Planta Virrey.
 
 17. Reserva materiales (04) → M4 Pañol.
 18. Documentos de equipo (15) → storage.
-19. Gantt (23) + OT derivada (24).
+19. Gantt (23). OT derivada (24) ✅.
 20. Búsqueda avanzada procedimientos (02), versiones (07).
 
 ### Más adelante **P2–P3**

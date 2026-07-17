@@ -22,7 +22,7 @@ Estado actual: **módulo cerrado para desarrollo** (~95%).
 - Solicitudes de trabajo + conformidad + emitir OT
 - PDF OT (HTML imprimible)
 - Fotos en ejecución (`fotos` JSONB + presign)
-- FCM push (código listo; requiere service account + Android)
+- FCM push (`PushService` + deep-link Mis OT; validar E2E Android)
 - Tests e2e: `apps/api/test/ot.e2e-spec.ts` (4/4)
 
 ### Flutter

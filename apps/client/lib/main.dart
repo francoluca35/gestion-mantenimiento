@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'app.dart';
+import 'core/config/app_config.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'firebase_options.dart';
 
@@ -18,6 +19,7 @@ Future<void> main() async {
 	}
 
 	final prefs = await SharedPreferences.getInstance();
+	await AppConfig.loadOverride(prefs);
 
 	try {
 		await Firebase.initializeApp(

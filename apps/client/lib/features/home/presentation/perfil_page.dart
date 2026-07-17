@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/sika_ui.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 
@@ -18,11 +20,55 @@ class _PerfilPageState extends ConsumerState<PerfilPage> {
 	List<Map<String, dynamic>> _sesiones = [];
 	bool _loadingSesiones = true;
 	String? _sesionesError;
+	late final TextEditingController _apiUrlCtrl;
+	bool _savingApiUrl = false;
 
 	@override
 	void initState() {
 		super.initState();
+		_apiUrlCtrl = TextEditingController(text: AppConfig.apiBaseUrl);
 		_cargarSesiones();
+	}
+
+	@override
+	void dispose() {
+		_apiUrlCtrl.dispose();
+		super.dispose();
+	}
+
+	Future<void> _guardarApiUrl() async {
+		final raw = _apiUrlCtrl.text.trim();
+		if (raw.isNotEmpty) {
+			final uri = Uri.tryParse(raw);
+			if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(content: Text('URL inválida. Ej: http://192.168.1.10:3000/v1')),
+				);
+				return;
+			}
+		}
+
+		setState(() => _savingApiUrl = true);
+		try {
+			final prefs = ref.read(sharedPreferencesProvider);
+			final effective = await AppConfig.setOverride(
+				prefs,
+				raw.isEmpty ? null : raw,
+			);
+			_apiUrlCtrl.text = effective;
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(
+						'API: $effective\nCerrá sesión e ingresá de nuevo para aplicar.',
+					),
+				),
+			);
+			await ref.read(authControllerProvider.notifier).logout();
+			if (mounted) context.go('/login');
+		} finally {
+			if (mounted) setState(() => _savingApiUrl = false);
+		}
 	}
 
 	Future<void> _cargarSesiones() async {
@@ -382,6 +428,66 @@ class _PerfilPageState extends ConsumerState<PerfilPage> {
 						],
 					),
 				),
+				if (!kIsWeb) ...[
+					const SizedBox(height: 16),
+					SikaCard(
+						padding: const EdgeInsets.all(20),
+						child: Column(
+							crossAxisAlignment: CrossAxisAlignment.start,
+							children: [
+								Text(
+									'Servidor API',
+									style: Theme.of(context).textTheme.titleMedium?.copyWith(
+												fontWeight: FontWeight.w700,
+											),
+								),
+								const SizedBox(height: 8),
+								Text(
+									'Misma Wi‑Fi que la PC, hotspot, o USB con adb reverse '
+									'(http://127.0.0.1:3000/v1). Vacío = valor de compilación.',
+									style: Theme.of(context).textTheme.bodySmall?.copyWith(
+												color: AppColors.mutedText,
+											),
+								),
+								const SizedBox(height: 12),
+								TextField(
+									controller: _apiUrlCtrl,
+									keyboardType: TextInputType.url,
+									autocorrect: false,
+									decoration: const InputDecoration(
+										labelText: 'URL API',
+										hintText: 'http://192.168.x.x:3000/v1',
+										border: OutlineInputBorder(),
+									),
+								),
+								if (AppConfig.hasOverride) ...[
+									const SizedBox(height: 8),
+									Text(
+										'Override activo (compile: ${AppConfig.compileTimeApiBaseUrl})',
+										style: Theme.of(context).textTheme.bodySmall?.copyWith(
+													color: AppColors.mutedText,
+												),
+									),
+								],
+								const SizedBox(height: 12),
+								SizedBox(
+									width: double.infinity,
+									child: FilledButton.tonalIcon(
+										onPressed: _savingApiUrl ? null : _guardarApiUrl,
+										icon: _savingApiUrl
+												? const SizedBox(
+														width: 16,
+														height: 16,
+														child: CircularProgressIndicator(strokeWidth: 2),
+													)
+												: const Icon(Icons.save_outlined),
+										label: Text(_savingApiUrl ? 'Guardando…' : 'Guardar URL'),
+									),
+								),
+							],
+						),
+					),
+				],
 				const SizedBox(height: 16),
 				SizedBox(
 					width: double.infinity,

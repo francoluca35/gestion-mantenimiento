@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import 'core/config/app_config.dart';
 import 'core/layout/app_shell.dart';
+import 'core/notifications/fcm_bootstrap.dart';
+import 'core/notifications/fcm_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'features/auth/presentation/login_page.dart';
@@ -70,7 +72,9 @@ class GestionMantenimientoApp extends ConsumerWidget {
 			theme: AppTheme.light(),
 			darkTheme: AppTheme.dark(),
 			themeMode: ThemeMode.dark,
+			scaffoldMessengerKey: rootScaffoldMessengerKey,
 			routerConfig: router,
+			builder: (context, child) => FcmBootstrap(child: child ?? const SizedBox.shrink()),
 		);
 	}
 }
@@ -131,7 +135,13 @@ final _routerProvider = Provider<GoRouter>((ref) {
 					),
 					GoRoute(
 						path: '/mis-ot',
-						pageBuilder: (context, state) => _fadePage(state, const MisOtPage()),
+						pageBuilder: (context, state) {
+							final numero = state.uri.queryParameters['numero'];
+							return _fadePage(
+								state,
+								MisOtPage(numeroInicial: numero),
+							);
+						},
 					),
 					GoRoute(
 						path: '/ot/necesarias',

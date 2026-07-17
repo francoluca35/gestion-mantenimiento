@@ -22,7 +22,7 @@ Estado actual: **módulo cerrado para desarrollo** (~95%).
 - Solicitudes de trabajo + conformidad + emitir OT
 - PDF OT (HTML imprimible)
 - Fotos en ejecución (`fotos` JSONB + presign)
-- FCM push (código listo; requiere service account + Android)
+- FCM push (`PushService` + deep-link Mis OT) — **Sprint 4 cerrado**
 - Tests e2e: `apps/api/test/ot.e2e-spec.ts` (4/4)
 
 ### Flutter
@@ -43,7 +43,7 @@ Estado actual: **módulo cerrado para desarrollo** (~95%).
 
 | Ítem | Prioridad | Notas |
 |------|-----------|-------|
-| FCM push real en Android | Media | Config `.env` Firebase |
+| FCM push real en Android | — | ✅ Sprint 4 cerrado (`sprint-4-fcm.md`) |
 | Gantt programación | P2 | Mejor en M6 |
 | Búsqueda avanzada procedimientos | — | ✅ Sprint 1: filtros tipo/sector/periodicidad/tipo equipo + texto |
 | Toolbar procedimientos + export CSV | — | ✅ Sprint 1 |

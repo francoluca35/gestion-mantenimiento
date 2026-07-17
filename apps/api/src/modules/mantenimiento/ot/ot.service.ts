@@ -5,9 +5,9 @@ import {
 	NotFoundException,
 } from '@nestjs/common';
 import { EstadoOt, Prisma, TipoMantenimiento } from '@prisma/client';
-import admin from 'firebase-admin';
 import { PrismaService } from '../../../database/prisma.service';
 import type { AuthUser } from '../../seguridad/auth/auth.types';
+import { PushService } from '../../notificaciones/push.service';
 import { assertSucursalAccess, resolveSucursalId } from '../mantenimiento.scope';
 import { AnularOtDto } from './dto/anular-ot.dto';
 import { AsignarOtDto } from './dto/asignar-ot.dto';
@@ -32,7 +32,10 @@ const TRANSICIONES: Record<EstadoOt, EstadoOt[]> = {
 
 @Injectable()
 export class OtService {
-	constructor(private readonly prisma: PrismaService) {}
+	constructor(
+		private readonly prisma: PrismaService,
+		private readonly push: PushService,
+	) {}
 
 	private otInclude() {
 		return {
@@ -421,6 +424,8 @@ export class OtService {
 	async emitirNecesarias(dto: EmitirOtNecesariasDto, currentUser: AuthUser) {
 		const sucursalId = resolveSucursalId(currentUser, dto.sucursalId);
 		const emitidas = [];
+		/** tecnicoId → números OT a notificar (resumen por técnico). */
+		const pushPorTecnico = new Map<string, number[]>();
 
 		for (const item of dto.items) {
 			const necesarias = await this.listarNecesarias(currentUser, {
@@ -449,12 +454,27 @@ export class OtService {
 					fechaProgramacion: item.fechaProgramacion,
 					prioridad: item.prioridad,
 					comentarios: `OT necesaria — ${valida.procedimientoNombre}`,
-					notificarAsignacion: item.notificarAsignacion,
+					// Diferimos push al final del lote para no spamear
+					notificarAsignacion: false,
 				},
 				currentUser,
 			);
 
 			emitidas.push(ot);
+
+			if (
+				item.tecnicoAsignadoId &&
+				item.notificarAsignacion !== false &&
+				typeof ot.numero === 'number'
+			) {
+				const list = pushPorTecnico.get(item.tecnicoAsignadoId) ?? [];
+				list.push(ot.numero);
+				pushPorTecnico.set(item.tecnicoAsignadoId, list);
+			}
+		}
+
+		for (const [tecnicoId, numeros] of pushPorTecnico) {
+			await this.push.notifyOtAsignadas(tecnicoId, numeros);
 		}
 
 		return {
@@ -773,7 +793,7 @@ export class OtService {
 		if (dto.tecnicoAsignadoId) {
 			const debeNotificar = dto.notificarAsignacion !== false;
 			if (debeNotificar) {
-				await this.notificarAsignacion(ot.numero, dto.tecnicoAsignadoId);
+				await this.push.notifyOtAsignada(ot.numero, dto.tecnicoAsignadoId);
 			}
 		}
 
@@ -854,7 +874,7 @@ export class OtService {
 				tecnicoAsignado: { connect: { id: dto.tecnicoAsignadoId } },
 			},
 		).then(async (actualizada) => {
-			await this.notificarAsignacion(actualizada.numero, dto.tecnicoAsignadoId);
+			await this.push.notifyOtAsignada(actualizada.numero, dto.tecnicoAsignadoId);
 			return actualizada;
 		});
 	}
@@ -1209,73 +1229,6 @@ export class OtService {
 		}
 
 		return [...result];
-	}
-
-	private async notificarAsignacion(otNumero: number, tecnicoId: string) {
-		const tecnico = await this.prisma.usuario.findUnique({
-			where: { id: tecnicoId },
-			select: { nombreUsuario: true },
-		});
-
-		const dispositivos = await this.prisma.dispositivoFcm.findMany({
-			where: { usuarioId: tecnicoId },
-			select: { token: true },
-		});
-
-		if (dispositivos.length === 0) return;
-
-		// Tipado flexible: firebase-admin tiene diferencias entre versiones/ESM.
-		const firebase = admin as any;
-
-		const projectId = process.env.FIREBASE_PROJECT_ID;
-		const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-		const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
-
-		// En dev, si no hay credenciales, degradamos a log.
-		if (!projectId || !clientEmail || !privateKeyRaw) {
-			console.log(
-				`[push:disabled] OT #${otNumero} asignada a ${
-					tecnico?.nombreUsuario ?? tecnicoId
-				} (sin credenciales FCM)`,
-			);
-			return;
-		}
-
-		const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
-
-		if (firebase.apps.length === 0) {
-			firebase.initializeApp({
-				credential: firebase.credential.cert({
-					projectId,
-					clientEmail,
-					privateKey,
-				}),
-			});
-		}
-
-		try {
-			const tokens = dispositivos.map((d: { token: string }) => d.token);
-
-			const title = `OT #${otNumero}`;
-			const body = tecnico?.nombreUsuario
-				? `Nueva orden asignada a ${tecnico.nombreUsuario}`
-				: 'Nueva orden de trabajo asignada';
-
-			const response = await firebase.messaging().sendMulticast({
-				tokens,
-				notification: { title, body },
-				data: {
-					type: 'ot.asignada',
-					otNumero: String(otNumero),
-				},
-			});
-
-			console.log(
-				`[push] OT #${otNumero} enviada — ok: ${response.successCount} / ${response.failureCount}`,
-			);
-		} catch (error) {
-			console.log(`[push:error] ${String(error)}`);
-		}
 	}
 
 	private validarTransicion(actual: EstadoOt, siguiente: EstadoOt) {

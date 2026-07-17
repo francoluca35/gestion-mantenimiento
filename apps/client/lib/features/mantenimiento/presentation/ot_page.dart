@@ -26,10 +26,14 @@ class OtPage extends ConsumerStatefulWidget {
 		super.key,
 		this.modo = OtModo.buscar,
 		this.misOtOnly = false,
+		this.numeroInicial,
 	});
 
 	final OtModo modo;
 	final bool misOtOnly;
+
+	/// Si viene (p. ej. deep-link FCM), selecciona esa OT tras cargar.
+	final String? numeroInicial;
 
 	@override
 	ConsumerState<OtPage> createState() => _OtPageState();
@@ -84,6 +88,17 @@ class _OtPageState extends ConsumerState<OtPage> {
 		);
 	}
 
+	/// Técnico: ventana amplia para no “perder” OT abiertas fuera del mes.
+	static (DateTime, DateTime) _rangoMisOt() {
+		final now = DateTime.now();
+		final desde = now.subtract(const Duration(days: 365));
+		final hasta = now.add(const Duration(days: 60));
+		return (
+			DateTime(desde.year, desde.month, desde.day),
+			DateTime(hasta.year, hasta.month, hasta.day),
+		);
+	}
+
 	AuthUser? get _user => ref.read(authControllerProvider).session?.usuario;
 
 	bool get _canAnular =>
@@ -116,12 +131,16 @@ class _OtPageState extends ConsumerState<OtPage> {
 	@override
 	void initState() {
 		super.initState();
-		final (desde, hasta) = _rangoMesActual();
+		final (desde, hasta) =
+				widget.misOtOnly ? _rangoMisOt() : _rangoMesActual();
 		_fechaDesde = desde;
 		_fechaHasta = hasta;
 		if (widget.modo == OtModo.necesarias) {
 			_filtroEstado = 'necesaria_de_emitir';
 			_showFiltros = true;
+		}
+		if (widget.misOtOnly) {
+			_filtroEstado = null; // muestra abiertas + cerradas del rango
 		}
 		WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
 	}
@@ -267,6 +286,21 @@ class _OtPageState extends ConsumerState<OtPage> {
 				_motivos = motivos;
 			});
 
+			final targetNumero = widget.numeroInicial?.trim();
+			if (targetNumero != null && targetNumero.isNotEmpty) {
+				Map<String, dynamic>? match;
+				for (final ot in lista) {
+					if ('${ot['numero']}' == targetNumero) {
+						match = ot;
+						break;
+					}
+				}
+				if (match != null) {
+					await _selectOt(match, silent: true);
+					return;
+				}
+			}
+
 			if (lista.isNotEmpty && MediaQuery.sizeOf(context).width >= 900) {
 				await _selectOt(lista.first, silent: true);
 			}
@@ -280,7 +314,8 @@ class _OtPageState extends ConsumerState<OtPage> {
 	Future<void> _aplicarFiltros() => _bootstrap();
 
 	void _resetMesActual() {
-		final (desde, hasta) = _rangoMesActual();
+		final (desde, hasta) =
+				widget.misOtOnly ? _rangoMisOt() : _rangoMesActual();
 		setState(() {
 			_fechaDesde = desde;
 			_fechaHasta = hasta;
@@ -807,19 +842,29 @@ class _OtPageState extends ConsumerState<OtPage> {
 		}
 
 		final scheme = Theme.of(context).colorScheme;
-		final wide = MediaQuery.sizeOf(context).width >= 900;
+		final width = MediaQuery.sizeOf(context).width;
+		final wide = width >= 900;
+		final tablet = width >= 700 && width < 900;
 
-		if (!wide) {
+		if (!wide && !(widget.misOtOnly && tablet)) {
 			return _wrapTecnicoShell(_buildMobile(scheme));
 		}
 
 		if (widget.misOtOnly) {
+			final listFlex = width >= 1100 ? 2 : 3;
+			final detailFlex = width >= 1100 ? 5 : 4;
 			return _wrapTecnicoShell(
 				Row(
 					children: [
-						SizedBox(width: 380, child: _buildListPanel(scheme)),
+						Expanded(
+							flex: listFlex,
+							child: _buildListPanel(scheme, comfortable: true),
+						),
 						const VerticalDivider(width: 1),
-						Expanded(child: _buildMainPanel(scheme)),
+						Expanded(
+							flex: detailFlex,
+							child: _buildMainPanel(scheme, mobile: width < 1100),
+						),
 					],
 				),
 			);
@@ -894,6 +939,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 			children: [
 				_TecnicoTopBar(
 					userName: _user?.nombreUsuario ?? '',
+					onRefresh: () => _bootstrap(keepSelection: true),
 					onPerfil: () => context.go('/perfil'),
 					onLogout: () async {
 						await ref.read(authControllerProvider.notifier).logout();
@@ -940,7 +986,12 @@ class _OtPageState extends ConsumerState<OtPage> {
 		if (_selected == null) {
 			return Column(
 				children: [
-					Expanded(child: _buildListPanel(scheme)),
+					Expanded(
+						child: _buildListPanel(
+							scheme,
+							comfortable: widget.misOtOnly,
+						),
+					),
 					if (!widget.misOtOnly)
 						SafeArea(
 							child: Padding(
@@ -963,19 +1014,30 @@ class _OtPageState extends ConsumerState<OtPage> {
 			children: [
 				Material(
 					color: scheme.surface,
-					child: Padding(
-						padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-						child: Row(
-							children: [
-								IconButton(
-									onPressed: () => setState(() => _selected = null),
-									icon: const Icon(Icons.arrow_back_rounded),
-								),
-								Text(
-									'OT #${_selected?['numero']}',
-									style: const TextStyle(fontWeight: FontWeight.w700),
-								),
-							],
+					child: SafeArea(
+						bottom: false,
+						child: Padding(
+							padding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
+							child: Row(
+								children: [
+									IconButton(
+										onPressed: () => setState(() => _selected = null),
+										icon: const Icon(Icons.arrow_back_rounded),
+									),
+									const SizedBox(width: 4),
+									Expanded(
+										child: Text(
+											'OT #${_selected?['numero']}',
+											maxLines: 1,
+											overflow: TextOverflow.ellipsis,
+											style: const TextStyle(
+												fontWeight: FontWeight.w700,
+												fontSize: 18,
+											),
+										),
+									),
+								],
+							),
 						),
 					),
 				),
@@ -984,10 +1046,12 @@ class _OtPageState extends ConsumerState<OtPage> {
 		);
 	}
 
-	Widget _buildListPanel(ColorScheme scheme) {
+	Widget _buildListPanel(ColorScheme scheme, {bool comfortable = false}) {
 		final plantaLine = _user?.sucursalNombre != null
-				? '${_user!.sucursalNombre!} - ${_dateFormat.format(_fechaDesde)} - ${_dateFormat.format(_fechaHasta)}'
+				? '${_user!.sucursalNombre!} · ${_dateFormat.format(_fechaDesde)} – ${_dateFormat.format(_fechaHasta)}'
 				: null;
+		final hPad = comfortable ? 20.0 : 16.0;
+		final titleSize = comfortable ? 24.0 : 22.0;
 
 		return Container(
 			color: AppColors.black,
@@ -995,7 +1059,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 				crossAxisAlignment: CrossAxisAlignment.stretch,
 				children: [
 					Padding(
-						padding: const EdgeInsets.fromLTRB(20, 20, 12, 4),
+						padding: EdgeInsets.fromLTRB(hPad, comfortable ? 24 : 20, 12, comfortable ? 10 : 4),
 						child: Row(
 							crossAxisAlignment: CrossAxisAlignment.start,
 							children: [
@@ -1005,20 +1069,24 @@ class _OtPageState extends ConsumerState<OtPage> {
 										children: [
 											Text(
 												_tituloListado,
-												style: const TextStyle(
+												style: TextStyle(
 													fontWeight: FontWeight.w700,
-													fontSize: 22,
+													fontSize: titleSize,
 													color: Colors.white,
+													height: 1.2,
 												),
 											),
 											if (plantaLine != null) ...[
-												const SizedBox(height: 6),
+												const SizedBox(height: 8),
 												Text(
 													plantaLine,
+													maxLines: 2,
+													overflow: TextOverflow.ellipsis,
 													style: const TextStyle(
 														color: AppColors.accent,
 														fontSize: 13,
 														fontWeight: FontWeight.w500,
+														height: 1.35,
 													),
 												),
 											],
@@ -1074,7 +1142,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 							),
 						),
 					Padding(
-						padding: const EdgeInsets.symmetric(horizontal: 16),
+						padding: EdgeInsets.symmetric(horizontal: hPad),
 						child: TextField(
 							style: const TextStyle(color: Colors.white),
 							decoration: SikaUi.searchDecoration(
@@ -1086,7 +1154,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 							onChanged: (value) => setState(() => _search = value),
 						),
 					),
-					const SizedBox(height: 10),
+					SizedBox(height: comfortable ? 14 : 10),
 					_FiltrosEstado(
 						valor: _filtroEstado,
 						countFor: _countEstado,
@@ -1113,37 +1181,58 @@ class _OtPageState extends ConsumerState<OtPage> {
 						),
 					],
 					Expanded(
-						child: _filtradas.isEmpty
-								? _EmptyListState(
-										hasFiltro: _filtroEstado != null || _search.isNotEmpty,
-									)
-								: _filtroEstado == null && _search.isEmpty
-										? _buildGroupedList()
-										: ListView.builder(
-												padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-												itemCount: _filtradas.length,
-												itemBuilder: (context, index) {
-													final ot = _filtradas[index];
-													return _OtListTile(
-														ot: ot,
-														selected: _selected?['id'] == ot['id'],
-														checked: _checkedIds.contains(ot['id'] as String),
-														showCheckbox: _canManage && !widget.misOtOnly,
-														formatDate: _formatDate,
-														onTap: () => _selectOt(ot),
-														onCheckChanged: _canManage && !widget.misOtOnly
-																? () => _toggleCheck(ot['id'] as String)
-																: null,
-													);
-												},
-											),
+						child: RefreshIndicator(
+							color: AppColors.brandYellow,
+							onRefresh: () => _bootstrap(keepSelection: true),
+							child: _filtradas.isEmpty
+									? ListView(
+											physics: const AlwaysScrollableScrollPhysics(),
+											children: [
+												SizedBox(
+													height: 280,
+													child: _EmptyListState(
+														hasFiltro: _filtroEstado != null || _search.isNotEmpty,
+														misOt: widget.misOtOnly,
+													),
+												),
+											],
+										)
+									: _filtroEstado == null && _search.isEmpty
+											? _buildGroupedList(comfortable: comfortable)
+											: ListView.builder(
+													physics: const AlwaysScrollableScrollPhysics(),
+													padding: EdgeInsets.fromLTRB(
+														comfortable ? 16 : 12,
+														comfortable ? 8 : 4,
+														comfortable ? 16 : 12,
+														comfortable ? 28 : 16,
+													),
+													itemCount: _filtradas.length,
+													itemBuilder: (context, index) {
+														final ot = _filtradas[index];
+														return _OtListTile(
+															ot: ot,
+															selected: _selected?['id'] == ot['id'],
+															checked: _checkedIds.contains(ot['id'] as String),
+															showCheckbox: _canManage && !widget.misOtOnly,
+															hideTecnico: widget.misOtOnly,
+															comfortable: comfortable,
+															formatDate: _formatDate,
+															onTap: () => _selectOt(ot),
+															onCheckChanged: _canManage && !widget.misOtOnly
+																	? () => _toggleCheck(ot['id'] as String)
+																	: null,
+														);
+													},
+												),
+						),
 					),
 				],
 			),
 		);
 	}
 
-	Widget _buildGroupedList() {
+	Widget _buildGroupedList({bool comfortable = false}) {
 		const secciones = [
 			('realizada', 'No hay órdenes realizadas', Icons.check_circle_outline_rounded),
 			('pendiente', 'No hay órdenes pendientes', Icons.schedule_rounded),
@@ -1152,7 +1241,13 @@ class _OtPageState extends ConsumerState<OtPage> {
 		];
 
 		return ListView(
-			padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+			physics: const AlwaysScrollableScrollPhysics(),
+			padding: EdgeInsets.fromLTRB(
+				comfortable ? 16 : 12,
+				comfortable ? 8 : 4,
+				comfortable ? 16 : 12,
+				comfortable ? 28 : 16,
+			),
 			children: [
 				for (final (estado, emptyMsg, icon) in secciones) ...[
 					..._ordenes
@@ -1163,6 +1258,8 @@ class _OtPageState extends ConsumerState<OtPage> {
 									selected: _selected?['id'] == ot['id'],
 									checked: _checkedIds.contains(ot['id'] as String),
 									showCheckbox: _canManage && !widget.misOtOnly,
+									hideTecnico: widget.misOtOnly,
+									comfortable: comfortable,
 									formatDate: _formatDate,
 									onTap: () => _selectOt(ot),
 									onCheckChanged: _canManage && !widget.misOtOnly
@@ -1256,7 +1353,12 @@ class _OtPageState extends ConsumerState<OtPage> {
 														children: [
 															Expanded(
 																child: ListView(
-																	padding: EdgeInsets.all(mobile ? 16 : 20),
+																	padding: EdgeInsets.fromLTRB(
+																		mobile ? 16 : 24,
+																		mobile ? 16 : 24,
+																		mobile ? 16 : 24,
+																		mobile ? 12 : 16,
+																	),
 																	children: [
 																		buildDetailContent(includeActionBar: false),
 																	],
@@ -1266,10 +1368,10 @@ class _OtPageState extends ConsumerState<OtPage> {
 																top: false,
 																child: Padding(
 																	padding: EdgeInsets.fromLTRB(
-																		mobile ? 12 : 20,
-																		0,
-																		mobile ? 12 : 20,
-																		12,
+																		mobile ? 16 : 24,
+																		8,
+																		mobile ? 16 : 24,
+																		mobile ? 16 : 20,
 																	),
 																	child: buildActionBar(),
 																),
@@ -1303,11 +1405,13 @@ class _OtPageState extends ConsumerState<OtPage> {
 class _TecnicoTopBar extends StatelessWidget {
 	const _TecnicoTopBar({
 		required this.userName,
+		required this.onRefresh,
 		required this.onPerfil,
 		required this.onLogout,
 	});
 
 	final String userName;
+	final VoidCallback onRefresh;
 	final VoidCallback onPerfil;
 	final VoidCallback onLogout;
 
@@ -1320,8 +1424,8 @@ class _TecnicoTopBar extends StatelessWidget {
 			child: SafeArea(
 				bottom: false,
 				child: Container(
-					height: 56,
-					padding: const EdgeInsets.symmetric(horizontal: 16),
+					height: 60,
+					padding: const EdgeInsets.symmetric(horizontal: 12),
 					decoration: BoxDecoration(
 						border: Border(
 							bottom: BorderSide(
@@ -1331,6 +1435,7 @@ class _TecnicoTopBar extends StatelessWidget {
 					),
 					child: Row(
 						children: [
+							const SizedBox(width: 4),
 							Text(
 								'SIKA',
 								style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1349,6 +1454,11 @@ class _TecnicoTopBar extends StatelessWidget {
 												fontWeight: FontWeight.w500,
 											),
 								),
+							),
+							IconButton(
+								tooltip: 'Actualizar',
+								onPressed: onRefresh,
+								icon: const Icon(Icons.refresh_rounded),
 							),
 							IconButton(
 								tooltip: 'Perfil',
@@ -1835,45 +1945,48 @@ class _FiltrosEstado extends StatelessWidget {
 	Widget build(BuildContext context) {
 		const estados = [null, 'pendiente', 'en_ejecucion'];
 
-		return SizedBox(
-			height: 36,
-			child: ListView(
+		return Padding(
+			padding: const EdgeInsets.only(bottom: 4),
+			child: SingleChildScrollView(
 				scrollDirection: Axis.horizontal,
-				padding: const EdgeInsets.symmetric(horizontal: 16),
-				children: estados.map((estado) {
-					final selected = valor == estado;
-					final label = estado == null ? 'Todas' : OtUi.estadoLabel(estado);
-					final count = countFor(estado);
-					final chipColor = estado != null
-							? OtUi.estadoColor(estado)
-							: Theme.of(context).colorScheme.onSurfaceVariant;
+				padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+				child: Row(
+					children: estados.map((estado) {
+						final selected = valor == estado;
+						final label = estado == null ? 'Todas' : OtUi.estadoLabel(estado);
+						final count = countFor(estado);
+						final chipColor = estado != null
+								? OtUi.estadoColor(estado)
+								: Theme.of(context).colorScheme.onSurfaceVariant;
 
-					return Padding(
-						padding: const EdgeInsets.only(right: 8),
-						child: FilterChip(
-							label: Text('$label ($count)'),
-							selected: selected,
-							showCheckmark: false,
-							selectedColor: chipColor.withValues(alpha: 0.15),
-							backgroundColor: AppColors.cardElevated,
-							side: BorderSide(
-								color: selected
-										? (estado == null
-												? AppColors.brandYellow
-												: chipColor.withValues(alpha: 0.5))
-										: AppColors.cardBorder,
+						return Padding(
+							padding: const EdgeInsets.only(right: 8),
+							child: FilterChip(
+								label: Text('$label ($count)'),
+								selected: selected,
+								showCheckmark: false,
+								visualDensity: VisualDensity.comfortable,
+								selectedColor: chipColor.withValues(alpha: 0.15),
+								backgroundColor: AppColors.cardElevated,
+								side: BorderSide(
+									color: selected
+											? (estado == null
+													? AppColors.brandYellow
+													: chipColor.withValues(alpha: 0.5))
+											: AppColors.cardBorder,
+								),
+								labelStyle: TextStyle(
+									fontSize: 13,
+									fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+									color: selected
+											? (estado == null ? AppColors.brandYellow : chipColor)
+											: AppColors.mutedText,
+								),
+								onSelected: (_) => onChanged(estado),
 							),
-							labelStyle: TextStyle(
-								fontSize: 12,
-								fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-								color: selected
-										? (estado == null ? AppColors.brandYellow : chipColor)
-										: AppColors.mutedText,
-							),
-							onSelected: (_) => onChanged(estado),
-						),
-					);
-				}).toList(),
+						);
+					}).toList(),
+				),
 			),
 		);
 	}
@@ -1887,6 +2000,8 @@ class _OtListTile extends StatelessWidget {
 		required this.onTap,
 		this.checked = false,
 		this.showCheckbox = false,
+		this.hideTecnico = false,
+		this.comfortable = false,
 		this.onCheckChanged,
 	});
 
@@ -1894,6 +2009,8 @@ class _OtListTile extends StatelessWidget {
 	final bool selected;
 	final bool checked;
 	final bool showCheckbox;
+	final bool hideTecnico;
+	final bool comfortable;
 	final String Function(dynamic) formatDate;
 	final VoidCallback onTap;
 	final VoidCallback? onCheckChanged;
@@ -1919,9 +2036,10 @@ class _OtListTile extends StatelessWidget {
 			_ => AppColors.cardDark,
 		};
 		final onCard = isRealizada || estado == 'pendiente' || estado == 'en_ejecucion';
+		final pad = comfortable ? 18.0 : 16.0;
 
 		return Padding(
-			padding: const EdgeInsets.only(bottom: 10),
+			padding: EdgeInsets.only(bottom: comfortable ? 14 : 10),
 			child: Material(
 				color: cardBg,
 				borderRadius: BorderRadius.circular(16),
@@ -1935,11 +2053,12 @@ class _OtListTile extends StatelessWidget {
 										borderRadius: BorderRadius.circular(16),
 									)
 								: null,
-						padding: const EdgeInsets.all(16),
+						padding: EdgeInsets.all(pad),
 						child: Column(
 							crossAxisAlignment: CrossAxisAlignment.start,
 							children: [
 								Row(
+									crossAxisAlignment: CrossAxisAlignment.start,
 									children: [
 										if (showCheckbox) ...[
 											Checkbox(
@@ -1994,40 +2113,45 @@ class _OtListTile extends StatelessWidget {
 											),
 									],
 								),
-								const SizedBox(height: 12),
+								SizedBox(height: comfortable ? 14 : 12),
 								Text(
 									'OT #${ot['numero']}',
-									style: const TextStyle(
+									style: TextStyle(
 										color: Colors.white,
 										fontWeight: FontWeight.w800,
-										fontSize: 20,
+										fontSize: comfortable ? 22 : 20,
 									),
 								),
-								const SizedBox(height: 4),
+								const SizedBox(height: 6),
 								Text(
 									equipo != null
 											? '${equipo['codigo']} — ${equipo['nombre']}'
 											: 'Sin equipo',
+									maxLines: 2,
+									overflow: TextOverflow.ellipsis,
 									style: TextStyle(
 										color: onCard
 												? Colors.white.withValues(alpha: 0.85)
 												: AppColors.mutedText,
-										fontSize: 13,
+										fontSize: 14,
+										height: 1.3,
 									),
 								),
 								if (ubicacion != null) ...[
-									const SizedBox(height: 2),
+									const SizedBox(height: 4),
 									Text(
 										ubicacion['nombre'] as String? ?? '',
+										maxLines: 1,
+										overflow: TextOverflow.ellipsis,
 										style: TextStyle(
 											color: onCard
 													? Colors.white.withValues(alpha: 0.65)
 													: AppColors.mutedText.withValues(alpha: 0.8),
-											fontSize: 12,
+											fontSize: 13,
 										),
 									),
 								],
-								const SizedBox(height: 6),
+								SizedBox(height: comfortable ? 10 : 6),
 								Text(
 									'Prog: ${formatDate(ot['fechaProgramacion'])}'
 											'${ot['fechaEjecucion'] != null ? ' · Ejec: ${formatDate(ot['fechaEjecucion'])}' : ''}',
@@ -2035,12 +2159,15 @@ class _OtListTile extends StatelessWidget {
 										color: onCard
 												? Colors.white.withValues(alpha: 0.6)
 												: AppColors.mutedText,
-										fontSize: 11,
+										fontSize: 12,
 									),
 								),
-								if (tecnico != null)
+								if (!hideTecnico && tecnico != null) ...[
+									const SizedBox(height: 4),
 									Text(
 										'Recibe: ${tecnico['nombreUsuario']}',
+										maxLines: 1,
+										overflow: TextOverflow.ellipsis,
 										style: TextStyle(
 											color: onCard
 													? Colors.white.withValues(alpha: 0.75)
@@ -2049,27 +2176,34 @@ class _OtListTile extends StatelessWidget {
 											fontWeight: FontWeight.w600,
 										),
 									),
-								if (motivo != null)
+								],
+								if (motivo != null) ...[
+									const SizedBox(height: 4),
 									Text(
 										'Motivo: ${motivo['descripcion']}',
+										maxLines: 2,
+										overflow: TextOverflow.ellipsis,
 										style: TextStyle(
 											color: onCard
 													? AppColors.warning.withValues(alpha: 0.9)
 													: AppColors.warning,
-											fontSize: 11,
+											fontSize: 12,
 											fontWeight: FontWeight.w600,
 										),
 									),
-								if (gut != '—')
+								],
+								if (gut != '—') ...[
+									const SizedBox(height: 4),
 									Text(
 										'GUT est.: $gut',
 										style: TextStyle(
 											color: onCard
 													? Colors.white.withValues(alpha: 0.55)
 													: AppColors.mutedText,
-											fontSize: 11,
+											fontSize: 12,
 										),
 									),
+								],
 							],
 						),
 					),
@@ -2152,21 +2286,28 @@ class _OtDetailContent extends StatelessWidget {
 						children: [
 							Container(
 								width: double.infinity,
-								padding: const EdgeInsets.all(24),
+								padding: EdgeInsets.all(
+									MediaQuery.sizeOf(context).width < 600 ? 18 : 24,
+								),
 								color: heroBg,
 								child: Column(
 									crossAxisAlignment: CrossAxisAlignment.start,
 									children: [
-										Row(
+										Wrap(
+											spacing: 8,
+											runSpacing: 8,
 											children: [
 												SikaBadge(
 													label: OtUi.estadoLabel(estado),
 													color: Colors.white,
 												),
-												const SizedBox(width: 8),
 												SikaBadge(
 													label: tipo.toUpperCase(),
 													color: AppColors.mutedText,
+												),
+												SikaBadge(
+													label: OtUi.prioridadLabel(prioridad),
+													color: Colors.white.withValues(alpha: 0.7),
 												),
 											],
 										),
@@ -2178,7 +2319,7 @@ class _OtDetailContent extends StatelessWidget {
 														fontWeight: FontWeight.w800,
 													),
 										),
-										const SizedBox(height: 6),
+										const SizedBox(height: 8),
 										Text(
 											equipo != null
 													? '${equipo['codigo']} — ${equipo['nombre']}'
@@ -2186,10 +2327,11 @@ class _OtDetailContent extends StatelessWidget {
 											style: TextStyle(
 												color: Colors.white.withValues(alpha: 0.9),
 												fontSize: 16,
+												height: 1.35,
 											),
 										),
 										if (ubicacion != null) ...[
-											const SizedBox(height: 4),
+											const SizedBox(height: 6),
 											Text(
 												ubicacion['nombre'] as String? ?? '',
 												style: TextStyle(
@@ -2285,31 +2427,27 @@ class _OtDetailContent extends StatelessWidget {
 								),
 						];
 
-						if (constraints.maxWidth < 600) {
-							return Wrap(
-								spacing: 12,
-								runSpacing: 12,
-								children: cards
-										.map(
-											(c) => SizedBox(
-												width: (constraints.maxWidth - 12) / 2,
-												child: c,
-											),
-										)
-										.toList(),
+						final narrow = constraints.maxWidth < 520;
+						if (narrow) {
+							return Column(
+								children: [
+									for (var i = 0; i < cards.length; i++) ...[
+										SizedBox(width: double.infinity, child: cards[i]),
+										if (i < cards.length - 1) const SizedBox(height: 10),
+									],
+								],
 							);
 						}
 
-						return Row(
+						final gap = 12.0;
+						final cols = constraints.maxWidth < 800 ? 2 : 3;
+						final itemWidth = (constraints.maxWidth - gap * (cols - 1)) / cols;
+
+						return Wrap(
+							spacing: gap,
+							runSpacing: gap,
 							children: cards
-									.map(
-										(c) => Expanded(
-											child: Padding(
-												padding: const EdgeInsets.only(right: 12),
-												child: c,
-											),
-										),
-									)
+									.map((c) => SizedBox(width: itemWidth, child: c))
 									.toList(),
 						);
 					},
@@ -2619,15 +2757,19 @@ class _ActionBar extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		final actions = <Widget>[];
-		final pdfDisponible = !ocultarPdf && estado == 'realizada';
+		final narrow = MediaQuery.sizeOf(context).width < 700;
+		final minSize = Size(narrow ? double.infinity : 0, 52);
+		final pad = const EdgeInsets.symmetric(horizontal: 20, vertical: 14);
 
-		if (pdfDisponible) {
+		final actions = <Widget>[];
+
+		if (!ocultarPdf && estado == 'realizada') {
 			actions.add(
 				FilledButton.icon(
 					style: FilledButton.styleFrom(
 						backgroundColor: AppColors.success,
-						padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+						minimumSize: minSize,
+						padding: pad,
 					),
 					onPressed: onPdf,
 					icon: const Icon(Icons.picture_as_pdf_rounded),
@@ -2641,7 +2783,8 @@ class _ActionBar extends StatelessWidget {
 				FilledButton.icon(
 					style: FilledButton.styleFrom(
 						backgroundColor: AppColors.accent,
-						padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+						minimumSize: minSize,
+						padding: pad,
 					),
 					onPressed: onIniciar,
 					icon: const Icon(Icons.play_arrow_rounded),
@@ -2653,6 +2796,7 @@ class _ActionBar extends StatelessWidget {
 		if (['pendiente', 'en_ejecucion'].contains(estado) && canEjecutar) {
 			actions.add(
 				FilledButton.tonalIcon(
+					style: FilledButton.styleFrom(minimumSize: minSize, padding: pad),
 					onPressed: onEjecucion,
 					icon: const Icon(Icons.edit_note_rounded),
 					label: const Text('Registrar trabajo'),
@@ -2665,7 +2809,8 @@ class _ActionBar extends StatelessWidget {
 				FilledButton.icon(
 					style: FilledButton.styleFrom(
 						backgroundColor: AppColors.success,
-						padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+						minimumSize: minSize,
+						padding: pad,
 					),
 					onPressed: onFirmar,
 					icon: const Icon(Icons.draw_rounded),
@@ -2677,7 +2822,11 @@ class _ActionBar extends StatelessWidget {
 		if (canAnular && estado != 'realizada' && estado != 'anulada') {
 			actions.add(
 				OutlinedButton.icon(
-					style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+					style: OutlinedButton.styleFrom(
+						foregroundColor: AppColors.danger,
+						minimumSize: minSize,
+						padding: pad,
+					),
 					onPressed: onAnular,
 					icon: const Icon(Icons.cancel_outlined),
 					label: const Text('Anular'),
@@ -2688,6 +2837,7 @@ class _ActionBar extends StatelessWidget {
 		if (canReabrir && (estado == 'realizada' || estado == 'anulada')) {
 			actions.add(
 				FilledButton.tonalIcon(
+					style: FilledButton.styleFrom(minimumSize: minSize, padding: pad),
 					onPressed: onReabrir,
 					icon: const Icon(Icons.replay_rounded),
 					label: const Text('Reabrir OT'),
@@ -2698,6 +2848,7 @@ class _ActionBar extends StatelessWidget {
 		if (canEmitirNoPeriodica && estado == 'realizada') {
 			actions.add(
 				FilledButton.tonalIcon(
+					style: FilledButton.styleFrom(minimumSize: minSize, padding: pad),
 					onPressed: onDerivar,
 					icon: const Icon(Icons.call_split_rounded),
 					label: const Text('OT derivada'),
@@ -2708,7 +2859,11 @@ class _ActionBar extends StatelessWidget {
 		if (canEmitirNoPeriodica && (estado == 'realizada' || estado == 'anulada')) {
 			actions.add(
 				FilledButton.icon(
-					style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
+					style: FilledButton.styleFrom(
+						backgroundColor: AppColors.warning,
+						minimumSize: minSize,
+						padding: pad,
+					),
 					onPressed: onEmitirNoPeriodica,
 					icon: const Icon(Icons.build_circle_outlined),
 					label: const Text('Nueva OT no periódica'),
@@ -2719,7 +2874,7 @@ class _ActionBar extends StatelessWidget {
 		if (actions.isEmpty) return const SizedBox.shrink();
 
 		return Container(
-			padding: const EdgeInsets.all(16),
+			padding: EdgeInsets.all(narrow ? 14 : 16),
 			decoration: BoxDecoration(
 				color: Theme.of(context).colorScheme.surface,
 				borderRadius: BorderRadius.circular(16),
@@ -2727,7 +2882,17 @@ class _ActionBar extends StatelessWidget {
 					color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
 				),
 			),
-			child: Wrap(spacing: 10, runSpacing: 10, children: actions),
+			child: narrow
+					? Column(
+							crossAxisAlignment: CrossAxisAlignment.stretch,
+							children: [
+								for (var i = 0; i < actions.length; i++) ...[
+									actions[i],
+									if (i < actions.length - 1) const SizedBox(height: 10),
+								],
+							],
+						)
+					: Wrap(spacing: 10, runSpacing: 10, children: actions),
 		);
 	}
 }
@@ -2806,9 +2971,13 @@ class _EstadoChip extends StatelessWidget {
 }
 
 class _EmptyListState extends StatelessWidget {
-	const _EmptyListState({required this.hasFiltro});
+	const _EmptyListState({
+		required this.hasFiltro,
+		this.misOt = false,
+	});
 
 	final bool hasFiltro;
+	final bool misOt;
 
 	@override
 	Widget build(BuildContext context) {
@@ -2825,14 +2994,20 @@ class _EmptyListState extends StatelessWidget {
 						),
 						const SizedBox(height: 12),
 						Text(
-							hasFiltro ? 'Sin resultados' : 'No hay OT',
+							hasFiltro
+									? 'Sin resultados'
+									: misOt
+											? 'No tenés OT asignadas'
+											: 'No hay OT',
 							style: const TextStyle(fontWeight: FontWeight.w600),
 						),
 						const SizedBox(height: 4),
 						Text(
 							hasFiltro
 									? 'Probá con otro filtro o búsqueda'
-									: 'Las órdenes aparecerán acá',
+									: misOt
+											? 'Cuando te asignen una orden, va a aparecer acá. Deslizá hacia abajo para actualizar.'
+											: 'Las órdenes aparecerán acá',
 							style: TextStyle(
 								fontSize: 13,
 								color: Theme.of(context).colorScheme.onSurfaceVariant,

@@ -1,0 +1,46 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+
+# Flutter
+apps/client/.dart_tool/
+apps/client/.flutter-plugins
+apps/client/.flutter-plugins-dependencies
+apps/client/.packages
+apps/client/build/
+apps/client/.flutter-plugins-dependencies
+
+# NestJS
+apps/api/node_modules/
+apps/api/dist/
+apps/api/storage/
+apps/api/.env
+
+# Root
+node_modules/
+package-lock.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Database
+*.sqlite
+*.db
+
+# Puppeteer
+apps/api/.puppeteer/
+
+# Android APK builds (locales / demos)
+*.apk
+*.aab
+apps/client/gestion-mantenimiento.apk
+

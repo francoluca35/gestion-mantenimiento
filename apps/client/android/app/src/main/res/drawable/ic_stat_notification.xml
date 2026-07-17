@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícono monocromo para la barra de estado (Android lo tiñe de blanco). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+	android:width="24dp"
+	android:height="24dp"
+	android:viewportWidth="24"
+	android:viewportHeight="24">
+	<path
+		android:fillColor="#FFFFFF"
+		android:pathData="M22.7,19.07l-1.41,1.41c-0.39,0.39 -1.02,0.39 -1.41,0L14.5,15.1c-1.31,0.81 -2.91,1.15 -4.53,0.86 -3.26,-0.58 -5.78,-3.25 -6.13,-6.54C3.3,4.9 7.35,0.85 12.37,1.39c3.28,0.43 5.98,2.99 6.47,6.27 0.29,1.94 -0.17,3.76 -1.16,5.22l5.02,5.02c0.39,0.39 0.39,1.02 0,1.41zM12,4c-2.76,0 -5,2.24 -5,5s2.24,5 5,5 5,-2.24 5,-5 -2.24,-5 -5,-5z"/>
+</vector>

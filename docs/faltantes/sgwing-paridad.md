@@ -16,7 +16,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 |--------|-----------|---------|---------------------|
 | Procedimientos | 01–07 | 🟡 ~85% | Versiones (07), reserva materiales (04) |
 | Equipos | 08–15 | ✅ ~95% | Repuestos por equipo (M4) |
-| OT / Programación | 16–32 | ✅ ~90% | Gantt, OT derivada (P2) |
+| OT / Programación | 16–32 | ✅ ~92% | Gantt (P2); OT derivada ✅ |
 
 ---
 
@@ -92,7 +92,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | # | Captura | Función SGwing | Ruta / API | Estado | Prioridad |
 |---|---------|----------------|------------|--------|-----------|
 | 23 | `sgwing-23` | Diagrama de Gantt | — | ❌ | P2 |
-| 24 | `sgwing-24` | OT derivada | — | ❌ | P2 |
+| 24 | `sgwing-24` | OT derivada | `POST /ot/:id/derivar` | ✅ | — |
 | 25 | `sgwing-25` | OT no periódica: sector/equipo, fechas, recibe, responsable | `/ot/emitir-no-periodica` | ✅ | — |
 
 ### Solicitudes y contadores (26–29)
@@ -109,7 +109,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | # | Captura | Función SGwing | Ruta / API | Estado | Prioridad |
 |---|---------|----------------|------------|--------|-----------|
 | 30 | `sgwing-30` | Mapa para elegir ámbito de OT periódicas | `/ot/necesarias` | ✅ | — |
-| 31 | `sgwing-31` | Lupa → próximas; emitir lote; técnico; push; PDF; select all | `/ot/necesarias` | 🟡 | push diferido |
+| 31 | `sgwing-31` | Lupa → próximas; emitir lote; técnico; push; PDF; select all | `/ot/necesarias` | ✅ | resumen push por técnico |
 | 32 | `sgwing-32` | Al seleccionar OT, mapa lateral sector/máquina | `/ot` | ✅ | — |
 
 ---
@@ -118,7 +118,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 
 | Mejora | Pantallas | Estado | Prioridad |
 |--------|-----------|--------|-----------|
-| Notificar técnico al asignar “recibe” | 25, 31 | 🟡 diferido | Código listo; FCM Android + service account |
+| Notificar técnico al asignar “recibe” | 25, 31 | ✅ | `PushService` + FCM Android; requiere `FIREBASE_*` |
 | PDF para tercerizados / impresión selectiva | 12, 31 | ✅ HTML | Plantilla SGwing imprimible |
 | Colores OT: verde / rojo / amarillo | 17 | ✅ | `ot_ui.dart` |
 | Mapa contextual en búsqueda y detalle OT | 16, 32 | ✅ | `PlantaMapPanel` en `/ot` |
@@ -164,7 +164,7 @@ Orden sugerido para máximo impacto operativo en Planta Virrey.
 
 17. Reserva materiales (04) → M4 Pañol.
 18. Documentos de equipo (15) → storage.
-19. Gantt (23) + OT derivada (24).
+19. Gantt (23). OT derivada (24) ✅.
 20. Búsqueda avanzada procedimientos (02), versiones (07).
 
 ### Más adelante **P2–P3**
@@ -183,7 +183,7 @@ Orden sugerido para máximo impacto operativo en Planta Virrey.
 - [x] `/ot/necesarias` usa el mismo mapa que procedimientos; emite lote con técnico asignado.
 - [x] Estados OT con colores acordados (verde/rojo/amarillo).
 - [x] PDF descargable de una OT emitida (HTML imprimible).
-- [ ] Técnico recibe notificación al ser asignado — **diferido** (FCM Android).
+- [x] Técnico recibe notificación al ser asignado — Sprint 4 FCM Android.
 - [x] En `/planta`, al seleccionar planta, procedimientos asociados muestran solo alcance planta.
 
 **Smoke test API:** `node tools/smoke-ola2.mjs` — 12/12 OK (2026-07-08).

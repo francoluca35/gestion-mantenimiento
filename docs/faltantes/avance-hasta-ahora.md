@@ -1,11 +1,11 @@
 # Avance del proyecto — resumen hasta ahora
 
-**Fecha:** 2026-07-16  
+**Fecha:** 2026-07-17  
 **Rama actual:** `Sprint-4/1-comunicacion`  
-**Último commit relevante:** `0c3cac8` — Sprint 4: push FCM, Mis OT móvil y bots de smoke  
-**Cierre óptimo (local):** deep-link OT, URL API runtime, adb reverse, docs M7, gitignore APK, CI build API
+**Estado Sprint 4:** ✅ **CERRADO**  
+**Último commit de cierre:** ver historial de la rama (FCM + Mis OT + shell móvil)
 
-Documento de cierre parcial: **qué se hizo** vs **qué falta** (sección aparte).
+Documento de cierre: **qué se hizo** vs **qué queda fuera de Sprint 4**.
 
 ---
 
@@ -37,7 +37,7 @@ Documento de cierre parcial: **qué se hizo** vs **qué falta** (sección aparte
 - Impresión HTML / CSV (`PlantaPrint`).
 - Procedimientos asociados filtrados por planta/sector/equipo.
 
-### M3 — Mantenimiento (~90–95% web)
+### M3 — Mantenimiento (~92%)
 
 - Ciclo de vida OT: emitir, asignar, ejecutar, checklist, firma, anular, reabrir, derivar.
 - OT necesarias (tiempo + contador) + emisión en lote + cron diario.
@@ -47,99 +47,66 @@ Documento de cierre parcial: **qué se hizo** vs **qué falta** (sección aparte
 - Filtros avanzados OT, colores de estado, mapa contextual.
 - Contadores con gráfico + reinicio con clave admin.
 
-### Sprint 1 — Procedimientos
+### Sprint 1 — Procedimientos ✅
 
-- Filtros avanzados (tipo, sector, periodicidad, tipo equipo, texto).
-- Toolbar + export CSV.
-- Asociar a planta / sector / equipo + emitir primera OT + imprimir.
+- Filtros avanzados, toolbar + export CSV, asociar + emitir primera OT.
 
-### Sprint 2 — Planta / equipos (PR #6)
+### Sprint 2 — Planta / equipos ✅ (PR #6)
 
-- Toolbar y acciones de sector/equipo.
-- Impresión / listados.
-- Documentos con URL de apertura.
-- Pulido de UX en ficha y mapa.
+- Toolbar sector/equipo, impresión, documentos, UX ficha/mapa.
 
-### Sprint 3 — OT profundidad (PR #7)
+### Sprint 3 — OT profundidad ✅ (PR #7)
 
-- Filtros OT, GUT estimada, export CSV, vista previa / imprimir (`OtPrint`).
-- OT no periódica: fechas inicio/límite, recibe.
-- Contadores: reinicio con clave admin.
-- Fix firma PDF (stroke negro sobre transparente para impresión).
+- Filtros OT, GUT, export CSV, OtPrint, OT no periódica, contadores, fix firma PDF.
 
-### Sprint 4 — Comunicación / FCM (en curso)
+### Sprint 4 — Comunicación / FCM ✅ CERRADO (2026-07-17)
+
+Detalle: [`sprint-4-fcm.md`](sprint-4-fcm.md)
 
 #### API
-
-- `PushService` centraliza FCM (API modular firebase-admin v14: `cert` + `getMessaging`).
-- Push al asignar / emitir OT.
-- Emisión en lote: **una notificación resumen por técnico**.
-- Prune de tokens FCM inválidos.
-- Arranque: log `FCM listo (credenciales cargadas)` con `FIREBASE_*` en `.env`.
+- `PushService` FCM (firebase-admin v14).
+- Push al asignar / emitir; lote = 1 resumen por técnico.
+- Prune tokens inválidos; log `FCM listo` / `FCM deshabilitado`.
 
 #### Flutter Android
+- Token + refresh + logout; handlers → `/mis-ot?numero=`.
+- SnackBar foreground; canal `ot_asignadas`; cleartext local.
 
-- `FcmService` + bootstrap: registro de token, refresh, logout borra token.
-- Handlers foreground / background / tap → `/mis-ot`.
-- SnackBar en foreground con acción “Ver”.
-- Permiso `POST_NOTIFICATIONS` + canal `ot_asignadas`.
-- `minSdk 23`, NDK 27, `usesCleartextTraffic` para HTTP local.
+#### Mis OT + shell
+- Rango amplio, refresh, deep-link, layout móvil/tablet cómodo.
+- Bottom nav **Más** (↑) con todos los destinos.
+- URL API editable en Perfil + `android-adb-reverse.ps1`.
 
-#### Mis OT (móvil)
-
-- Rango de fechas amplio (~1 año / +60 días).
-- Pull-to-refresh + botón actualizar.
-- Empty state orientado al técnico.
-
-#### Tooling / calidad
-
-- Smoke bot API: `scripts/smoke-bot.mjs` (`npm run smoke`).
-- Playwright UI smoke: `scripts/playwright/` (login vía tokens SharedPreferences).
-- Semantics habilitadas en web para pruebas.
-
-#### Build APK de prueba
-
-- APK release generada localmente (no versionar): `apps/client/gestion-mantenimiento.apk`.
-- Firebase client: proyecto `mantenimiento-app-75a63`.
-- Firebase server: service account en `.env` / `apps/api/.env` (no commitear).
-- **URL API editable** en Perfil (Android) sin regenerar APK.
-- Script USB: `scripts/android-adb-reverse.ps1` → `http://127.0.0.1:3000/v1`.
-- Deep-link: tap / “Ver” → `/mis-ot?numero=N` y selección de la OT.
+#### Tooling
+- Smoke bot API + Playwright UI smoke.
+- CI build API; `*.apk` en gitignore.
 
 ---
 
-## Cómo probar lo hecho (referencia rápida)
+## Cómo probar (referencia rápida)
 
 | Qué | Cómo |
 |-----|------|
-| API | `npm run start:dev` en `apps/api` → debe loguear `FCM listo` |
+| API | `npm run start:dev` en `apps/api` → `FCM listo` |
 | Web | `flutter run -d chrome --web-port=8080` |
 | Smoke API | `npm run smoke` (desde API) |
-| Playwright | ver `scripts/playwright/README.md` |
-| Push FCM | Solo Android real (web no registra token) |
-| APK / USB | Instalar APK → Perfil → URL `http://127.0.0.1:3000/v1` + `android-adb-reverse.ps1` |
+| Push FCM | Android (web no registra token) |
+| APK / USB | Perfil → `http://127.0.0.1:3000/v1` + `android-adb-reverse.ps1` |
 
 Usuarios demo: `admin` / `supervisor` / `tecnico` — clave `Sika123!`.
 
 ---
 
-## Qué falta
+## Qué falta (fuera de Sprint 4)
 
-### Sprint 4 / FCM (pendiente de validar en dispositivo)
+### Ops residual Sprint 4 (no bloquea merge)
 
-| Ítem | Estado |
+| Ítem | Notas |
 |------|--------|
-| Deep-link a OT desde notificación | ✅ `/mis-ot?numero=` |
-| URL API sin rebuild | ✅ Perfil → Servidor API |
-| Script adb reverse + docs conectividad | ✅ |
-| `*.apk` en gitignore | ✅ |
-| Docs M7 actualizadas | ✅ |
-| CI build API | ✅ workflow |
-| Probar push end-to-end en Android | ⏳ pendiente dispositivo |
-| Rotar service account Firebase | ⏳ manual (si la key se filtró) |
-| Notificación local más rica (canal nativo foreground) | Diferido (SnackBar OK) |
+| Smoke push en dispositivo físico | Login técnico → asignar OT → verificar bandeja |
+| Rotar service account Firebase | Solo si la private key se filtró |
 
-### Paridad SGwing / producto (no Sprint 4)
+### Paridad SGwing / producto
 
 | Ítem | Prioridad | Módulo |
 |------|-----------|--------|
@@ -151,12 +118,12 @@ Usuarios demo: `admin` / `supervisor` / `tecnico` — clave `Sika123!`.
 | Repuestos por equipo | P2 | **M4** |
 | Módulo Pañol completo | — | **M4** (0%) |
 | Módulo Compras | — | **M5** (0%) |
-| Indicadores / reportes avanzados | — | **M6** (~5%, solo resumen home) |
+| Indicadores / reportes avanzados | — | **M6** (~5%) |
 | Offline + sync móvil | — | Fase 3 |
-| Columnas GUT/HH real en schema (migración) | P2 | M3 |
+| Columnas GUT/HH real en schema | P2 | M3 |
 | Ampliar árbol de derechos 1:1 SGMWin | — | M1 |
 | Recuperación de clave | Opcional | M1 |
-| CI Playwright UI | — | Tooling (diferido; lento) |
+| CI Playwright UI | — | Tooling (diferido) |
 
 ### Infra / ops
 

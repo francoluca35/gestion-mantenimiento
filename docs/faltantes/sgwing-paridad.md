@@ -183,7 +183,7 @@ Orden sugerido para máximo impacto operativo en Planta Virrey.
 - [x] `/ot/necesarias` usa el mismo mapa que procedimientos; emite lote con técnico asignado.
 - [x] Estados OT con colores acordados (verde/rojo/amarillo).
 - [x] PDF descargable de una OT emitida (HTML imprimible).
-- [ ] Técnico recibe notificación al ser asignado — **diferido** (FCM Android).
+- [x] Técnico recibe notificación al ser asignado — Sprint 4 FCM Android.
 - [x] En `/planta`, al seleccionar planta, procedimientos asociados muestran solo alcance planta.
 
 **Smoke test API:** `node tools/smoke-ola2.mjs` — 12/12 OK (2026-07-08).

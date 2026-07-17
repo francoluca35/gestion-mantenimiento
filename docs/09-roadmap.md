@@ -43,7 +43,7 @@ Plan por fases con criterios de aceptación, estimaciones y dependencias.
 - [ ] Validar con demo de SGMWin (si disponible)
 - [ ] Revisar con equipo Sika: módulos, prioridades, sucursales
 - [ ] Definir infraestructura (VPS, dominio, certificados)
-- [ ] Crear proyecto Firebase (solo FCM)
+- [x] Crear proyecto Firebase (solo FCM)
 - [ ] Wireframes de alta fidelidad (Figma, opcional)
 
 ---

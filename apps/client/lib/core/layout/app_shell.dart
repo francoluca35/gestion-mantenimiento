@@ -181,17 +181,24 @@ class AppShell extends ConsumerWidget {
 		];
 	}
 
-	List<AppNavItem> _mobileItems({
+	static const _moreItem = AppNavItem(
+		id: 'more',
+		label: 'Más',
+		icon: Icons.keyboard_arrow_up_rounded,
+		selectedIcon: Icons.keyboard_arrow_up_rounded,
+		route: '',
+	);
+
+	List<AppNavItem> _mobilePrimaryItems({
 		required bool isTechnician,
 		required bool canBuscarOt,
-		required bool canSolicitudes,
 		required bool canPlanta,
 	}) {
 		if (isTechnician) {
 			return _technicianItems();
 		}
 
-		final items = <AppNavItem>[
+		return [
 			const AppNavItem(
 				id: 'home',
 				label: 'Inicio',
@@ -199,10 +206,7 @@ class AppShell extends ConsumerWidget {
 				selectedIcon: Icons.home_rounded,
 				route: '/home',
 			),
-		];
-
-		if (canBuscarOt) {
-			items.add(
+			if (canBuscarOt)
 				const AppNavItem(
 					id: 'buscar-ot',
 					label: 'OT',
@@ -210,21 +214,8 @@ class AppShell extends ConsumerWidget {
 					selectedIcon: Icons.manage_search_rounded,
 					route: '/ot',
 				),
-			);
-		}
-		if (canSolicitudes) {
-			items.add(
-				const AppNavItem(
-					id: 'solicitudes',
-					label: 'Solicitudes',
-					icon: Icons.campaign_outlined,
-					selectedIcon: Icons.campaign_rounded,
-					route: '/solicitudes',
-				),
-			);
-		}
-		if (canPlanta) {
-			items.add(
+			_moreItem,
+			if (canPlanta)
 				const AppNavItem(
 					id: 'equipos',
 					label: 'Planta',
@@ -232,10 +223,6 @@ class AppShell extends ConsumerWidget {
 					selectedIcon: Icons.precision_manufacturing_rounded,
 					route: '/planta',
 				),
-			);
-		}
-
-		items.add(
 			const AppNavItem(
 				id: 'perfil',
 				label: 'Perfil',
@@ -243,12 +230,119 @@ class AppShell extends ConsumerWidget {
 				selectedIcon: Icons.person_rounded,
 				route: '/perfil',
 			),
+		];
+	}
+
+	List<AppNavItem> _mobileMoreItems(List<AppNavItem> allItems) {
+		const primaryIds = {'home', 'buscar-ot', 'equipos', 'perfil', 'more'};
+		return allItems.where((item) => !primaryIds.contains(item.id)).toList();
+	}
+
+	Future<void> _showMoreMenu(
+		BuildContext context, {
+		required List<AppNavItem> moreItems,
+		required String selectedId,
+	}) async {
+		if (moreItems.isEmpty) return;
+
+		final route = await showModalBottomSheet<String>(
+			context: context,
+			backgroundColor: AppColors.cardElevated,
+			shape: const RoundedRectangleBorder(
+				borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+			),
+			builder: (sheetContext) {
+				return SafeArea(
+					child: Padding(
+						padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+						child: Column(
+							mainAxisSize: MainAxisSize.min,
+							children: [
+								Container(
+									width: 40,
+									height: 4,
+									margin: const EdgeInsets.only(bottom: 16),
+									decoration: BoxDecoration(
+										color: Colors.white.withValues(alpha: 0.25),
+										borderRadius: BorderRadius.circular(2),
+									),
+								),
+								Align(
+									alignment: Alignment.centerLeft,
+									child: Text(
+										'Menú',
+										style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
+													color: Colors.white,
+													fontWeight: FontWeight.w700,
+												),
+									),
+								),
+								const SizedBox(height: 12),
+								...moreItems.map((item) {
+									final selected = item.id == selectedId;
+									return Padding(
+										padding: const EdgeInsets.only(bottom: 4),
+										child: Material(
+											color: selected
+													? AppColors.brandYellow
+													: Colors.transparent,
+											borderRadius: BorderRadius.circular(12),
+											child: InkWell(
+												borderRadius: BorderRadius.circular(12),
+												onTap: () => Navigator.of(sheetContext).pop(item.route),
+												child: Padding(
+													padding: const EdgeInsets.symmetric(
+														horizontal: 14,
+														vertical: 14,
+													),
+													child: Row(
+														children: [
+															Icon(
+																selected ? item.selectedIcon : item.icon,
+																size: 22,
+																color: selected
+																		? AppColors.ink
+																		: Colors.white.withValues(alpha: 0.85),
+															),
+															const SizedBox(width: 14),
+															Expanded(
+																child: Text(
+																	item.label,
+																	style: TextStyle(
+																		fontWeight: selected
+																				? FontWeight.w700
+																				: FontWeight.w500,
+																		color: selected
+																				? AppColors.ink
+																				: Colors.white.withValues(alpha: 0.9),
+																		fontSize: 15,
+																	),
+																),
+															),
+															Icon(
+																Icons.chevron_right_rounded,
+																size: 20,
+																color: selected
+																		? AppColors.ink.withValues(alpha: 0.5)
+																		: Colors.white.withValues(alpha: 0.35),
+															),
+														],
+													),
+												),
+											),
+										),
+									);
+								}),
+							],
+						),
+					),
+				);
+			},
 		);
 
-		if (items.length > 5) {
-			return [...items.sublist(0, 3), items.last];
+		if (route != null && context.mounted) {
+			_go(context, route);
 		}
-		return items;
 	}
 
 	@override
@@ -293,15 +387,16 @@ class AppShell extends ConsumerWidget {
 						canOtNecesarias: canOtNecesarias,
 						canConfig: canConfig,
 					);
-		final mobileItems = _mobileItems(
+		final mobileItems = _mobilePrimaryItems(
 			isTechnician: isTechnician,
 			canBuscarOt: canBuscarOt,
-			canSolicitudes: canSolicitudes,
 			canPlanta: canPlanta,
 		);
+		final moreItems = _mobileMoreItems(items);
 		final selectedId = _selectedId();
 		final pageBg = AppColors.backgroundDark;
 		final navBg = AppColors.black;
+		final moreSelected = moreItems.any((item) => item.id == selectedId);
 
 		if (isTechnician) {
 			return Scaffold(
@@ -311,7 +406,9 @@ class AppShell extends ConsumerWidget {
 		}
 
 		if (isMobile) {
-			final mobileIndex = mobileItems.indexWhere((item) => item.id == selectedId);
+			final mobileIndex = moreSelected
+					? mobileItems.indexWhere((item) => item.id == 'more')
+					: mobileItems.indexWhere((item) => item.id == selectedId);
 			final navIndex = mobileIndex >= 0 ? mobileIndex : 0;
 
 			return Scaffold(
@@ -320,15 +417,27 @@ class AppShell extends ConsumerWidget {
 				bottomNavigationBar: NavigationBar(
 					selectedIndex: navIndex,
 					onDestinationSelected: (index) {
-						if (index < mobileItems.length) {
-							_go(context, mobileItems[index].route);
+						if (index >= mobileItems.length) return;
+						final item = mobileItems[index];
+						if (item.id == 'more') {
+							_showMoreMenu(
+								context,
+								moreItems: moreItems,
+								selectedId: selectedId,
+							);
+							return;
 						}
+						_go(context, item.route);
 					},
 					destinations: mobileItems
 							.map(
 								(item) => NavigationDestination(
-									icon: Icon(item.icon),
-									selectedIcon: Icon(item.selectedIcon),
+									icon: item.id == 'more'
+											? const Icon(Icons.keyboard_arrow_up_rounded, size: 28)
+											: Icon(item.icon),
+									selectedIcon: item.id == 'more'
+											? const Icon(Icons.keyboard_arrow_up_rounded, size: 28)
+											: Icon(item.selectedIcon),
 									label: item.label,
 								),
 							)

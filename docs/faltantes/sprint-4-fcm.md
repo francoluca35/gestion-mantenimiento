@@ -1,35 +1,57 @@
 # Sprint 4 — Push FCM + Mis OT
 
-## Qué se hizo
+**Estado:** ✅ **CERRADO** (2026-07-17)  
+**Rama:** `Sprint-4/1-comunicacion`
+
+---
+
+## Criterios de cierre
+
+| Criterio | Estado |
+|----------|--------|
+| Push FCM al asignar / emitir OT | ✅ `PushService` |
+| Emisión en lote: 1 push resumen por técnico | ✅ |
+| Prune tokens inválidos | ✅ |
+| Android: registro token + refresh + logout | ✅ |
+| Foreground / background / tap → Mis OT | ✅ deep-link `?numero=` |
+| Mis OT usable en móvil/tablet | ✅ layout cómodo + refresh |
+| URL API runtime (Perfil) + adb reverse | ✅ |
+| Credenciales `FIREBASE_*` en API local | ✅ |
+| Shell móvil: menú «Más» con destinos overflow | ✅ |
+
+---
+
+## Qué se entregó
 
 ### API
 - `PushService` centraliza FCM (firebase-admin v14 modular: `cert` + `getMessaging`).
 - Emitir / asignar OT usan `PushService`.
-- Emisión en lote (`/ot/necesarias/emitir`): **una notificación resumen por técnico** (no N pushes).
+- Emisión en lote (`/ot/necesarias/emitir`): **una notificación resumen por técnico**.
 - Prune de tokens inválidos.
 - Log al arrancar: `FCM listo` o `FCM deshabilitado`.
 
 ### Flutter Android
-- Handlers foreground / background / tap → `/mis-ot?numero=N` (deep-link a la OT).
-- SnackBar en foreground con acción “Ver” (misma ruta).
+- Handlers foreground / background / tap → `/mis-ot?numero=N`.
+- SnackBar en foreground con acción “Ver”.
 - Registro de token + `onTokenRefresh`; logout borra token en API.
-- `POST_NOTIFICATIONS` + canal `ot_asignadas` + `usesCleartextTraffic` (HTTP local).
+- `POST_NOTIFICATIONS` + canal `ot_asignadas` + `usesCleartextTraffic`.
 - `minSdk 23` (requerido por `firebase_messaging`).
 
-### Mis OT
-- Rango de fechas ~1 año atrás / 60 días adelante.
-- Pull-to-refresh + botón actualizar en top bar.
-- Empty state orientado al técnico.
+### Mis OT + shell móvil
+- Rango de fechas amplio; pull-to-refresh; empty state técnico.
 - Query `?numero=` selecciona la OT al cargar.
+- Layout móvil/tablet con más aire, botones full-width, sin overflow.
+- Bottom nav: ítem **Más** (↑) abre menú con todos los destinos.
 
 ### URL API en dispositivo
-- Override en SharedPreferences desde **Perfil → Servidor API** (solo Android/desktop).
-- Sin rebuild al cambiar IP / usar `127.0.0.1` con adb reverse.
-- Vacío = valor de `--dart-define=API_BASE_URL` (default localhost).
+- Override en SharedPreferences desde **Perfil → Servidor API**.
+- Script USB: `scripts/android-adb-reverse.ps1` → `http://127.0.0.1:3000/v1`.
 
-## Activar push en el entorno
+---
 
-1. Firebase Console → Project settings → Service accounts → Generate new private key.
+## Activar push (ops)
+
+1. Firebase Console → Service accounts → Generate new private key.
 2. En `apps/api/.env`:
 
 ```
@@ -38,25 +60,27 @@ FIREBASE_CLIENT_EMAIL=...@....iam.gserviceaccount.com
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
-3. Reiniciar API. Debe loguear `FCM listo`.
+3. Reiniciar API → log `FCM listo`.
 4. App Android: login `tecnico` → aceptar notificaciones.
-5. Supervisor asigna OT / emite con “recibe” → push en el dispositivo.
+5. Supervisor asigna OT → push en el dispositivo + log `[push] … ok`.
 
-Sin credenciales, la app sigue funcionando y la API loguea `[push:disabled]`.
+Sin credenciales la app sigue OK y la API loguea `[push:disabled]`.
+
+## Smoke post-deploy (ops, no bloquea cierre)
+
+| Paso | Cómo |
+|------|------|
+| Token registrado | Login técnico en Android → fila en `dispositivos_fcm` |
+| Push al asignar | Supervisor asigna OT → bandeja Android + deep-link |
+| Lote | Emitir necesarias a un técnico → **1** notificación resumen |
+| Rotar key | Si la private key se filtró en chat, regenerar en Firebase Console |
 
 ## Conectividad celular ↔ API
 
-La APK **no** usa datos móviles para llegar a una IP LAN. Opciones:
-
 | Método | Pasos |
 |--------|--------|
-| Misma Wi‑Fi | Celular y PC en la misma red (no Wi‑Fi invitado). En Perfil: `http://<IP-PC>:3000/v1`. Firewall: puerto TCP 3000 inbound. |
-| Hotspot PC | Activar zona Wi‑Fi móvil en Windows; conectar el celular. IP típica PC: `192.168.137.1`. |
-| USB + adb reverse | `powershell -ExecutionPolicy Bypass -File scripts/android-adb-reverse.ps1` → en Perfil: `http://127.0.0.1:3000/v1` |
+| Misma Wi‑Fi | Perfil: `http://<IP-PC>:3000/v1` · firewall TCP 3000 |
+| Hotspot PC | IP típica `192.168.137.1` |
+| USB + adb reverse | `scripts/android-adb-reverse.ps1` → `http://127.0.0.1:3000/v1` |
 
-Probar antes en el navegador del celular: `http://…:3000/v1/health` → `{"status":"ok"…}`.
-
-## Pendiente de validación
-
-- Push end-to-end en dispositivo real (token registrado + log `[push] … ok 1`).
-- Rotar service account si la private key se filtró en chat local.
+Probar: `http://…:3000/v1/health` → `{"status":"ok"…}`.

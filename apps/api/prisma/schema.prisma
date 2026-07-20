@@ -64,6 +64,26 @@ enum EstadoSolicitudTrabajo {
 	rechazada
 }
 
+enum TipoMovimientoStock {
+	entrada
+	salida
+	reserva
+	devolucion
+	transferencia
+}
+
+enum EstadoSolicitudMaterial {
+	pendiente
+	aprobado
+	rechazado
+}
+
+enum EstadoPedidoStock {
+	pendiente
+	en_proceso
+	completado
+}
+
 model Sucursal {
 	id        String   @id @default(uuid()) @db.Uuid
 	nombre    String   @db.VarChar(100)
@@ -81,6 +101,7 @@ model Sucursal {
 	solicitudesTrabajo   SolicitudTrabajo[]
 	equipoDocumentos     EquipoDocumento[]
 	motivosOtPendiente   MotivoOtPendiente[]
+	panoles              Panol[]
 
 	@@map("sucursales")
 }
@@ -171,6 +192,10 @@ model Usuario {
 	historialOt           OtEstadoHistorial[]
 	historialEquipo       HistorialEquipo[]
 	documentosEquipo      EquipoDocumento[]
+	movimientosStock      MovimientoStock[]
+	solicitudesMaterial   SolicitudMaterial[] @relation("SolicitudMaterialSolicitante")
+	solicitudesMaterialResueltas SolicitudMaterial[] @relation("SolicitudMaterialPanolero")
+	pedidosStock          PedidoStock[]
 
 	@@map("usuarios")
 }
@@ -423,6 +448,8 @@ model OrdenTrabajo {
 	lecturas          Lectura[]
 	solicitudOrigen   SolicitudTrabajo?     @relation("SolicitudOtGenerada")
 	historialEquipo   HistorialEquipo[]
+	solicitudesMaterial SolicitudMaterial[]
+	movimientosStock  MovimientoStock[]
 
 	@@index([sucursalId, estado])
 	@@index([tecnicoAsignadoId, estado])
@@ -480,4 +507,141 @@ model HistorialEquipo {
 
 	@@index([equipoId, fecha])
 	@@map("historial_equipo")
+}
+
+model Unidad {
+	id     String  @id @default(uuid()) @db.Uuid
+	codigo String  @unique @db.VarChar(20)
+	nombre String  @db.VarChar(50)
+	activo Boolean @default(true)
+
+	materiales Material[]
+
+	@@map("unidades")
+}
+
+model Panol {
+	id         String   @id @default(uuid()) @db.Uuid
+	sucursalId String   @map("sucursal_id") @db.Uuid
+	nombre     String   @db.VarChar(100)
+	activo     Boolean  @default(true)
+	createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal    Sucursal           @relation(fields: [sucursalId], references: [id])
+	stockItems  StockItem[]
+	movimientos MovimientoStock[]
+	solicitudes SolicitudMaterial[]
+	pedidos     PedidoStock[]
+
+	@@index([sucursalId, activo])
+	@@map("panoles")
+}
+
+model Material {
+	id           String   @id @default(uuid()) @db.Uuid
+	codigo       String   @unique @db.VarChar(50)
+	nombre       String   @db.VarChar(200)
+	marca        String?  @db.VarChar(100)
+	uso          String   @default("Mantenimiento") @db.VarChar(50)
+	unidadId     String   @map("unidad_id") @db.Uuid
+	precioActual Decimal  @default(0) @map("precio_actual") @db.Decimal(15, 2)
+	activo       Boolean  @default(true)
+	createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	unidad      Unidad             @relation(fields: [unidadId], references: [id])
+	stockItems  StockItem[]
+	movimientos MovimientoStock[]
+	solicitudes SolicitudMaterial[]
+	pedidos     PedidoStock[]
+
+	@@index([activo, nombre])
+	@@map("materiales")
+}
+
+model StockItem {
+	id                 String  @id @default(uuid()) @db.Uuid
+	panolId            String  @map("panol_id") @db.Uuid
+	materialId         String  @map("material_id") @db.Uuid
+	cantidadActual     Decimal @default(0) @map("cantidad_actual") @db.Decimal(10, 2)
+	cantidadMinima     Decimal @default(0) @map("cantidad_minima") @db.Decimal(10, 2)
+	cantidadReservada  Decimal @default(0) @map("cantidad_reservada") @db.Decimal(10, 2)
+
+	panol    Panol    @relation(fields: [panolId], references: [id], onDelete: Cascade)
+	material Material @relation(fields: [materialId], references: [id])
+
+	@@unique([panolId, materialId])
+	@@index([materialId])
+	@@map("stock_items")
+}
+
+model MovimientoStock {
+	id        String              @id @default(uuid()) @db.Uuid
+	panolId   String              @map("panol_id") @db.Uuid
+	materialId String             @map("material_id") @db.Uuid
+	tipo      TipoMovimientoStock
+	cantidad  Decimal             @db.Decimal(10, 2)
+	otId      String?             @map("ot_id") @db.Uuid
+	usuarioId String?             @map("usuario_id") @db.Uuid
+	fecha     DateTime            @default(now()) @db.Timestamptz(6)
+	origen    String?             @db.VarChar(50)
+	notas     String?             @db.Text
+
+	panol    Panol         @relation(fields: [panolId], references: [id])
+	material Material      @relation(fields: [materialId], references: [id])
+	ot       OrdenTrabajo? @relation(fields: [otId], references: [id])
+	usuario  Usuario?      @relation(fields: [usuarioId], references: [id])
+
+	@@index([panolId, fecha])
+	@@index([materialId, fecha])
+	@@index([otId])
+	@@map("movimientos_stock")
+}
+
+model SolicitudMaterial {
+	id                  String                  @id @default(uuid()) @db.Uuid
+	otId                String                  @map("ot_id") @db.Uuid
+	panolId             String                  @map("panol_id") @db.Uuid
+	materialId          String                  @map("material_id") @db.Uuid
+	cantidadSolicitada  Decimal                 @map("cantidad_solicitada") @db.Decimal(10, 2)
+	estado              EstadoSolicitudMaterial @default(pendiente)
+	solicitanteId       String?                 @map("solicitante_id") @db.Uuid
+	panoleroId          String?                 @map("panolero_id") @db.Uuid
+	fechaSolicitud      DateTime                @default(now()) @map("fecha_solicitud") @db.Timestamptz(6)
+	fechaResolucion     DateTime?               @map("fecha_resolucion") @db.Timestamptz(6)
+	motivoRechazo       String?                 @map("motivo_rechazo") @db.Text
+
+	ot          OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
+	panol       Panol        @relation(fields: [panolId], references: [id])
+	material    Material     @relation(fields: [materialId], references: [id])
+	solicitante Usuario?     @relation("SolicitudMaterialSolicitante", fields: [solicitanteId], references: [id])
+	panolero    Usuario?     @relation("SolicitudMaterialPanolero", fields: [panoleroId], references: [id])
+
+	@@index([otId, estado])
+	@@index([panolId, estado])
+	@@index([estado, fechaSolicitud])
+	@@map("solicitudes_material")
+}
+
+model PedidoStock {
+	id         String           @id @default(uuid()) @db.Uuid
+	numero     Int              @unique @default(autoincrement())
+	panolId    String           @map("panol_id") @db.Uuid
+	materialId String           @map("material_id") @db.Uuid
+	cantidad   Decimal          @db.Decimal(10, 2)
+	estado     EstadoPedidoStock @default(pendiente)
+	usuarioId  String?          @map("usuario_id") @db.Uuid
+	notas      String?          @db.Text
+	createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+	completadoAt DateTime?      @map("completado_at") @db.Timestamptz(6)
+
+	panol    Panol    @relation(fields: [panolId], references: [id])
+	material Material @relation(fields: [materialId], references: [id])
+	usuario  Usuario? @relation(fields: [usuarioId], references: [id])
+
+	@@index([panolId, estado])
+	@@index([estado, createdAt])
+	@@map("pedidos_stock")
 }

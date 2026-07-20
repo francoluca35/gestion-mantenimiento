@@ -51,6 +51,12 @@ class _HomePageState extends ConsumerState<HomePage> {
 		final canOt =
 				user?.tieneDerecho('programacion.ordenes_trabajo.buscar_y_actualizar') == true ||
 				user?.esAdministrador == true;
+		final canStock =
+				user?.tieneDerecho('stock.materiales_en_stock.ver') == true ||
+				user?.esAdministrador == true;
+		final canSolicitudesMateriales =
+				user?.tieneDerecho('stock.pañol.solicitudes_materiales.ver_pendientes') == true ||
+				user?.esAdministrador == true;
 		final planta = user?.sucursalNombre ?? 'Sin planta';
 		final perfil = user?.perfilNombre ??
 				(user?.esAdministrador == true ? 'Administrador' : 'Usuario');
@@ -123,6 +129,33 @@ class _HomePageState extends ConsumerState<HomePage> {
 													onTap: () => context.go('/config'),
 												),
 											),
+										if (canStock && (canPlanta || canOt || canConfig))
+											const SizedBox(width: 20),
+										if (canStock)
+											Expanded(
+												child: _ModuleCard(
+													title: 'Stock / Pañol',
+													subtitle: 'Materiales, mínimos y reservas',
+													icon: Icons.inventory_2_rounded,
+													watermarkIcon: Icons.inventory_2_outlined,
+													color: AppColors.brandYellow,
+													onTap: () => context.go('/stock'),
+												),
+											),
+										if (canSolicitudesMateriales &&
+												(canPlanta || canOt || canConfig || canStock))
+											const SizedBox(width: 20),
+										if (canSolicitudesMateriales)
+											Expanded(
+												child: _ModuleCard(
+													title: 'Solicitudes materiales',
+													subtitle: 'Aprobar o rechazar pedidos de OT',
+													icon: Icons.shopping_bag_rounded,
+													watermarkIcon: Icons.shopping_bag_outlined,
+													color: AppColors.accent,
+													onTap: () => context.go('/solicitudes-materiales'),
+												),
+											),
 									],
 								),
 							)
@@ -161,6 +194,29 @@ class _HomePageState extends ConsumerState<HomePage> {
 											watermarkIcon: Icons.settings_outlined,
 											color: AppColors.secondaryLight,
 											onTap: () => context.go('/config'),
+										),
+									if (canStock && (canPlanta || canOt || canConfig))
+										const SizedBox(height: 16),
+									if (canStock)
+										_ModuleCard(
+											title: 'Stock / Pañol',
+											subtitle: 'Materiales, mínimos y reservas',
+											icon: Icons.inventory_2_rounded,
+											watermarkIcon: Icons.inventory_2_outlined,
+											color: AppColors.brandYellow,
+											onTap: () => context.go('/stock'),
+										),
+									if (canSolicitudesMateriales &&
+											(canPlanta || canOt || canConfig || canStock))
+										const SizedBox(height: 16),
+									if (canSolicitudesMateriales)
+										_ModuleCard(
+											title: 'Solicitudes materiales',
+											subtitle: 'Aprobar o rechazar pedidos de OT',
+											icon: Icons.shopping_bag_rounded,
+											watermarkIcon: Icons.shopping_bag_outlined,
+											color: AppColors.accent,
+											onTap: () => context.go('/solicitudes-materiales'),
 										),
 								],
 							),

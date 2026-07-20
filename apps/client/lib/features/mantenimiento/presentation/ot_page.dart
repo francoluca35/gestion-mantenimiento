@@ -18,6 +18,7 @@ import 'ot_motivo_pendiente_dialog.dart';
 import 'ot_pdf.dart';
 import 'ot_print.dart';
 import 'ot_ui.dart';
+import '../../panol/presentation/solicitar_materiales_sheet.dart';
 
 enum OtModo { buscar, necesarias }
 
@@ -112,6 +113,10 @@ class _OtPageState extends ConsumerState<OtPage> {
 
 	bool get _canEmitirNoPeriodica =>
 			_user?.tieneDerecho('programacion.ordenes_trabajo.emitir_no_periodica') == true ||
+			_user?.esAdministrador == true;
+
+	bool get _canSolicitarMateriales =>
+			_user?.tieneDerecho('stock.pañol.solicitudes_materiales.solicitar') == true ||
 			_user?.esAdministrador == true;
 
 	bool get _canManage =>
@@ -760,6 +765,23 @@ class _OtPageState extends ConsumerState<OtPage> {
 		}
 	}
 
+	Future<void> _solicitarMateriales(Map<String, dynamic> ot) async {
+		final ok = await showSolicitarMaterialesSheet(
+			context,
+			ref,
+			otId: ot['id'] as String,
+			otNumero: ot['numero'] as int? ?? 0,
+		);
+		if (!mounted) return;
+		if (ok) {
+			await _bootstrap(keepSelection: true);
+			if (!mounted) return;
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Solicitud de materiales enviada')),
+			);
+		}
+	}
+
 	void _navegarEmitirNoPeriodicaDesdeOt(Map<String, dynamic> ot) {
 		final equipo = ot['equipo'] as Map<String, dynamic>?;
 		final procedimiento = ot['procedimiento'] as Map<String, dynamic>?;
@@ -1283,6 +1305,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 				canAnular: _canAnular,
 				canReabrir: _canReabrir,
 				canEmitirNoPeriodica: _canEmitirNoPeriodica,
+				canSolicitarMateriales: _canSolicitarMateriales,
 				formatDate: _formatDate,
 				includeActionBar: includeActionBar,
 				onPdf: () => _abrirPdf(_selected!['id'] as String),
@@ -1301,6 +1324,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 				onReabrir: () => _reabrirOt(_selected!),
 				onEmitirNoPeriodica: () => _navegarEmitirNoPeriodicaDesdeOt(_selected!),
 				onDerivar: () => _derivarOt(_selected!),
+				onSolicitarMateriales: () => _solicitarMateriales(_selected!),
 				ocultarPdf: widget.misOtOnly,
 			);
 		}
@@ -1314,6 +1338,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 				canAnular: _canAnular,
 				canReabrir: _canReabrir,
 				canEmitirNoPeriodica: _canEmitirNoPeriodica,
+				canSolicitarMateriales: _canSolicitarMateriales,
 				onPdf: () => _abrirPdf(ot['id'] as String),
 				onIniciar: () => _cambiarEstado(
 					ot['id'] as String,
@@ -1330,6 +1355,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 				onReabrir: () => _reabrirOt(ot),
 				onEmitirNoPeriodica: () => _navegarEmitirNoPeriodicaDesdeOt(ot),
 				onDerivar: () => _derivarOt(ot),
+				onSolicitarMateriales: () => _solicitarMateriales(ot),
 				ocultarPdf: widget.misOtOnly,
 			);
 		}
@@ -2231,6 +2257,8 @@ class _OtDetailContent extends StatelessWidget {
 		required this.onReabrir,
 		required this.onEmitirNoPeriodica,
 		required this.onDerivar,
+		this.onSolicitarMateriales,
+		this.canSolicitarMateriales = false,
 		this.ocultarPdf = false,
 	});
 
@@ -2240,6 +2268,7 @@ class _OtDetailContent extends StatelessWidget {
 	final bool canAnular;
 	final bool canReabrir;
 	final bool canEmitirNoPeriodica;
+	final bool canSolicitarMateriales;
 	final bool ocultarPdf;
 	final String Function(dynamic) formatDate;
 	final bool includeActionBar;
@@ -2251,6 +2280,7 @@ class _OtDetailContent extends StatelessWidget {
 	final VoidCallback onReabrir;
 	final VoidCallback onEmitirNoPeriodica;
 	final VoidCallback onDerivar;
+	final VoidCallback? onSolicitarMateriales;
 
 	@override
 	Widget build(BuildContext context) {
@@ -2556,6 +2586,7 @@ class _OtDetailContent extends StatelessWidget {
 						canAnular: canAnular,
 						canReabrir: canReabrir,
 						canEmitirNoPeriodica: canEmitirNoPeriodica,
+						canSolicitarMateriales: canSolicitarMateriales,
 						onPdf: onPdf,
 						onIniciar: onIniciar,
 						onEjecucion: onEjecucion,
@@ -2564,6 +2595,7 @@ class _OtDetailContent extends StatelessWidget {
 						onReabrir: onReabrir,
 						onEmitirNoPeriodica: onEmitirNoPeriodica,
 						onDerivar: onDerivar,
+						onSolicitarMateriales: onSolicitarMateriales,
 						ocultarPdf: ocultarPdf,
 					),
 			],
@@ -2736,6 +2768,8 @@ class _ActionBar extends StatelessWidget {
 		required this.onReabrir,
 		required this.onEmitirNoPeriodica,
 		required this.onDerivar,
+		this.onSolicitarMateriales,
+		this.canSolicitarMateriales = false,
 		this.ocultarPdf = false,
 	});
 
@@ -2745,6 +2779,7 @@ class _ActionBar extends StatelessWidget {
 	final bool canAnular;
 	final bool canReabrir;
 	final bool canEmitirNoPeriodica;
+	final bool canSolicitarMateriales;
 	final bool ocultarPdf;
 	final VoidCallback onPdf;
 	final VoidCallback onIniciar;
@@ -2754,6 +2789,7 @@ class _ActionBar extends StatelessWidget {
 	final VoidCallback onReabrir;
 	final VoidCallback onEmitirNoPeriodica;
 	final VoidCallback onDerivar;
+	final VoidCallback? onSolicitarMateriales;
 
 	@override
 	Widget build(BuildContext context) {
@@ -2774,6 +2810,19 @@ class _ActionBar extends StatelessWidget {
 					onPressed: onPdf,
 					icon: const Icon(Icons.picture_as_pdf_rounded),
 					label: const Text('Descargar PDF completado'),
+				),
+			);
+		}
+
+		if (['pendiente', 'en_ejecucion', 'pendiente_panol'].contains(estado) &&
+				canSolicitarMateriales &&
+				onSolicitarMateriales != null) {
+			actions.add(
+				FilledButton.tonalIcon(
+					style: FilledButton.styleFrom(minimumSize: minSize, padding: pad),
+					onPressed: onSolicitarMateriales,
+					icon: const Icon(Icons.inventory_2_outlined),
+					label: const Text('Solicitar materiales'),
 				),
 			);
 		}

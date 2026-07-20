@@ -40,6 +40,20 @@ class AuthUser {
 				!tieneDerecho('configuracion.usuarios.listar');
 	}
 
+	/// Rol pañolero: stock / pedidos / seguimiento (sin home completo).
+	bool get esPanolero {
+		if (esAdministrador || supervisaSucursales || esTecnico) return false;
+		final perfil = perfilNombre?.toLowerCase().trim() ?? '';
+		if (perfil.contains('pañol') || perfil.contains('panol')) {
+			return true;
+		}
+		return tieneDerecho('stock.materiales_en_stock.ver') &&
+				tieneDerecho('stock.materiales_en_stock.modificar_valores_gestion') &&
+				tieneDerecho('stock.pañol.solicitudes_materiales.aprobar') &&
+				!tieneDerecho('programacion.ordenes_trabajo.emitir_no_periodica') &&
+				!tieneDerecho('configuracion.usuarios.listar');
+	}
+
 	factory AuthUser.fromJson(Map<String, dynamic> json) {
 		final sucursal = json['sucursal'] as Map<String, dynamic>?;
 		final perfil = json['perfil'] as Map<String, dynamic>?;

@@ -7,6 +7,7 @@ import 'core/layout/app_shell.dart';
 import 'core/notifications/fcm_bootstrap.dart';
 import 'core/notifications/fcm_service.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_controller.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/home/presentation/config_page.dart';
@@ -20,6 +21,13 @@ import 'features/mantenimiento/presentation/mis_ot_page.dart';
 import 'features/mantenimiento/presentation/ot_page.dart';
 import 'features/mantenimiento/presentation/procedimientos_page.dart';
 import 'features/mantenimiento/presentation/solicitudes_trabajo_page.dart';
+import 'features/panol/presentation/dashboard_pedidos_page.dart';
+import 'features/panol/presentation/panol_home_page.dart';
+import 'features/panol/presentation/panol_shell.dart';
+import 'features/panol/presentation/pedidos_page.dart';
+import 'features/panol/presentation/seguimiento_page.dart';
+import 'features/panol/presentation/solicitudes_materiales_page.dart';
+import 'features/panol/presentation/stock_page.dart';
 import 'features/planta/presentation/planta_page.dart';
 import 'features/seguridad/presentation/derechos_tree_page.dart';
 import 'features/seguridad/presentation/perfil_derechos_page.dart';
@@ -54,12 +62,15 @@ class GestionMantenimientoApp extends ConsumerWidget {
 	Widget build(BuildContext context, WidgetRef ref) {
 		final auth = ref.watch(authControllerProvider);
 		final router = ref.watch(_routerProvider);
+		final themeMode = ref.watch(themeControllerProvider);
 
 		if (!auth.bootstrapped) {
 			return MaterialApp(
 				title: AppConfig.appName,
 				debugShowCheckedModeBanner: false,
 				theme: AppTheme.light(),
+				darkTheme: AppTheme.dark(),
+				themeMode: themeMode,
 				home: const Scaffold(
 					body: Center(child: CircularProgressIndicator()),
 				),
@@ -71,7 +82,7 @@ class GestionMantenimientoApp extends ConsumerWidget {
 			debugShowCheckedModeBanner: false,
 			theme: AppTheme.light(),
 			darkTheme: AppTheme.dark(),
-			themeMode: ThemeMode.dark,
+			themeMode: themeMode,
 			scaffoldMessengerKey: rootScaffoldMessengerKey,
 			routerConfig: router,
 			builder: (context, child) => FcmBootstrap(child: child ?? const SizedBox.shrink()),
@@ -100,13 +111,31 @@ final _routerProvider = Provider<GoRouter>((ref) {
 
 			if (!isAuth && !loggingIn) return '/login';
 			if (isAuth && loggingIn) {
-				return user?.esTecnico == true ? '/mis-ot' : '/home';
+				if (user?.esTecnico == true) return '/mis-ot';
+				if (user?.esPanolero == true) return '/panol';
+				return '/home';
 			}
 
 			if (isAuth && user?.esTecnico == true) {
 				const permitidas = {'/mis-ot', '/perfil'};
 				if (loc == '/home' || !permitidas.contains(loc)) {
 					return '/mis-ot';
+				}
+			}
+
+			if (isAuth && user?.esPanolero == true) {
+				const permitidas = {
+					'/panol',
+					'/panol/dashboard',
+					'/panol/stock',
+					'/panol/pedidos',
+					'/panol/seguimiento',
+					'/perfil',
+				};
+				if (loc == '/stock') return '/panol/stock';
+				if (loc == '/solicitudes-materiales') return '/panol/pedidos';
+				if (loc == '/home' || !permitidas.contains(loc)) {
+					return '/panol';
 				}
 			}
 
@@ -119,6 +148,14 @@ final _routerProvider = Provider<GoRouter>((ref) {
 			),
 			ShellRoute(
 				builder: (context, state, child) {
+					final user = ref.read(authControllerProvider).session?.usuario;
+					if (user?.esPanolero == true &&
+							!state.uri.path.startsWith('/perfil')) {
+						return PanolShell(
+							location: state.uri.path,
+							child: child,
+						);
+					}
 					return AppShell(
 						location: state.uri.path,
 						child: child,
@@ -172,6 +209,43 @@ final _routerProvider = Provider<GoRouter>((ref) {
 						path: '/solicitudes',
 						pageBuilder: (context, state) =>
 								_fadePage(state, const SolicitudesTrabajoPage()),
+					),
+					GoRoute(
+						path: '/stock',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const StockPage()),
+					),
+					GoRoute(
+						path: '/panol',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const PanolHomePage()),
+					),
+					GoRoute(
+						path: '/panol/dashboard',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const DashboardPedidosPage()),
+					),
+					GoRoute(
+						path: '/panol/stock',
+						pageBuilder: (context, state) => _fadePage(
+							state,
+							const StockPage(embeddedInPanol: true),
+						),
+					),
+					GoRoute(
+						path: '/panol/pedidos',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const PedidosPage()),
+					),
+					GoRoute(
+						path: '/panol/seguimiento',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const SeguimientoPage()),
+					),
+					GoRoute(
+						path: '/solicitudes-materiales',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const SolicitudesMaterialesPage()),
 					),
 					GoRoute(
 						path: '/contadores',

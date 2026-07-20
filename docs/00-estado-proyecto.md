@@ -2,7 +2,11 @@
 
 Documento maestro: **qué hay**, **qué falta** y **qué mejorar**.
 
-**Última actualización:** 2026-07-17
+**Última actualización:** 2026-07-20
+
+**Para personas (no técnicas):**
+- Inventario + roles + mejoras → [`inventario-app.md`](inventario-app.md)
+- Manual de uso paso a paso → [`manual-de-uso.md`](manual-de-uso.md)
 
 ---
 

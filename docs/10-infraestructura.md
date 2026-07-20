@@ -108,6 +108,18 @@ Cloudflare Tunnel → HTTPS
 | Push | Firebase FCM |
 | Acceso 4G | Tunnel + dominio + HTTPS |
 
+### Demo 2 meses (Sprint 5)
+
+Stack completo en un host (sin notebook de desarrollo):
+
+```bash
+cp .env.example .env.demo   # ajustar JWT, claves, FIREBASE_*, IP pública MinIO
+docker compose -f docker-compose.demo.yml --env-file .env.demo up -d --build
+powershell -File scripts/backup-postgres.ps1
+```
+
+Checklist y detalle: [`faltantes/sprint-5-infra-demo.md`](faltantes/sprint-5-infra-demo.md).
+
 ---
 
 ## Flutter

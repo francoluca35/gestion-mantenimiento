@@ -44,3 +44,8 @@ apps/api/.puppeteer/
 *.aab
 apps/client/gestion-mantenimiento.apk
 
+
+# Demo backups
+backups/
+*.sql.gz
+

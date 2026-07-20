@@ -1,0 +1,116 @@
+# Demo 2 meses — Postgres + Redis + MinIO + API Nest en un host estable.
+# Uso:
+#   cp .env.example .env.demo   # ajustar secretos e IP
+#   docker compose -f docker-compose.demo.yml --env-file .env.demo up -d --build
+#
+# Acceso LAN: http://<IP-SERVIDOR>:3000/v1
+# Android: Perfil → URL API = http://<IP-SERVIDOR>:3000/v1
+
+name: sika-demo
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sika-demo-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sika}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sika_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-gestion_mantenimiento}
+    volumes:
+      - demo_postgres_data:/var/lib/postgresql/data
+      - ./packages/database/init:/docker-entrypoint-initdb.d:ro
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sika} -d ${POSTGRES_DB:-gestion_mantenimiento}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: sika-demo-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - demo_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: sika-demo-minio
+    restart: unless-stopped
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - demo_minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: sika-demo-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb --ignore-existing local/$${STORAGE_BUCKET:-sika-mantenimiento};
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-sika-mantenimiento}
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: sika-demo-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sika}:${POSTGRES_PASSWORD:-sika_dev}@postgres:5432/${POSTGRES_DB:-gestion_mantenimiento}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change-me-demo-jwt-secret-min-32-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-demo-refresh-secret-min-32}
+      REDIS_URL: redis://redis:6379
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-minio}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-sika-mantenimiento}
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-http://localhost:9000/sika-mantenimiento}
+      STORAGE_FORCE_PATH_STYLE: "true"
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
+      OT_CRON_ENABLED: ${OT_CRON_ENABLED:-true}
+      STOCK_ALERT_CRON_ENABLED: ${STOCK_ALERT_CRON_ENABLED:-true}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+
+volumes:
+  demo_postgres_data:
+  demo_redis_data:
+  demo_minio_data:

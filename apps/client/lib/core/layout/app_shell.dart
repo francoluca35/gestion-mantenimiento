@@ -46,6 +46,8 @@ class AppShell extends ConsumerWidget {
 		required bool canSolicitudes,
 		required bool canContadores,
 		required bool canOtNecesarias,
+		required bool canStock,
+		required bool canSolicitudesMateriales,
 		required bool canConfig,
 	}) {
 		return [
@@ -96,6 +98,22 @@ class AppShell extends ConsumerWidget {
 					selectedIcon: Icons.campaign_rounded,
 					route: '/solicitudes',
 				),
+			if (canStock)
+				const AppNavItem(
+					id: 'stock',
+					label: 'Stock',
+					icon: Icons.inventory_2_outlined,
+					selectedIcon: Icons.inventory_2_rounded,
+					route: '/stock',
+				),
+			if (canSolicitudesMateriales)
+				const AppNavItem(
+					id: 'solicitudes-materiales',
+					label: 'Mat. pañol',
+					icon: Icons.shopping_bag_outlined,
+					selectedIcon: Icons.shopping_bag_rounded,
+					route: '/solicitudes-materiales',
+				),
 			if (canContadores)
 				const AppNavItem(
 					id: 'contadores',
@@ -137,6 +155,8 @@ class AppShell extends ConsumerWidget {
 		if (location.startsWith('/ot/emitir-periodica')) return 'emitir-no-periodica';
 		if (location.startsWith('/procedimientos')) return 'procedimientos';
 		if (location.startsWith('/planta')) return 'equipos';
+		if (location.startsWith('/solicitudes-materiales')) return 'solicitudes-materiales';
+		if (location.startsWith('/stock')) return 'stock';
 		if (location.startsWith('/solicitudes')) return 'solicitudes';
 		if (location.startsWith('/contadores')) return 'contadores';
 		if (location.startsWith('/usuarios') ||
@@ -364,6 +384,12 @@ class AppShell extends ConsumerWidget {
 		final canSolicitudes =
 				user?.tieneDerecho('programacion.solicitudes_trabajo.listar') == true ||
 				user?.esAdministrador == true;
+		final canStock =
+				user?.tieneDerecho('stock.materiales_en_stock.ver') == true ||
+				user?.esAdministrador == true;
+		final canSolicitudesMateriales =
+				user?.tieneDerecho('stock.pañol.solicitudes_materiales.ver_pendientes') == true ||
+				user?.esAdministrador == true;
 		final canContadores =
 				user?.tieneDerecho('archivos.equipos.listar') == true ||
 				user?.esAdministrador == true;
@@ -371,6 +397,7 @@ class AppShell extends ConsumerWidget {
 				user?.tieneDerecho('programacion.ordenes_trabajo.emitir_periodica') == true ||
 				user?.esAdministrador == true;
 		final isTechnician = user?.esTecnico == true;
+		final isPanolero = user?.esPanolero == true;
 
 		final width = MediaQuery.sizeOf(context).width;
 		final isMobile = width < Breakpoints.tablet;
@@ -385,6 +412,8 @@ class AppShell extends ConsumerWidget {
 						canSolicitudes: canSolicitudes,
 						canContadores: canContadores,
 						canOtNecesarias: canOtNecesarias,
+						canStock: canStock,
+						canSolicitudesMateriales: canSolicitudesMateriales,
 						canConfig: canConfig,
 					);
 		final mobileItems = _mobilePrimaryItems(
@@ -398,9 +427,9 @@ class AppShell extends ConsumerWidget {
 		final navBg = AppColors.black;
 		final moreSelected = moreItems.any((item) => item.id == selectedId);
 
-		if (isTechnician) {
+		if (isTechnician || isPanolero) {
 			return Scaffold(
-				backgroundColor: pageBg,
+				backgroundColor: isPanolero ? AppColors.backgroundLight : pageBg,
 				body: child,
 			);
 		}

@@ -8,6 +8,7 @@ import { EstadoOt, Prisma, TipoMantenimiento } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { PushService } from '../../notificaciones/push.service';
+import { StockService } from '../../panol/stock/stock.service';
 import { assertSucursalAccess, resolveSucursalId } from '../mantenimiento.scope';
 import { AnularOtDto } from './dto/anular-ot.dto';
 import { AsignarOtDto } from './dto/asignar-ot.dto';
@@ -35,6 +36,7 @@ export class OtService {
 	constructor(
 		private readonly prisma: PrismaService,
 		private readonly push: PushService,
+		private readonly stockService: StockService,
 	) {}
 
 	private otInclude() {
@@ -1274,6 +1276,11 @@ export class OtService {
 				`OT #${ot.numero} realizada`,
 				currentUser.id,
 			);
+			await this.stockService.consumirReservasOt(ot.id, currentUser.id);
+		}
+
+		if (estado === 'anulada') {
+			await this.stockService.liberarReservasOt(ot.id, currentUser.id);
 		}
 
 		return actualizada;

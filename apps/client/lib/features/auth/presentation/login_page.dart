@@ -37,7 +37,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 		if (!mounted) return;
 		if (ok) {
 			final user = ref.read(authControllerProvider).session?.usuario;
-			context.go(user?.esTecnico == true ? '/mis-ot' : '/home');
+			context.go(
+				user?.esTecnico == true
+						? '/mis-ot'
+						: user?.esPanolero == true
+								? '/panol'
+								: '/home',
+			);
 		}
 	}
 

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../components/sika_ui.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../auth/application/auth_controller.dart';
 
 class PerfilPage extends ConsumerStatefulWidget {
@@ -312,6 +313,59 @@ class _PerfilPageState extends ConsumerState<PerfilPage> {
 										value: user?.esAdministrador == true ? 'Sí' : 'No',
 									),
 								],
+							),
+						],
+					),
+				),
+				const SizedBox(height: 16),
+				SikaCard(
+					padding: const EdgeInsets.all(20),
+					child: Column(
+						crossAxisAlignment: CrossAxisAlignment.start,
+						children: [
+							Text(
+								'Apariencia',
+								style: Theme.of(context).textTheme.titleMedium?.copyWith(
+											fontWeight: FontWeight.w700,
+										),
+							),
+							const SizedBox(height: 8),
+							Text(
+								'Elegí el tema de la aplicación',
+								style: Theme.of(context).textTheme.bodySmall?.copyWith(
+											color: AppColors.mutedText,
+										),
+							),
+							const SizedBox(height: 12),
+							Builder(
+								builder: (context) {
+									final mode = ref.watch(themeControllerProvider);
+									return SegmentedButton<ThemeMode>(
+										segments: const [
+											ButtonSegment(
+												value: ThemeMode.light,
+												label: Text('Claro'),
+												icon: Icon(Icons.light_mode_outlined, size: 18),
+											),
+											ButtonSegment(
+												value: ThemeMode.dark,
+												label: Text('Oscuro'),
+												icon: Icon(Icons.dark_mode_outlined, size: 18),
+											),
+											ButtonSegment(
+												value: ThemeMode.system,
+												label: Text('Sistema'),
+												icon: Icon(Icons.brightness_auto_outlined, size: 18),
+											),
+										],
+										selected: {mode},
+										onSelectionChanged: (values) {
+											ref
+													.read(themeControllerProvider.notifier)
+													.setMode(values.first);
+										},
+									);
+								},
 							),
 						],
 					),

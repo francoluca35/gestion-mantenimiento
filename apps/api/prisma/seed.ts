@@ -120,6 +120,7 @@ const ARBOL_DERECHOS: DerechoNode[] = [
 								nombre: 'Solicitudes de materiales',
 								orden: 1,
 								children: crudLeaves('stock.pañol.solicitudes_materiales', [
+									'solicitar',
 									'ver_pendientes',
 									'aprobar',
 									'rechazar',
@@ -368,7 +369,9 @@ async function main() {
 		[
 			'programacion.ordenes_trabajo.buscar_y_actualizar',
 			'archivos.equipos.listar',
+			'stock.pañol.solicitudes_materiales.solicitar',
 			'stock.pañol.solicitudes_materiales.ver_pendientes',
+			'stock.materiales_en_stock.ver',
 		],
 		derechoMap,
 	);
@@ -509,6 +512,16 @@ async function main() {
 	});
 
 	// Demo planta Virrey + M3
+	await prisma.solicitudMaterial.deleteMany({
+		where: { ot: { sucursalId: virrey.id } },
+	});
+	await prisma.movimientoStock.deleteMany({
+		where: { panol: { sucursalId: virrey.id } },
+	});
+	await prisma.stockItem.deleteMany({
+		where: { panol: { sucursalId: virrey.id } },
+	});
+	await prisma.panol.deleteMany({ where: { sucursalId: virrey.id } });
 	await prisma.historialEquipo.deleteMany({
 		where: { equipo: { sucursalId: virrey.id } },
 	});
@@ -804,7 +817,232 @@ async function main() {
 		},
 	});
 
+	// —— M4 Pañol demo Virrey ——
+	const unidades = [
+		{ id: 'aaaa0001-0001-0001-0001-000000000001', codigo: 'UN', nombre: 'Unidad' },
+		{ id: 'aaaa0001-0001-0001-0001-000000000002', codigo: 'KG', nombre: 'Kilogramo' },
+		{ id: 'aaaa0001-0001-0001-0001-000000000003', codigo: 'L', nombre: 'Litro' },
+		{ id: 'aaaa0001-0001-0001-0001-000000000004', codigo: 'M', nombre: 'Metro' },
+	];
+	for (const u of unidades) {
+		await prisma.unidad.upsert({
+			where: { id: u.id },
+			update: { codigo: u.codigo, nombre: u.nombre, activo: true },
+			create: u,
+		});
+	}
+
+	const panol = await prisma.panol.upsert({
+		where: { id: 'bbbb0001-0001-0001-0001-000000000001' },
+		update: { nombre: 'Pañol Central', activo: true, sucursalId: virrey.id },
+		create: {
+			id: 'bbbb0001-0001-0001-0001-000000000001',
+			sucursalId: virrey.id,
+			nombre: 'Pañol Central',
+		},
+	});
+
+	const materialesSeed = [
+		{
+			id: 'cccc0001-0001-0001-0001-000000000001',
+			codigo: 'ROD-6205',
+			nombre: 'Rodamiento 6205',
+			marca: 'SKF',
+			uso: 'Mantenimiento',
+			unidadId: unidades[0].id,
+			precio: 18500,
+			actual: 24,
+			minima: 8,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000002',
+			codigo: 'ROD-6308',
+			nombre: 'Rodamiento 6308',
+			marca: 'FAG',
+			uso: 'Mantenimiento',
+			unidadId: unidades[0].id,
+			precio: 42000,
+			actual: 12,
+			minima: 4,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000003',
+			codigo: 'GRA-EP2',
+			nombre: 'Grasa EP2',
+			marca: 'Shell',
+			uso: 'Lubricación',
+			unidadId: unidades[1].id,
+			precio: 8500,
+			actual: 40,
+			minima: 15,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000004',
+			codigo: 'ACE-68',
+			nombre: 'Aceite hidráulico ISO 68',
+			marca: 'Mobil',
+			uso: 'Lubricación',
+			unidadId: unidades[2].id,
+			precio: 6200,
+			actual: 80,
+			minima: 30,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000005',
+			codigo: 'FIL-AIR-10',
+			nombre: 'Filtro de aire 10"',
+			marca: 'Donaldson',
+			uso: 'Filtración',
+			unidadId: unidades[0].id,
+			precio: 15000,
+			actual: 6,
+			minima: 10,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000006',
+			codigo: 'COR-V8',
+			nombre: 'Correa V-8',
+			marca: 'Gates',
+			uso: 'Transmisión',
+			unidadId: unidades[0].id,
+			precio: 9800,
+			actual: 18,
+			minima: 6,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000007',
+			codigo: 'JUN-EPDM',
+			nombre: 'Junta EPDM 50mm',
+			marca: null,
+			uso: 'Sellado',
+			unidadId: unidades[3].id,
+			precio: 1200,
+			actual: 100,
+			minima: 20,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000008',
+			codigo: 'TOR-M12',
+			nombre: 'Tornillo M12x40',
+			marca: null,
+			uso: 'Fijación',
+			unidadId: unidades[0].id,
+			precio: 180,
+			actual: 500,
+			minima: 100,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000009',
+			codigo: 'SEL-MECH',
+			nombre: 'Sello mecánico bomba',
+			marca: 'Burgmann',
+			uso: 'Sellado',
+			unidadId: unidades[0].id,
+			precio: 95000,
+			actual: 3,
+			minima: 2,
+		},
+		{
+			id: 'cccc0001-0001-0001-0001-000000000010',
+			codigo: 'FIL-OLE-20',
+			nombre: 'Filtro de aceite 20µm',
+			marca: 'Parker',
+			uso: 'Filtración',
+			unidadId: unidades[0].id,
+			precio: 22000,
+			actual: 8,
+			minima: 5,
+		},
+	];
+
+	for (const m of materialesSeed) {
+		await prisma.material.upsert({
+			where: { id: m.id },
+			update: {
+				codigo: m.codigo,
+				nombre: m.nombre,
+				marca: m.marca,
+				uso: m.uso,
+				unidadId: m.unidadId,
+				precioActual: m.precio,
+				activo: true,
+			},
+			create: {
+				id: m.id,
+				codigo: m.codigo,
+				nombre: m.nombre,
+				marca: m.marca,
+				uso: m.uso,
+				unidadId: m.unidadId,
+				precioActual: m.precio,
+			},
+		});
+		await prisma.stockItem.upsert({
+			where: {
+				panolId_materialId: { panolId: panol.id, materialId: m.id },
+			},
+			update: {
+				cantidadActual: m.actual,
+				cantidadMinima: m.minima,
+				cantidadReservada: 0,
+			},
+			create: {
+				panolId: panol.id,
+				materialId: m.id,
+				cantidadActual: m.actual,
+				cantidadMinima: m.minima,
+				cantidadReservada: 0,
+			},
+		});
+	}
+
+	const panoleroUser = await prisma.usuario.findUnique({
+		where: { nombreUsuario: 'panolero' },
+	});
+	await prisma.pedidoStock.deleteMany({ where: { panolId: panol.id } });
+	if (panoleroUser) {
+		await prisma.pedidoStock.createMany({
+			data: [
+				{
+					panolId: panol.id,
+					materialId: 'cccc0001-0001-0001-0001-000000000005',
+					cantidad: 20,
+					estado: 'en_proceso',
+					usuarioId: panoleroUser.id,
+				},
+				{
+					panolId: panol.id,
+					materialId: 'cccc0001-0001-0001-0001-000000000009',
+					cantidad: 5,
+					estado: 'pendiente',
+					usuarioId: panoleroUser.id,
+				},
+				{
+					panolId: panol.id,
+					materialId: 'cccc0001-0001-0001-0001-000000000010',
+					cantidad: 10,
+					estado: 'completado',
+					usuarioId: panoleroUser.id,
+					completadoAt: new Date(),
+				},
+			],
+		});
+	}
+
 	// Rosario vacío
+	await prisma.solicitudMaterial.deleteMany({
+		where: { ot: { sucursalId: rosario.id } },
+	});
+	await prisma.pedidoStock.deleteMany({
+		where: { panol: { sucursalId: rosario.id } },
+	});
+	await prisma.movimientoStock.deleteMany({
+		where: { panol: { sucursalId: rosario.id } },
+	});
+	await prisma.stockItem.deleteMany({
+		where: { panol: { sucursalId: rosario.id } },
+	});
+	await prisma.panol.deleteMany({ where: { sucursalId: rosario.id } });
 	await prisma.historialEquipo.deleteMany({
 		where: { equipo: { sucursalId: rosario.id } },
 	});
@@ -823,11 +1061,12 @@ async function main() {
 	await prisma.equipo.deleteMany({ where: { sucursalId: rosario.id } });
 	await prisma.ubicacion.deleteMany({ where: { sucursalId: rosario.id } });
 
-	console.log('Seed M1 + M2 + M3 completado');
+	console.log('Seed M1 + M2 + M3 + M4 completado');
 	console.log(`Sucursales: ${virrey.codigo}, ${rosario.codigo}`);
 	console.log('Usuarios demo (clave: Sika123!): admin, tecnico, panolero, supervisor, admin.virrey');
 	console.log('Demo Virrey: Silos Externos → Sector Losa → SILO-103/104, Molienda → MOL-01');
 	console.log('Demo OT: #1001 pendiente, #1002 en ejecución, #1003 realizada');
+	console.log(`Demo Pañol: ${panol.nombre} — ${materialesSeed.length} materiales`);
 }
 
 main()

@@ -29,15 +29,27 @@ class AppTheme {
 			useMaterial3: true,
 			colorScheme: scheme,
 			scaffoldBackgroundColor: AppColors.backgroundLight,
+			iconTheme: const IconThemeData(color: AppColors.ink),
+			primaryIconTheme: const IconThemeData(color: AppColors.ink),
 			textTheme: GoogleFonts.interTextTheme().apply(
 				bodyColor: AppColors.ink,
 				displayColor: AppColors.ink,
+			),
+			listTileTheme: const ListTileThemeData(
+				iconColor: AppColors.ink,
+				textColor: AppColors.ink,
+			),
+			tabBarTheme: const TabBarThemeData(
+				labelColor: AppColors.ink,
+				unselectedLabelColor: AppColors.secondary,
 			),
 			appBarTheme: const AppBarTheme(
 				centerTitle: false,
 				elevation: 0,
 				backgroundColor: AppColors.white,
 				foregroundColor: AppColors.ink,
+				iconTheme: IconThemeData(color: AppColors.ink),
+				actionsIconTheme: IconThemeData(color: AppColors.ink),
 				surfaceTintColor: Colors.transparent,
 			),
 			cardTheme: CardThemeData(
@@ -110,12 +122,24 @@ class AppTheme {
 			useMaterial3: true,
 			colorScheme: scheme,
 			scaffoldBackgroundColor: AppColors.backgroundDark,
+			iconTheme: const IconThemeData(color: AppColors.white),
+			primaryIconTheme: const IconThemeData(color: AppColors.white),
 			textTheme: base,
+			listTileTheme: const ListTileThemeData(
+				iconColor: AppColors.white,
+				textColor: AppColors.white,
+			),
+			tabBarTheme: const TabBarThemeData(
+				labelColor: AppColors.white,
+				unselectedLabelColor: AppColors.mutedText,
+			),
 			appBarTheme: const AppBarTheme(
 				centerTitle: false,
 				elevation: 0,
 				backgroundColor: AppColors.backgroundDark,
 				foregroundColor: AppColors.white,
+				iconTheme: IconThemeData(color: AppColors.white),
+				actionsIconTheme: IconThemeData(color: AppColors.white),
 				surfaceTintColor: Colors.transparent,
 			),
 			cardTheme: CardThemeData(
@@ -207,11 +231,6 @@ class AppTheme {
 					),
 				),
 			),
-			listTileTheme: const ListTileThemeData(
-				iconColor: AppColors.mutedText,
-				textColor: AppColors.white,
-			),
-			iconTheme: const IconThemeData(color: AppColors.mutedText),
 			progressIndicatorTheme: const ProgressIndicatorThemeData(
 				color: AppColors.brandYellow,
 			),

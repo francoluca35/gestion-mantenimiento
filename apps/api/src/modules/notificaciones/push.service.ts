@@ -115,6 +115,82 @@ export class PushService implements OnModuleInit {
 		}
 	}
 
+	/**
+	 * Notificación genérica a un usuario (pañol, rechazo material, etc.).
+	 */
+	async notifyUsuario(
+		usuarioId: string,
+		payload: {
+			title: string;
+			body: string;
+			data?: Record<string, string>;
+		},
+	) {
+		const usuario = await this.prisma.usuario.findUnique({
+			where: { id: usuarioId },
+			select: { nombreUsuario: true },
+		});
+
+		const dispositivos = await this.prisma.dispositivoFcm.findMany({
+			where: { usuarioId },
+			select: { id: true, token: true },
+		});
+
+		if (dispositivos.length === 0) {
+			this.logger.debug(
+				`Sin tokens FCM para ${usuario?.nombreUsuario ?? usuarioId}`,
+			);
+			return { sent: 0, failed: 0, disabled: !this.ready };
+		}
+
+		if (!this.ready) {
+			this.logger.log(
+				`[push:disabled] ${payload.title} → ${usuario?.nombreUsuario ?? usuarioId}`,
+			);
+			return { sent: 0, failed: 0, disabled: true };
+		}
+
+		const tokens = dispositivos.map((d) => d.token);
+
+		try {
+			const messaging = getMessaging();
+			const response = await messaging.sendEachForMulticast({
+				tokens,
+				notification: { title: payload.title, body: payload.body },
+				data: {
+					...(payload.data ?? {}),
+					click_action: 'FLUTTER_NOTIFICATION_CLICK',
+				},
+				android: {
+					priority: 'high',
+					notification: {
+						channelId: 'ot_asignadas',
+						clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+						icon: 'ic_stat_notification',
+						color: '#FFB11B',
+						defaultSound: true,
+						defaultVibrateTimings: true,
+					},
+				},
+			});
+
+			await this.pruneInvalidTokens(dispositivos, response.responses);
+
+			this.logger.log(
+				`[push] ${payload.title} → ${usuario?.nombreUsuario ?? usuarioId} — ok ${response.successCount} / fail ${response.failureCount}`,
+			);
+
+			return {
+				sent: response.successCount,
+				failed: response.failureCount,
+				disabled: false,
+			};
+		} catch (error) {
+			this.logger.warn(`[push:error] ${String(error)}`);
+			return { sent: 0, failed: tokens.length, disabled: false };
+		}
+	}
+
 	private ensureFirebase() {
 		if (this.ready) return;
 

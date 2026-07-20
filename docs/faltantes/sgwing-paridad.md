@@ -14,7 +14,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 
 | Bloque | Pantallas | Paridad | Prioridad siguiente |
 |--------|-----------|---------|---------------------|
-| Procedimientos | 01–07 | 🟡 ~85% | Versiones (07), reserva materiales (04) |
+| Procedimientos | 01–07 | 🟡 ~90% | Versiones (07); reserva materiales ✅ M4 |
 | Equipos | 08–15 | ✅ ~95% | Repuestos por equipo (M4) |
 | OT / Programación | 16–32 | ✅ ~92% | Gantt (P2); OT derivada ✅ |
 
@@ -27,7 +27,7 @@ Checklist imagen a imagen contra el documento visual de referencia de Sika.
 | 01 | `sgwing-01` | Buscar por descripción o código | `/procedimientos` | ✅ | P2 |
 | 02 | `sgwing-02` | Búsqueda avanzada (sector, tipo, etc.) | `GET /procedimientos?tipo&sectorResponsableId&periodicidadTipo&tipoEquipoId&q` | ✅ | P2 |
 | 03 | `sgwing-03` | Agregar procedimiento (form completo) | `/procedimientos` | ✅ | P2 |
-| 04 | `sgwing-04` | Reservar materiales | placeholder | ❌ | P1 (M4) |
+| 04 | `sgwing-04` | Reservar materiales | solicitudes + reserva al aprobar | ✅ | P1 (M4) |
 | 05 | `sgwing-05` | Resultado: Excel, modificar, eliminar, asociar si preventivo | `/procedimientos` + toolbar | ✅ | P2 |
 | 06 | `sgwing-06` | Asociar a planta / sector / equipo + imprimir OT + emitir OT | mapa + `asociar-equipo` / `asociar-alcance` | ✅ | **P0** |
 | 07 | `sgwing-07` | Versiones del procedimiento | — | ❌ | P3 |
@@ -162,7 +162,7 @@ Orden sugerido para máximo impacto operativo en Planta Virrey.
 
 ### Sprint E — Fase 2 plataforma **P1–P2**
 
-17. Reserva materiales (04) → M4 Pañol.
+| 17 | Reserva materiales (04) → M4 Pañol — **en progreso** (~25% MVP). |
 18. Documentos de equipo (15) → storage.
 19. Gantt (23). OT derivada (24) ✅.
 20. Búsqueda avanzada procedimientos (02), versiones (07).

@@ -13,11 +13,11 @@ Documento maestro: **qué hay**, **qué falta** y **qué mejorar**.
 | **M1 Seguridad** | 🟢 ~92% | RLS, CRUD UI, editor derechos, perfil clave/sesiones, e2e |
 | **M2 Planta** | 🟢 ~90% | CRUD UI, documentos, lecturas, mover/editar, e2e |
 | **M3 Mantenimiento** | 🟢 ~92% | Ola 2 + Sprints 1–4 cerrados (FCM + Mis OT) |
-| **M4 Pañol** | ❌ 0% | Fase 2 |
+| **M4 Pañol** | 🟢 ~95% | Cerrado demo: stock, solicitudes OT, consumo al cerrar, alertas mín. |
 | **M5 Compras** | ❌ 0% | Fase 2 |
 | **M6 Indicadores** | ❌ ~5% | Solo resumen OT en home |
 | **M7 Notificaciones** | 🟢 ~95% | Sprint 4 cerrado: FCM + deep-link Mis OT (smoke ops en dispositivo) |
-| **Paridad SGwing** | 🟡 ~58% | 32 capturas en `docs/images/` |
+| **Paridad SGwing** | 🟡 ~62% | + reserva materiales (sgwing-04) vía M4 |
 | **Paridad SGMWin manual** | 🟡 ~45% | Ver `MATRIZ-PARIDAD.md` |
 | **Shell adaptativo móvil** | 🟡 ~75% | Bottom nav por rol, sidebars colapsables con flecha |
 
@@ -130,7 +130,7 @@ Ver [`faltantes/sgwing-paridad.md`](faltantes/sgwing-paridad.md) Sprint A–B.
 | M2 | Editar/borrar ubicación, mover nodos, documentos equipo |
 | M3 | Filtros avanzados OT, columnas extendidas, fotos en OT |
 | M3 | OT no periódica: sector, fechas inicio/fin, campo recibe |
-| M4 | Pañol, stock, reserva materiales (sgwing-04) |
+| M4 | Pañol / stock / reserva materiales (sgwing-04) ✅ ~95% — ver `faltantes/m4-panol.md` |
 | Móvil | Vistas supervisor (OT sector, conformidad rápida) y gerencia (KPIs resumen) |
 
 ### P2 — Medio plazo
@@ -203,7 +203,7 @@ Ver [`faltantes/sgwing-paridad.md`](faltantes/sgwing-paridad.md) Sprint A–B.
 | **Admin sucursal** | Config, usuarios, planta, OT | Consultas + aprobaciones rápidas |
 | **Admin global** | Todas las sucursales | Mismo menú por permisos; config pesada mejor en desktop |
 | **Gerencia** | Dashboards, KPIs (futuro M6) | Resumen ejecutivo + alertas |
-| **Pañolero** | Stock (futuro M4) | Solicitudes materiales, alertas stock |
+| **Pañolero** | Shell PAÑOL: STOCK / PEDIDOS / SEGUIMIENTO | Solicitudes materiales OT, pedidos reposición, movimientos |
 
 **Regla:** el menú y las rutas dependen de **derechos**, no de la plataforma. No hay bloqueo `kIsWeb` en el código actual.
 
@@ -269,6 +269,7 @@ API: `http://localhost:3000/v1` · Web: `http://localhost:8080`
 | [`faltantes/m1-seguridad.md`](faltantes/m1-seguridad.md) | Detalle pendiente M1 |
 | [`faltantes/m2-planta.md`](faltantes/m2-planta.md) | Detalle pendiente M2 |
 | [`faltantes/m3-mantenimiento.md`](faltantes/m3-mantenimiento.md) | Detalle pendiente M3 |
+| [`faltantes/m4-panol.md`](faltantes/m4-panol.md) | Detalle pendiente M4 |
 
 ---
 

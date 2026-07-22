@@ -1,4 +1,4 @@
-# Configura adb reverse para que el celular use localhost:3000 → PC:3000
+﻿# Configura adb reverse para que el celular use localhost:3000 → PC:3000
 # Uso: desde la raíz del repo, con el teléfono USB + depuración USB:
 #   powershell -ExecutionPolicy Bypass -File scripts/android-adb-reverse.ps1
 

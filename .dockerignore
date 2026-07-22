@@ -1,0 +1,30 @@
+.git
+.cursor
+**/.DS_Store
+**/Thumbs.db
+
+# Docs / assets pesados
+docs
+backups
+*.apk
+*.aab
+*.sql.gz
+
+# Flutter (no va en la imagen API)
+apps/client
+**/.dart_tool
+**/.flutter-plugins*
+
+# Node local
+**/node_modules
+**/dist
+**/build
+**/.env
+**/.env.*
+!**/.env.example
+
+# IDE / misc
+.idea
+.vscode
+*.log
+scripts/playwright

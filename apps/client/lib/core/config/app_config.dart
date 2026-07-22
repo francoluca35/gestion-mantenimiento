@@ -50,5 +50,5 @@ class AppConfig {
 		return apiBaseUrl;
 	}
 
-	static const String appName = 'Gestión de Mantenimiento';
+	static const String appName = 'GestionMantenimiento';
 }

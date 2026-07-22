@@ -515,6 +515,9 @@ async function main() {
 	await prisma.solicitudMaterial.deleteMany({
 		where: { ot: { sucursalId: virrey.id } },
 	});
+	await prisma.pedidoStock.deleteMany({
+		where: { panol: { sucursalId: virrey.id } },
+	});
 	await prisma.movimientoStock.deleteMany({
 		where: { panol: { sucursalId: virrey.id } },
 	});

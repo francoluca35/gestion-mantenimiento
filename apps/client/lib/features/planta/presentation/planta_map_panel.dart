@@ -445,7 +445,7 @@ class _PlantaMapPanelState extends ConsumerState<PlantaMapPanel> {
 										label: const Text('Buscar'),
 										style: FilledButton.styleFrom(
 											backgroundColor: AppColors.brandYellow,
-											foregroundColor: AppColors.ink,
+											foregroundColor: AppColors.onPrimary,
 											padding: const EdgeInsets.symmetric(
 												horizontal: 12,
 												vertical: 8,
@@ -637,7 +637,7 @@ class _ExpandToggle extends StatelessWidget {
 			child: Icon(
 				expanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
 				size: 16,
-				color: AppColors.ink,
+				color: AppColors.onPrimary,
 			),
 		);
 	}

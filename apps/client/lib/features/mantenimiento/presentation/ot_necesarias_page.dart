@@ -747,7 +747,7 @@ class _Chip extends StatelessWidget {
 	Widget build(BuildContext context) {
 		final colors = switch (tone) {
 			_ChipTone.neutral => (const Color(0xFFE2E8F0), const Color(0xFF475569)),
-			_ChipTone.warning => (const Color(0xFFFEF3C7), const Color(0xFFB45309)),
+			_ChipTone.warning => (const Color(0xFFFFF0E6), AppColors.brandOrange),
 			_ChipTone.danger => (const Color(0xFFFEE2E2), const Color(0xFFB91C1C)),
 		};
 

@@ -67,6 +67,12 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 	async onModuleDestroy() {
 		await this.client.$disconnect();
 	}
+
+	// Los métodos $ del cliente extendido no se copian con Object.assign,
+	// por eso el readiness usa el cliente interno directamente.
+	async ping(): Promise<void> {
+		await this.client.$queryRaw`SELECT 1`;
+	}
 }
 
 export interface PrismaService extends ExtendedPrismaClient {}

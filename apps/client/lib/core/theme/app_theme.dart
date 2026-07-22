@@ -9,19 +9,19 @@ class AppTheme {
 	static ThemeData light() {
 		const scheme = ColorScheme(
 			brightness: Brightness.light,
-			primary: AppColors.primary,
+			primary: AppColors.brandPurpleDark,
 			onPrimary: AppColors.onPrimary,
-			secondary: AppColors.accent,
-			onSecondary: AppColors.onAccent,
+			secondary: AppColors.brandGreenDark,
+			onSecondary: AppColors.white,
 			error: AppColors.danger,
 			onError: AppColors.white,
 			surface: AppColors.surfaceLight,
 			onSurface: AppColors.ink,
 			onSurfaceVariant: AppColors.secondary,
-			outline: Color(0xFFE0E0E0),
-			outlineVariant: Color(0xFFEEEEEE),
+			outline: Color(0xFFE4DCEF),
+			outlineVariant: Color(0xFFEEE8F5),
 			surfaceContainerHighest: AppColors.surfaceMuted,
-			tertiary: AppColors.accent,
+			tertiary: AppColors.brandOrange,
 			onTertiary: AppColors.white,
 		);
 
@@ -57,7 +57,7 @@ class AppTheme {
 				color: AppColors.surfaceLight,
 				shape: RoundedRectangleBorder(
 					borderRadius: BorderRadius.circular(16),
-					side: const BorderSide(color: Color(0xFFE8E8E8)),
+					side: const BorderSide(color: Color(0xFFE8E0F0)),
 				),
 			),
 			inputDecorationTheme: InputDecorationTheme(
@@ -66,20 +66,20 @@ class AppTheme {
 				labelStyle: const TextStyle(color: AppColors.secondary),
 				border: OutlineInputBorder(
 					borderRadius: BorderRadius.circular(12),
-					borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+					borderSide: const BorderSide(color: Color(0xFFE0D8EC)),
 				),
 				enabledBorder: OutlineInputBorder(
 					borderRadius: BorderRadius.circular(12),
-					borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+					borderSide: const BorderSide(color: Color(0xFFE0D8EC)),
 				),
 				focusedBorder: OutlineInputBorder(
 					borderRadius: BorderRadius.circular(12),
-					borderSide: const BorderSide(color: AppColors.primary, width: 2),
+					borderSide: const BorderSide(color: AppColors.brandPurpleDark, width: 2),
 				),
 			),
 			filledButtonTheme: FilledButtonThemeData(
 				style: FilledButton.styleFrom(
-					backgroundColor: AppColors.primary,
+					backgroundColor: AppColors.brandPurpleDark,
 					foregroundColor: AppColors.onPrimary,
 					minimumSize: const Size(48, 48),
 					shape: RoundedRectangleBorder(
@@ -87,8 +87,32 @@ class AppTheme {
 					),
 				),
 			),
+			progressIndicatorTheme: const ProgressIndicatorThemeData(
+				color: AppColors.brandPurpleDark,
+			),
+			navigationBarTheme: NavigationBarThemeData(
+				backgroundColor: AppColors.white,
+				indicatorColor: AppColors.brandPurple.withValues(alpha: 0.16),
+				elevation: 0,
+				height: 64,
+				labelTextStyle: WidgetStateProperty.resolveWith((states) {
+					final selected = states.contains(WidgetState.selected);
+					return TextStyle(
+						fontSize: 11,
+						fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+						color: selected ? AppColors.brandPurpleDark : AppColors.secondary,
+					);
+				}),
+				iconTheme: WidgetStateProperty.resolveWith((states) {
+					final selected = states.contains(WidgetState.selected);
+					return IconThemeData(
+						color: selected ? AppColors.brandPurpleDark : AppColors.secondary,
+						size: 22,
+					);
+				}),
+			),
 			dividerTheme: const DividerThemeData(
-				color: Color(0xFFE8E8E8),
+				color: Color(0xFFE8E0F0),
 				thickness: 1,
 			),
 		);
@@ -97,10 +121,10 @@ class AppTheme {
 	static ThemeData dark() {
 		const scheme = ColorScheme(
 			brightness: Brightness.dark,
-			primary: AppColors.brandYellow,
-			onPrimary: AppColors.ink,
-			secondary: AppColors.accent,
-			onSecondary: AppColors.white,
+			primary: AppColors.brandPurple,
+			onPrimary: AppColors.onPrimary,
+			secondary: AppColors.brandGreen,
+			onSecondary: AppColors.black,
 			error: AppColors.danger,
 			onError: AppColors.white,
 			surface: AppColors.cardDark,
@@ -109,7 +133,7 @@ class AppTheme {
 			outline: AppColors.cardBorder,
 			outlineVariant: AppColors.cardBorder,
 			surfaceContainerHighest: AppColors.cardElevated,
-			tertiary: AppColors.accent,
+			tertiary: AppColors.brandOrange,
 			onTertiary: AppColors.white,
 		);
 
@@ -165,13 +189,13 @@ class AppTheme {
 				),
 				focusedBorder: OutlineInputBorder(
 					borderRadius: BorderRadius.circular(12),
-					borderSide: const BorderSide(color: AppColors.brandYellow, width: 1.5),
+					borderSide: const BorderSide(color: AppColors.brandPurple, width: 1.5),
 				),
 			),
 			filledButtonTheme: FilledButtonThemeData(
 				style: FilledButton.styleFrom(
-					backgroundColor: AppColors.brandYellow,
-					foregroundColor: AppColors.ink,
+					backgroundColor: AppColors.brandPurple,
+					foregroundColor: AppColors.onPrimary,
 					minimumSize: const Size(48, 44),
 					shape: RoundedRectangleBorder(
 						borderRadius: BorderRadius.circular(12),
@@ -190,7 +214,7 @@ class AppTheme {
 			),
 			chipTheme: ChipThemeData(
 				backgroundColor: AppColors.cardElevated,
-				selectedColor: AppColors.brandYellow.withValues(alpha: 0.15),
+				selectedColor: AppColors.brandPurple.withValues(alpha: 0.18),
 				labelStyle: const TextStyle(color: AppColors.white, fontSize: 12),
 				secondaryLabelStyle: const TextStyle(color: AppColors.white, fontSize: 12),
 				side: const BorderSide(color: AppColors.cardBorder),
@@ -202,7 +226,7 @@ class AppTheme {
 			),
 			navigationBarTheme: NavigationBarThemeData(
 				backgroundColor: AppColors.cardDark,
-				indicatorColor: AppColors.accent.withValues(alpha: 0.2),
+				indicatorColor: AppColors.brandPurple.withValues(alpha: 0.22),
 				elevation: 0,
 				height: 64,
 				labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -210,13 +234,13 @@ class AppTheme {
 					return TextStyle(
 						fontSize: 11,
 						fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-						color: selected ? AppColors.brandYellow : AppColors.mutedText,
+						color: selected ? AppColors.brandPurple : AppColors.mutedText,
 					);
 				}),
 				iconTheme: WidgetStateProperty.resolveWith((states) {
 					final selected = states.contains(WidgetState.selected);
 					return IconThemeData(
-						color: selected ? AppColors.brandYellow : AppColors.mutedText,
+						color: selected ? AppColors.brandPurple : AppColors.mutedText,
 						size: 22,
 					);
 				}),
@@ -232,7 +256,7 @@ class AppTheme {
 				),
 			),
 			progressIndicatorTheme: const ProgressIndicatorThemeData(
-				color: AppColors.brandYellow,
+				color: AppColors.brandPurple,
 			),
 		);
 	}

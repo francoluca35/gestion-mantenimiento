@@ -6,6 +6,7 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../components/sika_logo.dart';
 import '../layout/breakpoints.dart';
 import '../theme/app_colors.dart';
+import '../theme/theme_controller.dart';
 
 class AppNavItem {
 	const AppNavItem({
@@ -267,11 +268,17 @@ class AppShell extends ConsumerWidget {
 
 		final route = await showModalBottomSheet<String>(
 			context: context,
-			backgroundColor: AppColors.cardElevated,
+			backgroundColor:
+					Theme.of(context).brightness == Brightness.dark
+							? AppColors.cardElevated
+							: AppColors.white,
 			shape: const RoundedRectangleBorder(
 				borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
 			),
 			builder: (sheetContext) {
+				final scheme = Theme.of(sheetContext).colorScheme;
+				final onBg = scheme.onSurface;
+
 				return SafeArea(
 					child: Padding(
 						padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -283,7 +290,7 @@ class AppShell extends ConsumerWidget {
 									height: 4,
 									margin: const EdgeInsets.only(bottom: 16),
 									decoration: BoxDecoration(
-										color: Colors.white.withValues(alpha: 0.25),
+										color: onBg.withValues(alpha: 0.25),
 										borderRadius: BorderRadius.circular(2),
 									),
 								),
@@ -292,7 +299,7 @@ class AppShell extends ConsumerWidget {
 									child: Text(
 										'Menú',
 										style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-													color: Colors.white,
+													color: onBg,
 													fontWeight: FontWeight.w700,
 												),
 									),
@@ -304,7 +311,7 @@ class AppShell extends ConsumerWidget {
 										padding: const EdgeInsets.only(bottom: 4),
 										child: Material(
 											color: selected
-													? AppColors.brandYellow
+													? scheme.primary
 													: Colors.transparent,
 											borderRadius: BorderRadius.circular(12),
 											child: InkWell(
@@ -321,8 +328,8 @@ class AppShell extends ConsumerWidget {
 																selected ? item.selectedIcon : item.icon,
 																size: 22,
 																color: selected
-																		? AppColors.ink
-																		: Colors.white.withValues(alpha: 0.85),
+																		? scheme.onPrimary
+																		: onBg.withValues(alpha: 0.85),
 															),
 															const SizedBox(width: 14),
 															Expanded(
@@ -333,8 +340,8 @@ class AppShell extends ConsumerWidget {
 																				? FontWeight.w700
 																				: FontWeight.w500,
 																		color: selected
-																				? AppColors.ink
-																				: Colors.white.withValues(alpha: 0.9),
+																				? scheme.onPrimary
+																				: onBg.withValues(alpha: 0.9),
 																		fontSize: 15,
 																	),
 																),
@@ -343,8 +350,8 @@ class AppShell extends ConsumerWidget {
 																Icons.chevron_right_rounded,
 																size: 20,
 																color: selected
-																		? AppColors.ink.withValues(alpha: 0.5)
-																		: Colors.white.withValues(alpha: 0.35),
+																		? scheme.onPrimary.withValues(alpha: 0.6)
+																		: onBg.withValues(alpha: 0.35),
 															),
 														],
 													),
@@ -423,14 +430,16 @@ class AppShell extends ConsumerWidget {
 		);
 		final moreItems = _mobileMoreItems(items);
 		final selectedId = _selectedId();
-		final pageBg = AppColors.backgroundDark;
-		final navBg = AppColors.black;
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final pageBg =
+				isDark ? AppColors.backgroundDark : AppColors.backgroundLight;
+		final navBg = isDark ? AppColors.black : AppColors.white;
 		final moreSelected = moreItems.any((item) => item.id == selectedId);
 
 		if (isTechnician || isPanolero) {
 			return Scaffold(
 				backgroundColor: isPanolero ? AppColors.backgroundLight : pageBg,
-				body: child,
+				body: SafeArea(child: child),
 			);
 		}
 
@@ -441,8 +450,9 @@ class AppShell extends ConsumerWidget {
 			final navIndex = mobileIndex >= 0 ? mobileIndex : 0;
 
 			return Scaffold(
-				backgroundColor: AppColors.backgroundDark,
-				body: child,
+				backgroundColor: pageBg,
+				// bottom: false — la NavigationBar ya respeta el notch inferior
+				body: SafeArea(bottom: false, child: child),
 				bottomNavigationBar: NavigationBar(
 					selectedIndex: navIndex,
 					onDestinationSelected: (index) {
@@ -538,6 +548,10 @@ class _SidebarState extends State<_Sidebar> {
 		final width = _collapsed
 				? AppShell.sidebarCollapsedWidth
 				: AppShell.sidebarExpandedWidth;
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final borderColor = isDark
+				? Colors.white.withValues(alpha: 0.08)
+				: const Color(0xFFE8E0F0);
 
 		return Row(
 			children: [
@@ -550,13 +564,12 @@ class _SidebarState extends State<_Sidebar> {
 						child: Column(
 							crossAxisAlignment: CrossAxisAlignment.stretch,
 							children: [
-								Container(
-									color: AppColors.brandYellow,
+								Padding(
 									padding: EdgeInsets.fromLTRB(
 										_collapsed ? 12 : 20,
 										20,
 										_collapsed ? 12 : 20,
-										16,
+										4,
 									),
 									child: InkWell(
 										onTap: widget.onHome,
@@ -565,10 +578,13 @@ class _SidebarState extends State<_Sidebar> {
 												? const Center(
 														child: SikaLogo(size: 28, compact: true),
 													)
-												: const SikaLogo(
-														size: 44,
-														showTagline: true,
-													),
+												: _SidebarBrand(isDark: isDark),
+									),
+								),
+								Padding(
+									padding: const EdgeInsets.only(bottom: 10),
+									child: Center(
+										child: _ThemeToggleIcon(isDark: isDark),
 									),
 								),
 								Expanded(
@@ -599,9 +615,7 @@ class _SidebarState extends State<_Sidebar> {
 									),
 									child: Column(
 										children: [
-											Divider(
-												color: Colors.white.withValues(alpha: 0.1),
-											),
+											Divider(color: borderColor),
 											if (!_collapsed && widget.userName.isNotEmpty) ...[
 												Padding(
 													padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
@@ -611,8 +625,10 @@ class _SidebarState extends State<_Sidebar> {
 															widget.userName.toUpperCase(),
 															maxLines: 1,
 															overflow: TextOverflow.ellipsis,
-															style: const TextStyle(
-																color: AppColors.brandYellow,
+															style: TextStyle(
+																color: isDark
+																		? AppColors.brandPurple
+																		: AppColors.brandPurpleDark,
 																fontWeight: FontWeight.w800,
 																fontSize: 12,
 																letterSpacing: 0.3,
@@ -630,7 +646,9 @@ class _SidebarState extends State<_Sidebar> {
 																maxLines: 1,
 																overflow: TextOverflow.ellipsis,
 																style: TextStyle(
-																	color: Colors.white.withValues(alpha: 0.85),
+																	color: isDark
+																			? Colors.white.withValues(alpha: 0.85)
+																			: AppColors.ink,
 																	fontSize: 12,
 																	fontWeight: FontWeight.w500,
 																),
@@ -647,7 +665,9 @@ class _SidebarState extends State<_Sidebar> {
 																maxLines: 1,
 																overflow: TextOverflow.ellipsis,
 																style: TextStyle(
-																	color: Colors.white.withValues(alpha: 0.55),
+																	color: isDark
+																			? Colors.white.withValues(alpha: 0.55)
+																			: AppColors.secondary,
 																	fontSize: 11,
 																	fontWeight: FontWeight.w500,
 																),
@@ -677,6 +697,66 @@ class _SidebarState extends State<_Sidebar> {
 	}
 }
 
+class _ThemeToggleIcon extends ConsumerWidget {
+	const _ThemeToggleIcon({required this.isDark});
+
+	final bool isDark;
+
+	@override
+	Widget build(BuildContext context, WidgetRef ref) {
+		final fg = isDark
+				? Colors.white.withValues(alpha: 0.85)
+				: AppColors.ink.withValues(alpha: 0.75);
+		final border = isDark
+				? Colors.white.withValues(alpha: 0.14)
+				: const Color(0xFFE4DCEF);
+
+		return Tooltip(
+			message: isDark ? 'Modo claro' : 'Modo oscuro',
+			child: Material(
+				color: Colors.transparent,
+				shape: CircleBorder(side: BorderSide(color: border)),
+				child: InkWell(
+					customBorder: const CircleBorder(),
+					onTap: () =>
+							ref.read(themeControllerProvider.notifier).toggleLightDark(),
+					child: Padding(
+						padding: const EdgeInsets.all(8),
+						child: AnimatedSwitcher(
+							duration: const Duration(milliseconds: 250),
+							transitionBuilder: (child, anim) => RotationTransition(
+								turns: Tween(begin: 0.75, end: 1.0).animate(anim),
+								child: FadeTransition(opacity: anim, child: child),
+							),
+							child: Icon(
+								isDark
+										? Icons.light_mode_outlined
+										: Icons.dark_mode_outlined,
+								key: ValueKey(isDark),
+								size: 18,
+								color: fg,
+							),
+						),
+					),
+				),
+			),
+		);
+	}
+}
+
+class _SidebarBrand extends StatelessWidget {
+	const _SidebarBrand({required this.isDark});
+
+	final bool isDark;
+
+	@override
+	Widget build(BuildContext context) {
+		return const Center(
+			child: SikaLogo(size: 110, compact: true),
+		);
+	}
+}
+
 class _NavTile extends StatelessWidget {
 	const _NavTile({
 		required this.item,
@@ -693,10 +773,17 @@ class _NavTile extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		final icon = selected ? item.selectedIcon : item.icon;
-		final fgColor = selected ? AppColors.ink : Colors.white.withValues(alpha: 0.82);
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final fgColor = selected
+				? AppColors.onPrimary
+				: (isDark
+						? Colors.white.withValues(alpha: 0.82)
+						: AppColors.ink.withValues(alpha: 0.82));
 
 		final tile = Material(
-			color: selected ? AppColors.brandYellow : Colors.transparent,
+			color: selected
+					? (isDark ? AppColors.brandPurple : AppColors.brandPurpleDark)
+					: Colors.transparent,
 			borderRadius: BorderRadius.circular(12),
 			child: InkWell(
 				borderRadius: BorderRadius.circular(12),
@@ -751,35 +838,63 @@ class _SidebarCollapseHandle extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final lineColor =
+				isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE8E0F0);
+		final buttonBg = isDark ? AppColors.cardElevated : AppColors.white;
+
 		return SizedBox(
 			width: 20,
 			child: Stack(
 				clipBehavior: Clip.none,
 				children: [
-					const Positioned.fill(
-						child: VerticalDivider(
-							width: 1,
-							color: Color(0xFF2A2A2A),
-						),
+					Positioned.fill(
+						child: VerticalDivider(width: 1, color: lineColor),
 					),
 					Positioned(
-						left: -14,
-						top: 28,
-						child: Material(
-							color: AppColors.brandYellow,
-							shape: const CircleBorder(),
-							elevation: 2,
-							child: InkWell(
-								customBorder: const CircleBorder(),
-								onTap: onToggle,
-								child: Padding(
-									padding: const EdgeInsets.all(6),
-									child: Icon(
-										collapsed
-												? Icons.chevron_right_rounded
-												: Icons.chevron_left_rounded,
-										size: 18,
-										color: AppColors.ink,
+						left: -13,
+						top: 30,
+						child: Tooltip(
+							message: collapsed ? 'Expandir menú' : 'Colapsar menú',
+							child: AnimatedContainer(
+								duration: const Duration(milliseconds: 200),
+								decoration: BoxDecoration(
+									color: buttonBg,
+									shape: BoxShape.circle,
+									border: Border.all(
+										color: AppColors.brandPurple.withValues(alpha: 0.45),
+									),
+									boxShadow: [
+										BoxShadow(
+											color: Colors.black.withValues(
+												alpha: isDark ? 0.4 : 0.08,
+											),
+											blurRadius: 8,
+											offset: const Offset(0, 2),
+										),
+									],
+								),
+								child: Material(
+									color: Colors.transparent,
+									shape: const CircleBorder(),
+									child: InkWell(
+										customBorder: const CircleBorder(),
+										onTap: onToggle,
+										child: Padding(
+											padding: const EdgeInsets.all(5),
+											child: AnimatedRotation(
+												duration: const Duration(milliseconds: 220),
+												curve: Curves.easeOutCubic,
+												turns: collapsed ? 0.5 : 0,
+												child: Icon(
+													Icons.chevron_left_rounded,
+													size: 16,
+													color: isDark
+															? AppColors.brandPurple
+															: AppColors.brandPurpleDark,
+												),
+											),
+										),
 									),
 								),
 							),

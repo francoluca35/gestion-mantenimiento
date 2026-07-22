@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import 'perfil_form_sheet.dart';
@@ -150,10 +151,31 @@ class _PerfilesPageState extends ConsumerState<PerfilesPage> {
 												style: const TextStyle(fontWeight: FontWeight.w600),
 											),
 											subtitle: Text(
-												item['descripcion'] as String? ??
-														'${count?['usuarios'] ?? 0} usuarios · ${count?['derechos'] ?? 0} derechos',
+												[
+													item['descripcion'] as String? ??
+															'${count?['usuarios'] ?? 0} usuarios · ${count?['derechos'] ?? 0} derechos',
+													activo ? 'Activo' : 'Inactivo',
+												].join(' · '),
 											),
-											trailing: Row(
+											trailing: isCompactLayout(context)
+													? Row(
+															mainAxisSize: MainAxisSize.min,
+															children: [
+																if (puedeDerechos)
+																	IconButton(
+																		tooltip: 'Derechos',
+																		onPressed: () => _abrirDerechos(item),
+																		icon: const Icon(Icons.account_tree_outlined),
+																	),
+																if (puedeBorrar && activo)
+																	IconButton(
+																		tooltip: 'Desactivar',
+																		onPressed: () => _desactivar(item),
+																		icon: const Icon(Icons.block_outlined, size: 20),
+																	),
+															],
+														)
+													: Row(
 												mainAxisSize: MainAxisSize.min,
 												children: [
 													if (puedeDerechos)

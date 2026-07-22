@@ -266,7 +266,7 @@ class _SolicitarMaterialesSheetState
 									child: FilledButton(
 										style: FilledButton.styleFrom(
 											backgroundColor: AppColors.brandYellow,
-											foregroundColor: AppColors.ink,
+											foregroundColor: AppColors.onPrimary,
 											minimumSize: const Size.fromHeight(48),
 										),
 										onPressed:

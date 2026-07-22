@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/layout/breakpoints.dart';
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_user.dart';
@@ -727,7 +728,53 @@ class _StockPageState extends ConsumerState<StockPage> {
 															horizontal: 16,
 															vertical: 14,
 														),
-														child: Row(
+														child: isCompactLayout(context)
+																? Column(
+																		crossAxisAlignment: CrossAxisAlignment.start,
+																		children: [
+																			Row(
+																				children: [
+																					Expanded(
+																						child: Text(
+																							'${mat['codigo'] ?? ''}',
+																							style: TextStyle(
+																								fontWeight: FontWeight.w800,
+																								fontSize: 13,
+																								letterSpacing: 0.2,
+																								color: PanolUi.of(context).ink,
+																							),
+																						),
+																					),
+																					PanolStatusPill(
+																						label: bajo ? 'Bajo stock' : 'OK',
+																						tone: bajo
+																								? PanolKpiTone.danger
+																								: PanolKpiTone.success,
+																					),
+																				],
+																			),
+																			const SizedBox(height: 6),
+																			Text(
+																				'${mat['nombre'] ?? ''}',
+																				style: TextStyle(
+																					fontWeight: FontWeight.w600,
+																					fontSize: 14,
+																					color: PanolUi.of(context).ink,
+																				),
+																			),
+																			Text(
+																				'${mat['uso'] ?? '—'} · Disp. ${_disponible(item)}',
+																				style: TextStyle(
+																					color: bajo
+																							? AppColors.brandRed
+																							: PanolUi.of(context).muted,
+																					fontSize: 12,
+																					fontWeight: FontWeight.w700,
+																				),
+																			),
+																		],
+																	)
+																: Row(
 															children: [
 																Expanded(
 																	flex: 2,
@@ -826,7 +873,7 @@ class _StockPageState extends ConsumerState<StockPage> {
 						child: FilledButton.icon(
 							style: FilledButton.styleFrom(
 								backgroundColor: AppColors.brandYellow,
-								foregroundColor: AppColors.ink,
+								foregroundColor: AppColors.onPrimary,
 								shape: RoundedRectangleBorder(
 									borderRadius: BorderRadius.circular(12),
 								),

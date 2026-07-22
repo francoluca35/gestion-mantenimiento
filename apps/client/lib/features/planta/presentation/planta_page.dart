@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_user.dart';
@@ -54,6 +55,8 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 	String _search = '';
 	bool _loading = true;
 	String? _error;
+	/// En mobile/tablet: muestra detalle a pantalla completa tras elegir un nodo.
+	bool _compactShowDetail = false;
 
 	AuthUser? get _user => ref.read(authControllerProvider).session?.usuario;
 
@@ -273,9 +276,17 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 	}
 
 	Future<void> _select(_TreeNode node) async {
+		final compact =
+				MediaQuery.sizeOf(context).width < Breakpoints.tablet;
 		setState(() {
 			_selected = node;
 			_equipoDetalle = null;
+			// En mobile solo abrimos detalle al tocar máquina (acciones quedan en el árbol).
+			if (compact && node.kind == _NodeKind.maquina) {
+				_compactShowDetail = true;
+			} else if (compact && node.kind != _NodeKind.maquina) {
+				_compactShowDetail = false;
+			}
 		});
 
 		if (node.kind == _NodeKind.maquina) {
@@ -661,8 +672,8 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 					return AlertDialog(
 						title: const Text('Buscar máquina'),
 						content: SizedBox(
-							width: 460,
-							height: 460,
+							width: (MediaQuery.sizeOf(context).width - 48).clamp(280.0, 460.0),
+							height: (MediaQuery.sizeOf(context).height * 0.55).clamp(280.0, 460.0),
 							child: Column(
 								crossAxisAlignment: CrossAxisAlignment.stretch,
 								children: [
@@ -894,6 +905,7 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 		final isDark = Theme.of(context).brightness == Brightness.dark;
 		final explorerBg = isDark ? AppColors.explorerPanel : Colors.white;
 		final pageBg = isDark ? AppColors.backgroundDark : const Color(0xFFF1F5F9);
+		final compact = MediaQuery.sizeOf(context).width < Breakpoints.tablet;
 
 		if (_loading) {
 			return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -909,71 +921,45 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 		final root = _buildExplorerTree();
 		final visible = _filterTree(root);
 
+		if (compact) {
+			return Scaffold(
+				backgroundColor: pageBg,
+				body: _compactShowDetail
+						? _buildDetailColumn(
+								scheme: scheme,
+								pageBg: pageBg,
+								compact: true,
+								onBackToExplorer: () => setState(() => _compactShowDetail = false),
+							)
+						: Column(
+								children: [
+									_buildToolbar(),
+									Expanded(
+										child: _buildExplorerPanel(
+											scheme: scheme,
+											explorerBg: explorerBg,
+											isDark: isDark,
+											visible: visible,
+											compact: true,
+										),
+									),
+								],
+							),
+			);
+		}
+
 		return Scaffold(
 			backgroundColor: pageBg,
 			body: Row(
 				children: [
 					SizedBox(
 						width: 320,
-						child: Material(
-							color: explorerBg,
-							child: Column(
-								crossAxisAlignment: CrossAxisAlignment.stretch,
-								children: [
-									Padding(
-										padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-										child: Text(
-											'Explorador de equipos',
-											style: Theme.of(context).textTheme.titleMedium?.copyWith(
-														fontWeight: FontWeight.w700,
-													),
-										),
-									),
-									Padding(
-										padding: const EdgeInsets.symmetric(horizontal: 16),
-										child: TextField(
-											onChanged: (value) => setState(() => _search = value),
-											decoration: InputDecoration(
-												hintText: 'Buscar sector o máquina…',
-												helperText: 'Ej: SILO, sector losa, código de máquina',
-												helperMaxLines: 2,
-												prefixIcon: const Icon(Icons.search, size: 20),
-												filled: true,
-												fillColor: isDark
-														? Colors.white.withValues(alpha: 0.06)
-														: const Color(0xFFF8FAFC),
-												border: OutlineInputBorder(
-													borderRadius: BorderRadius.circular(12),
-													borderSide: BorderSide.none,
-												),
-												contentPadding: const EdgeInsets.symmetric(vertical: 12),
-											),
-										),
-									),
-									const SizedBox(height: 8),
-									Expanded(
-										child: visible.isEmpty
-												? const Center(child: Text('Sin resultados'))
-												: ListView(
-														padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
-														children: visible
-																.map(
-																	(node) => _ExplorerTile(
-																		node: node,
-																		selectedId: _selected?.id,
-																		depth: 0,
-																		onSelect: _select,
-																		onDrop: _onDrop,
-																		canDragEquipo: _canMoverEquipos,
-																		canDragUbicacion: _canMoverUbicaciones,
-																		isUbicacionHoja: _isUbicacionHoja,
-																	),
-																)
-																.toList(),
-													),
-									),
-								],
-							),
+						child: _buildExplorerPanel(
+							scheme: scheme,
+							explorerBg: explorerBg,
+							isDark: isDark,
+							visible: visible,
+							compact: false,
 						),
 					),
 					VerticalDivider(
@@ -981,76 +967,207 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 						color: scheme.outlineVariant.withValues(alpha: 0.4),
 					),
 					Expanded(
-						child: Column(
-							children: [
-								PlantaToolbar(
-									plantaNombre: _plantaNombre ?? '',
-									onRefresh: _bootstrap,
-									sucursales: _canCambiarPlanta ? _sucursales : const [],
-									sucursalId: _sucursalId,
-									onSucursalChanged: _canCambiarPlanta ? _onSucursalChanged : null,
-									selectionKind: switch (_selected?.kind) {
-										_NodeKind.maquina => 'maquina',
-										_NodeKind.ubicacion => 'ubicacion',
-										_NodeKind.planta => 'planta',
-										_ => null,
-									},
-									clipboardLabel: _clipboard?.nombre,
-									canAgregar: _showAddButton,
-									onAgregar: _onAddPressed,
-									canModificar:
-											(_selected?.kind == _NodeKind.maquina && _canModificarEquipos) ||
-											(_selected?.kind == _NodeKind.ubicacion && _canModificarUbicaciones),
-									onModificar: _onToolbarModificar,
-									canEliminar:
-											(_selected?.kind == _NodeKind.maquina && _canBorrarEquipos) ||
-											(_selected?.kind == _NodeKind.ubicacion && _canBorrarUbicaciones),
-									onEliminar: _onToolbarEliminar,
-									canMover:
-											(_selected?.kind == _NodeKind.maquina && _canMoverEquipos) ||
-											(_selected?.kind == _NodeKind.ubicacion && _canMoverUbicaciones),
-									onMover: _onToolbarMover,
-									canCopiar: _selected?.kind == _NodeKind.maquina && _canCopiarEquipos,
-									onCopiar: _copiarEquipoSeleccionado,
-									canCortar: _selected?.kind == _NodeKind.maquina && _canMoverEquipos,
-									onCortar: _cortarEquipoSeleccionado,
-									canPegar: _canPegar,
-									onPegar: _canPegar ? () => _pegarClipboard() : null,
-									onBuscar: () => _listarEquipos(),
-									onImprimir: _imprimirEquipos,
-									onExportar: _exportEquipos,
-								),
-								Expanded(
-									child: ListView(
-										padding: const EdgeInsets.all(20),
-										children: [
-											_StatsRow(
-												total: _totalMaquinas,
-												activos: _activas,
-												desactivados: _desactivadas,
-												sectores: _sectoresCount,
-											),
-											const SizedBox(height: 20),
-											_DetailPanel(
-												selected: _selected,
-												equipoDetalle: _equipoDetalle,
-												plantaNombre: _plantaNombre ?? '',
-												empresaNombre: _empresaNombre,
-												sucursalId: _sucursalId,
-												emptyTree: _ubicacionesTree.isEmpty,
-												canEdit: _canEditUbicaciones,
-												onCreateFirstUbicacion: _canEditUbicaciones
-														? () => _createUbicacion()
-														: null,
-												onEquipoUpdated: _onEquipoUpdated,
-												onEditUbicacion: _canModificarUbicaciones ? _editUbicacion : null,
-												onDeleteUbicacion: _canBorrarUbicaciones ? _deleteUbicacion : null,
-												onMoverUbicacion: _canMoverUbicaciones ? _moverUbicacion : null,
-												onEditEquipo: _canModificarEquipos ? (_) => _editEquipo() : null,
-												onMoverEquipo: _canMoverEquipos ? (_) => _moverEquipo() : null,
-											),
-										],
+						child: _buildDetailColumn(
+							scheme: scheme,
+							pageBg: pageBg,
+							compact: false,
+						),
+					),
+				],
+			),
+		);
+	}
+
+	Widget _buildToolbar() {
+		return PlantaToolbar(
+			plantaNombre: _plantaNombre ?? '',
+			onRefresh: _bootstrap,
+			sucursales: _canCambiarPlanta ? _sucursales : const [],
+			sucursalId: _sucursalId,
+			onSucursalChanged: _canCambiarPlanta ? _onSucursalChanged : null,
+			selectionKind: switch (_selected?.kind) {
+				_NodeKind.maquina => 'maquina',
+				_NodeKind.ubicacion => 'ubicacion',
+				_NodeKind.planta => 'planta',
+				_ => null,
+			},
+			clipboardLabel: _clipboard?.nombre,
+			canAgregar: _showAddButton,
+			onAgregar: _onAddPressed,
+			canModificar:
+					(_selected?.kind == _NodeKind.maquina && _canModificarEquipos) ||
+					(_selected?.kind == _NodeKind.ubicacion && _canModificarUbicaciones),
+			onModificar: _onToolbarModificar,
+			canEliminar:
+					(_selected?.kind == _NodeKind.maquina && _canBorrarEquipos) ||
+					(_selected?.kind == _NodeKind.ubicacion && _canBorrarUbicaciones),
+			onEliminar: _onToolbarEliminar,
+			canMover:
+					(_selected?.kind == _NodeKind.maquina && _canMoverEquipos) ||
+					(_selected?.kind == _NodeKind.ubicacion && _canMoverUbicaciones),
+			onMover: _onToolbarMover,
+			canCopiar: _selected?.kind == _NodeKind.maquina && _canCopiarEquipos,
+			onCopiar: _copiarEquipoSeleccionado,
+			canCortar: _selected?.kind == _NodeKind.maquina && _canMoverEquipos,
+			onCortar: _cortarEquipoSeleccionado,
+			canPegar: _canPegar,
+			onPegar: _canPegar ? () => _pegarClipboard() : null,
+			onBuscar: () => _listarEquipos(),
+			onImprimir: _imprimirEquipos,
+			onExportar: _exportEquipos,
+		);
+	}
+
+	Widget _buildExplorerPanel({
+		required ColorScheme scheme,
+		required Color explorerBg,
+		required bool isDark,
+		required List<_TreeNode> visible,
+		required bool compact,
+	}) {
+		return Material(
+			color: explorerBg,
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.stretch,
+				children: [
+					Padding(
+						padding: EdgeInsets.fromLTRB(compact ? 16 : 20, compact ? 12 : 20, 16, 8),
+						child: Text(
+							'Explorador de equipos',
+							style: Theme.of(context).textTheme.titleMedium?.copyWith(
+										fontWeight: FontWeight.w700,
 									),
+						),
+					),
+					if (compact)
+						Padding(
+							padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+							child: Text(
+								'Seleccioná un sector para Agregar/Editar. Tocá una máquina para ver su ficha.',
+								style: TextStyle(
+									fontSize: 12,
+									color: scheme.onSurfaceVariant,
+								),
+							),
+						),
+					Padding(
+						padding: const EdgeInsets.symmetric(horizontal: 16),
+						child: TextField(
+							onChanged: (value) => setState(() => _search = value),
+							decoration: InputDecoration(
+								hintText: 'Buscar sector o máquina…',
+								helperText: compact ? null : 'Ej: SILO, sector losa, código de máquina',
+								helperMaxLines: 2,
+								prefixIcon: const Icon(Icons.search, size: 20),
+								filled: true,
+								fillColor: isDark
+										? Colors.white.withValues(alpha: 0.06)
+										: const Color(0xFFF8FAFC),
+								border: OutlineInputBorder(
+									borderRadius: BorderRadius.circular(12),
+									borderSide: BorderSide.none,
+								),
+								contentPadding: const EdgeInsets.symmetric(vertical: 12),
+							),
+						),
+					),
+					const SizedBox(height: 8),
+					Expanded(
+						child: visible.isEmpty
+								? const Center(child: Text('Sin resultados'))
+								: ListView(
+										padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+										children: visible
+												.map(
+													(node) => _ExplorerTile(
+														node: node,
+														selectedId: _selected?.id,
+														depth: 0,
+														onSelect: _select,
+														onDrop: _onDrop,
+														canDragEquipo: _canMoverEquipos,
+														canDragUbicacion: _canMoverUbicaciones,
+														isUbicacionHoja: _isUbicacionHoja,
+													),
+												)
+												.toList(),
+									),
+					),
+				],
+			),
+		);
+	}
+
+	Widget _buildDetailColumn({
+		required ColorScheme scheme,
+		required Color pageBg,
+		required bool compact,
+		VoidCallback? onBackToExplorer,
+	}) {
+		return ColoredBox(
+			color: pageBg,
+			child: Column(
+				children: [
+					if (onBackToExplorer != null)
+						Material(
+							color: scheme.surface,
+							child: SafeArea(
+								bottom: false,
+								child: InkWell(
+									onTap: onBackToExplorer,
+									child: Padding(
+										padding: const EdgeInsets.fromLTRB(8, 4, 12, 4),
+										child: Row(
+											children: [
+												Icon(Icons.arrow_back_rounded, color: scheme.onSurface),
+												const SizedBox(width: 8),
+												Expanded(
+													child: Text(
+														_selected?.label ?? 'Explorador',
+														maxLines: 1,
+														overflow: TextOverflow.ellipsis,
+														style: const TextStyle(fontWeight: FontWeight.w700),
+													),
+												),
+												TextButton(
+													onPressed: onBackToExplorer,
+													child: const Text('Árbol'),
+												),
+											],
+										),
+									),
+								),
+							),
+						),
+					_buildToolbar(),
+					Expanded(
+						child: ListView(
+							padding: EdgeInsets.all(compact ? 12 : 20),
+							children: [
+								_StatsRow(
+									total: _totalMaquinas,
+									activos: _activas,
+									desactivados: _desactivadas,
+									sectores: _sectoresCount,
+								),
+								SizedBox(height: compact ? 12 : 20),
+								_DetailPanel(
+									selected: _selected,
+									equipoDetalle: _equipoDetalle,
+									plantaNombre: _plantaNombre ?? '',
+									empresaNombre: _empresaNombre,
+									sucursalId: _sucursalId,
+									emptyTree: _ubicacionesTree.isEmpty,
+									canEdit: _canEditUbicaciones,
+									onCreateFirstUbicacion: _canEditUbicaciones
+											? () => _createUbicacion()
+											: null,
+									onEquipoUpdated: _onEquipoUpdated,
+									onEditUbicacion: _canModificarUbicaciones ? _editUbicacion : null,
+									onDeleteUbicacion: _canBorrarUbicaciones ? _deleteUbicacion : null,
+									onMoverUbicacion: _canMoverUbicaciones ? _moverUbicacion : null,
+									onEditEquipo: _canModificarEquipos ? (_) => _editEquipo() : null,
+									onMoverEquipo: _canMoverEquipos ? (_) => _moverEquipo() : null,
 								),
 							],
 						),
@@ -1283,7 +1400,7 @@ class _ExplorerTileState extends State<_ExplorerTile> {
 				borderRadius: BorderRadius.circular(10),
 				onTap: () => widget.onSelect(node),
 				child: Padding(
-					padding: EdgeInsets.fromLTRB(8.0 + widget.depth * 14, 10, 8, 10),
+					padding: EdgeInsets.fromLTRB(8.0 + (widget.depth.clamp(0, 8) * 12.0), 10, 8, 10),
 					child: Row(
 						children: [
 							Icon(_icon, size: 18, color: scheme.onSurfaceVariant),
@@ -1300,6 +1417,8 @@ class _ExplorerTileState extends State<_ExplorerTile> {
 							Expanded(
 								child: Text(
 									node.label,
+									maxLines: 1,
+									overflow: TextOverflow.ellipsis,
 									style: TextStyle(
 										fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
 										fontSize: 13,

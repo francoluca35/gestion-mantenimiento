@@ -2,7 +2,11 @@
 
 Documento maestro: **qué hay**, **qué falta** y **qué mejorar**.
 
-**Última actualización:** 2026-07-17
+**Última actualización:** 2026-07-20
+
+**Para personas (no técnicas):**
+- Inventario + roles + mejoras → [`inventario-app.md`](inventario-app.md)
+- Manual de uso paso a paso → [`manual-de-uso.md`](manual-de-uso.md)
 
 ---
 
@@ -19,7 +23,8 @@ Documento maestro: **qué hay**, **qué falta** y **qué mejorar**.
 | **M7 Notificaciones** | 🟢 ~95% | Sprint 4 cerrado: FCM + deep-link Mis OT (smoke ops en dispositivo) |
 | **Paridad SGwing** | 🟡 ~62% | + reserva materiales (sgwing-04) vía M4 |
 | **Paridad SGMWin manual** | 🟡 ~45% | Ver `MATRIZ-PARIDAD.md` |
-| **Shell adaptativo móvil** | 🟡 ~75% | Bottom nav por rol, sidebars colapsables con flecha |
+| **Shell adaptativo móvil** | 🟡 ~80% | Bottom nav + toolbar Planta con menú Acciones en móvil |
+| **Infra demo 2m** | 🟢 lista | Compose robusto + tunnel + backups + autostart |
 
 **Principio de plataforma:** un solo Flutter (Web + Android), **todos los roles** en ambas plataformas. Misma API y permisos; la UI se adapta al ancho de pantalla y al perfil del usuario.
 

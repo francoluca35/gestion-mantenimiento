@@ -15,28 +15,28 @@ class ConfigPage extends StatelessWidget {
 				'Usuarios',
 				'Alta y gestión de usuarios',
 				'/usuarios',
-				AppColors.brandYellow,
+				AppColors.brandPurple,
 			),
 			(
 				Icons.badge_outlined,
 				'Perfiles',
 				'Perfiles y derechos',
 				'/perfiles',
-				AppColors.accent,
+				AppColors.brandOrange,
 			),
 			(
 				Icons.apartment_outlined,
 				'Plantas',
 				'Sucursales del sistema',
 				'/sucursales',
-				AppColors.mutedText,
+				AppColors.brandGreenDark,
 			),
 			(
 				Icons.account_tree_outlined,
 				'Derechos',
 				'Catálogo global (solo lectura)',
 				'/derechos',
-				AppColors.primary,
+				AppColors.brandPurpleDark,
 			),
 		];
 

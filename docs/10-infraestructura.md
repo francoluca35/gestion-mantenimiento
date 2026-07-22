@@ -108,6 +108,27 @@ Cloudflare Tunnel → HTTPS
 | Push | Firebase FCM |
 | Acceso 4G | Tunnel + dominio + HTTPS |
 
+### Demo 2 meses (Sprint 5) — PC Windows 24/7
+
+Stack endurecido: Postgres + API (storage local) + backup diario + Cloudflare Tunnel.
+
+```powershell
+cp .env.demo.example .env.demo
+# Editar secretos, PUBLIC_BASE_URL, CLOUDFLARE_TUNNEL_TOKEN
+powershell -File scripts/demo-up.ps1 -WithTunnel -Seed
+powershell -File scripts/install-autostart.ps1
+```
+
+| Acceso | URL |
+|--------|-----|
+| Público (móvil) | `https://api.sorjuanaliberte.store/v1` |
+| LAN fallback | `http://<IP-PC>:3000/v1` |
+| Health | `GET /v1/health` · Ready `GET /v1/ready` |
+
+Solo se publica el puerto **3000**. Fotos/firmas van por la API (`STORAGE_PROVIDER=local`), no hace falta MinIO público.
+
+Checklist y detalle: [`faltantes/sprint-5-infra-demo.md`](faltantes/sprint-5-infra-demo.md).
+
 ---
 
 ## Flutter

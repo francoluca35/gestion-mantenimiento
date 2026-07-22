@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 
-/// Logo triangular Sika + tagline corporativa.
+/// Logo GESTION (imagen de marca) + tagline tricolor opcional.
 class SikaLogo extends StatelessWidget {
 	const SikaLogo({
 		super.key,
@@ -19,55 +19,75 @@ class SikaLogo extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		final tagColor = taglineColor ?? AppColors.accent;
+		final onSurface = Theme.of(context).colorScheme.onSurface;
+		final sep = onSurface.withValues(alpha: 0.45);
 
-		if (compact) {
-			return CustomPaint(
-				size: Size(size, size * 0.9),
-				painter: const _SikaTrianglePainter(),
-			);
-		}
+		final mark = Image.asset(
+			'assets/logo.png',
+			width: size,
+			height: size,
+			fit: BoxFit.contain,
+			filterQuality: FilterQuality.medium,
+		);
+
+		if (compact) return mark;
+
+		final tagline = showTagline
+				? (taglineColor != null
+						? Text(
+								'GESTIÓN INTELIGENTE',
+								style: TextStyle(
+									color: taglineColor,
+									fontSize: size * 0.18,
+									fontWeight: FontWeight.w800,
+									letterSpacing: 0.6,
+									height: 1.2,
+								),
+							)
+						: Text.rich(
+								TextSpan(
+									style: TextStyle(
+										fontSize: size * 0.18,
+										fontWeight: FontWeight.w800,
+										letterSpacing: 0.6,
+										height: 1.2,
+									),
+									children: [
+										const TextSpan(
+											text: 'MANTENIMIENTO',
+											style: TextStyle(color: AppColors.brandPurple),
+										),
+										TextSpan(
+											text: ' | ',
+											style: TextStyle(color: sep),
+										),
+										const TextSpan(
+											text: 'STOCK',
+											style: TextStyle(color: AppColors.brandGreen),
+										),
+										TextSpan(
+											text: ' | ',
+											style: TextStyle(color: sep),
+										),
+										const TextSpan(
+											text: 'EFICIENCIA',
+											style: TextStyle(color: AppColors.brandOrange),
+										),
+									],
+								),
+							))
+				: null;
 
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.start,
 			mainAxisSize: MainAxisSize.min,
 			children: [
-				CustomPaint(
-					size: Size(size, size * 0.9),
-					painter: const _SikaTrianglePainter(),
-				),
-				if (showTagline) ...[
-					const SizedBox(height: 6),
-					Text(
-						'CONSTRUYENDO CONFIANZA',
-						style: TextStyle(
-							color: tagColor,
-							fontSize: size * 0.22,
-							fontWeight: FontWeight.w800,
-							letterSpacing: 0.4,
-							height: 1.1,
-						),
-					),
+				mark,
+				if (tagline != null) ...[
+					const SizedBox(height: 8),
+					tagline,
 				],
 			],
 		);
 	}
-}
-
-class _SikaTrianglePainter extends CustomPainter {
-	const _SikaTrianglePainter();
-
-	@override
-	void paint(Canvas canvas, Size size) {
-		final path = Path()
-				..moveTo(size.width * 0.5, 0)
-				..lineTo(size.width, size.height)
-				..lineTo(0, size.height)
-				..close();
-
-		canvas.drawPath(path, Paint()..color = AppColors.accent);
-	}
-
-	@override
-	bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

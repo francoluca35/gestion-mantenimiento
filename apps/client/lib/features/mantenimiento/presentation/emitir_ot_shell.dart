@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 
 class EmitirOtPageShell extends StatelessWidget {
@@ -23,11 +24,12 @@ class EmitirOtPageShell extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
+		final pad = responsivePagePadding(context);
 		return ListView(
-			padding: const EdgeInsets.all(24),
+			padding: pad,
 			children: [
 				Container(
-					padding: const EdgeInsets.all(24),
+					padding: pad,
 					decoration: BoxDecoration(
 						gradient: LinearGradient(
 							colors: gradient,
@@ -86,7 +88,7 @@ class EmitirOtPageShell extends StatelessWidget {
 						color: Theme.of(context).colorScheme.surface,
 						borderRadius: BorderRadius.circular(20),
 						child: Container(
-							padding: const EdgeInsets.all(24),
+							padding: pad,
 							decoration: BoxDecoration(
 								borderRadius: BorderRadius.circular(20),
 								border: Border.all(
@@ -122,22 +124,39 @@ class EmitirOtFormActions extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
+		final cancel = OutlinedButton(
+			onPressed: submitting ? null : onCancel,
+			child: const Text('Cancelar'),
+		);
+		final submit = FilledButton.icon(
+			style: FilledButton.styleFrom(backgroundColor: accentColor),
+			onPressed: submitting ? null : onSubmit,
+			icon: submitting
+					? const SizedBox(
+							width: 18,
+							height: 18,
+							child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+						)
+					: const Icon(Icons.send_rounded, size: 18),
+			label: Text(submitLabel),
+		);
+
+		if (isCompactLayout(context)) {
+			return Column(
+				crossAxisAlignment: CrossAxisAlignment.stretch,
+				children: [
+					submit,
+					const SizedBox(height: 10),
+					cancel,
+				],
+			);
+		}
+
 		return Row(
 			children: [
-				OutlinedButton(onPressed: submitting ? null : onCancel, child: const Text('Cancelar')),
+				cancel,
 				const Spacer(),
-				FilledButton.icon(
-					style: FilledButton.styleFrom(backgroundColor: accentColor),
-					onPressed: submitting ? null : onSubmit,
-					icon: submitting
-							? const SizedBox(
-									width: 18,
-									height: 18,
-									child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-								)
-							: const Icon(Icons.send_rounded, size: 18),
-					label: Text(submitLabel),
-				),
+				submit,
 			],
 		);
 	}

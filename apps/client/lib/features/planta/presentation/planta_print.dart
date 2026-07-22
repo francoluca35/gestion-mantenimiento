@@ -66,11 +66,11 @@ class PlantaPrint {
 			display: flex;
 			justify-content: space-between;
 			align-items: flex-start;
-			border-bottom: 3px solid #FFB11B;
+			border-bottom: 3px solid #C026FF;
 			padding-bottom: 12px;
 			margin-bottom: 16px;
 		}
-		.brand { font-size: 20px; font-weight: 800; color: #E30613; letter-spacing: 0.02em; }
+		.brand { font-size: 20px; font-weight: 800; color: #FF3B1F; letter-spacing: 0.02em; }
 		.title { font-size: 16px; font-weight: 700; margin: 4px 0 0; }
 		.meta { color: #555; margin: 2px 0; font-size: 11px; }
 		table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -110,7 +110,7 @@ class PlantaPrint {
 			$filtro
 		</div>
 		<div class="no-print">
-			<button onclick="window.print()" style="padding:8px 14px;background:#FFB11B;border:none;border-radius:6px;font-weight:600;cursor:pointer;">
+			<button onclick="window.print()" style="padding:8px 14px;background:#C026FF;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;">
 				Imprimir
 			</button>
 		</div>

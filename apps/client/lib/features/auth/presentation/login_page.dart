@@ -53,23 +53,30 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
 		return Scaffold(
 			backgroundColor: AppColors.backgroundDark,
-			body: Center(
-				child: SingleChildScrollView(
-					padding: const EdgeInsets.all(24),
-					child: ConstrainedBox(
-						constraints: const BoxConstraints(maxWidth: 420),
-						child: Column(
+			body: SafeArea(
+				child: Center(
+					child: SingleChildScrollView(
+						padding: const EdgeInsets.all(24),
+						child: ConstrainedBox(
+							constraints: const BoxConstraints(maxWidth: 420),
+							child: Column(
 							mainAxisSize: MainAxisSize.min,
 							children: [
 								Container(
 									width: double.infinity,
-									padding: const EdgeInsets.symmetric(vertical: 28),
+									padding: const EdgeInsets.symmetric(
+										vertical: 28,
+										horizontal: 16,
+									),
 									decoration: BoxDecoration(
-										color: AppColors.brandYellow,
+										color: AppColors.black,
 										borderRadius: BorderRadius.circular(20),
+										border: Border.all(
+											color: AppColors.brandPurple.withValues(alpha: 0.45),
+										),
 									),
 									child: const Center(
-										child: SikaLogo(size: 52, showTagline: true),
+										child: SikaLogo(size: 120, compact: true),
 									),
 								),
 								const SizedBox(height: 20),
@@ -82,7 +89,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 											crossAxisAlignment: CrossAxisAlignment.stretch,
 											children: [
 												const Text(
-													'Gestión de Mantenimiento',
+													'GestionMantenimiento',
 													style: TextStyle(
 														fontWeight: FontWeight.w800,
 														fontSize: 22,
@@ -132,8 +139,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 												FilledButton(
 													onPressed: auth.loading ? null : _submit,
 													style: FilledButton.styleFrom(
-														backgroundColor: AppColors.brandYellow,
-														foregroundColor: AppColors.ink,
+														backgroundColor: AppColors.brandPurple,
+														foregroundColor: AppColors.onPrimary,
 														padding: const EdgeInsets.symmetric(vertical: 16),
 													),
 													child: auth.loading
@@ -142,7 +149,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 																	width: 22,
 																	child: CircularProgressIndicator(
 																		strokeWidth: 2,
-																		color: AppColors.ink,
+																		color: AppColors.onPrimary,
 																	),
 																)
 															: const Text(
@@ -158,6 +165,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 						),
 					),
 				),
+			),
 			),
 		);
 	}

@@ -266,8 +266,8 @@ class _NotificationsBlock extends StatelessWidget {
 								child: Icon(
 									Icons.notifications_active_outlined,
 									color: PanolUi.of(context).isDark
-											? AppColors.brandYellow
-											: const Color(0xFF9A6B00),
+											? AppColors.brandPurple
+											: AppColors.brandPurpleDark,
 									size: 20,
 								),
 							),
@@ -369,7 +369,7 @@ class _NotifTile extends StatelessWidget {
 			PanolKpiTone.danger => (ui.softRed, AppColors.brandRed),
 			PanolKpiTone.warning => (
 					ui.softYellow,
-					ui.isDark ? AppColors.brandYellow : const Color(0xFF9A6B00),
+					ui.isDark ? AppColors.brandPurple : AppColors.brandPurpleDark,
 				),
 			PanolKpiTone.success => (ui.softGreen, AppColors.success),
 			PanolKpiTone.neutral => (ui.chipBg, ui.muted),

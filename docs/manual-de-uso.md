@@ -2,7 +2,7 @@
 
 **Versión:** 2026-07-20  
 **App:** Web (`http://localhost:8080`) y Android  
-**API:** `http://<servidor>:3000/v1`
+**API demo:** `https://api.sorjuanaliberte.store/v1` (o `http://<IP-PC>:3000/v1` en LAN)
 
 Guía práctica para operar el sistema día a día. Para el inventario técnico y mejoras, ver [`inventario-app.md`](inventario-app.md).
 
@@ -20,7 +20,18 @@ Guía práctica para operar el sistema día a día. Para el inventario técnico 
 | `tecnico` | `Sika123!` | Técnico de planta |
 | `panolero` | `Sika123!` | Pañol / stock |
 
-### 1.2 Iniciar sesión
+### 1.2 Conectar el celular (Android)
+
+1. Abrí la app e iniciá sesión, o andá a **Perfil**.
+2. **Servidor API** → pegá:
+   - Remoto / 4G: `https://api.sorjuanaliberte.store/v1`
+   - Misma Wi‑Fi que la PC servidor: `http://192.168.x.x:3000/v1`
+3. Guardá → la app vuelve al login.
+4. Probá con `tecnico` / `Sika123!`.
+
+Si no entra: desde el navegador del celular abrí `https://api.sorjuanaliberte.store/v1/health` (debe decir `"status":"ok"`). La PC servidor tiene que estar encendida con Docker + tunnel.
+
+### 1.3 Iniciar sesión
 
 1. Abrí la app (navegador o Android).
 2. Ingresá usuario y clave.
@@ -29,12 +40,11 @@ Guía práctica para operar el sistema día a día. Para el inventario técnico 
    - **Pañolero** → Pañol  
    - **Resto** → Inicio  
 
-### 1.3 Cerrar sesión y perfil
+### 1.4 Cerrar sesión y perfil
 
 1. Menú **Perfil**.
 2. Podés: cambiar clave, ver sesiones, revocar todas las sesiones, **cerrar sesión**.
-3. En Android/desktop: **Servidor API** — URL del backend sin reinstalar la app (ej. `http://192.168.1.50:3000/v1`).
-
+3. En Android/desktop: **Servidor API** — URL del backend sin reinstalar la app.
 ---
 
 ## 2. Técnico — Mis órdenes de trabajo

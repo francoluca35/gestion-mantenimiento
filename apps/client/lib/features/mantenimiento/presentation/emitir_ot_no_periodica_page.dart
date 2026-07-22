@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../planta/presentation/planta_equipo_picker_dialog.dart';
@@ -230,7 +231,7 @@ class _EmitirOtNoPeriodicaPageState extends ConsumerState<EmitirOtNoPeriodicaPag
 			subtitulo: widget.otReferencia != null
 					? 'Nueva orden de trabajo asociada al trabajo previo'
 					: 'Correctivo, predictivo o mejora fuera del plan de mantenimiento',
-			gradient: const [Color(0xFFB45309), AppColors.warning],
+			gradient: const [AppColors.brandOrange, AppColors.warning],
 			icon: Icons.build_circle_outlined,
 			loading: _loading,
 			child: catalogo == null || catalogo.equipos.isEmpty
@@ -269,60 +270,53 @@ class _EmitirOtNoPeriodicaPageState extends ConsumerState<EmitirOtNoPeriodicaPag
 									onChanged: (value) => setState(() => _procedimientoId = value),
 								),
 								const SizedBox(height: 16),
-								Row(
-									children: [
-										Expanded(
-											child: DropdownButtonFormField<String>(
-												value: _tipo,
-												decoration: const InputDecoration(
-													labelText: 'Tipo de trabajo',
-													border: OutlineInputBorder(),
-												),
-												items: const [
-													DropdownMenuItem(
-														value: 'correctivo',
-														child: Text('Correctivo'),
-													),
-													DropdownMenuItem(
-														value: 'predictivo',
-														child: Text('Predictivo'),
-													),
-													DropdownMenuItem(
-														value: 'mejora',
-														child: Text('Mejora'),
-													),
-													DropdownMenuItem(
-														value: 'preventivo',
-														child: Text('Preventivo'),
-													),
-												],
-												onChanged: (value) {
-													if (value != null) setState(() => _tipo = value);
-												},
-											),
+								ResponsivePair(
+									first: DropdownButtonFormField<String>(
+										value: _tipo,
+										decoration: const InputDecoration(
+											labelText: 'Tipo de trabajo',
+											border: OutlineInputBorder(),
 										),
-										const SizedBox(width: 12),
-										Expanded(
-											child: DropdownButtonFormField<_PrioridadOt>(
-												value: _prioridad,
-												decoration: const InputDecoration(
-													labelText: 'Prioridad',
-													border: OutlineInputBorder(),
-												),
-												items: _PrioridadOt.values
-														.map(
-															(p) => DropdownMenuItem(
-																value: p,
-																child: Text(_prioridadLabel(p)),
-															),
-														)
-														.toList(),
-												onChanged: (value) {
-													if (value != null) setState(() => _prioridad = value);
-												},
+										items: const [
+											DropdownMenuItem(
+												value: 'correctivo',
+												child: Text('Correctivo'),
 											),
+											DropdownMenuItem(
+												value: 'predictivo',
+												child: Text('Predictivo'),
+											),
+											DropdownMenuItem(
+												value: 'mejora',
+												child: Text('Mejora'),
+											),
+											DropdownMenuItem(
+												value: 'preventivo',
+												child: Text('Preventivo'),
+											),
+										],
+										onChanged: (value) {
+											if (value != null) setState(() => _tipo = value);
+										},
+									),
+									second: DropdownButtonFormField<_PrioridadOt>(
+										value: _prioridad,
+										decoration: const InputDecoration(
+											labelText: 'Prioridad',
+											border: OutlineInputBorder(),
 										),
-									],
+										items: _PrioridadOt.values
+												.map(
+													(p) => DropdownMenuItem(
+														value: p,
+														child: Text(_prioridadLabel(p)),
+													),
+												)
+												.toList(),
+										onChanged: (value) {
+											if (value != null) setState(() => _prioridad = value);
+										},
+									),
 								),
 								const SizedBox(height: 16),
 								InkWell(

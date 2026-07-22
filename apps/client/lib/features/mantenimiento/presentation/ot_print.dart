@@ -77,11 +77,11 @@ class OtPrint {
 			display: flex;
 			justify-content: space-between;
 			align-items: flex-start;
-			border-bottom: 3px solid #FFB11B;
+			border-bottom: 3px solid #C026FF;
 			padding-bottom: 10px;
 			margin-bottom: 14px;
 		}
-		.brand { font-size: 18px; font-weight: 800; color: #E30613; }
+		.brand { font-size: 18px; font-weight: 800; color: #FF3B1F; }
 		.title { font-size: 15px; font-weight: 700; margin: 4px 0 0; }
 		.meta { color: #555; margin: 2px 0; font-size: 10px; }
 		table { width: 100%; border-collapse: collapse; }
@@ -117,7 +117,7 @@ class OtPrint {
 			$filtro
 		</div>
 		<div class="no-print">
-			<button onclick="window.print()" style="padding:8px 14px;background:#FFB11B;border:none;border-radius:6px;font-weight:600;cursor:pointer;">
+			<button onclick="window.print()" style="padding:8px 14px;background:#C026FF;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;">
 				Imprimir
 			</button>
 		</div>

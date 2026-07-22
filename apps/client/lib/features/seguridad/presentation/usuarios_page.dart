@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import 'usuario_form_sheet.dart';
@@ -175,9 +176,21 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
 													sucursal?['nombre'] ?? 'Todas las sucursales',
 													if (usuario['esAdministrador'] == true)
 														'Admin',
+													activo ? 'Activo' : 'Inactivo',
 												].join(' · '),
 											),
-											trailing: Row(
+											trailing: isCompactLayout(context)
+													? (_puedeBorrar && activo && !esYo
+															? IconButton(
+																	tooltip: 'Desactivar',
+																	onPressed: () => _desactivar(usuario),
+																	icon: const Icon(
+																		Icons.person_off_outlined,
+																		size: 20,
+																	),
+																)
+															: null)
+													: Row(
 												mainAxisSize: MainAxisSize.min,
 												children: [
 													Chip(

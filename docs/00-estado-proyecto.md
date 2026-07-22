@@ -24,7 +24,7 @@ Documento maestro: **qué hay**, **qué falta** y **qué mejorar**.
 | **Paridad SGwing** | 🟡 ~62% | + reserva materiales (sgwing-04) vía M4 |
 | **Paridad SGMWin manual** | 🟡 ~45% | Ver `MATRIZ-PARIDAD.md` |
 | **Shell adaptativo móvil** | 🟡 ~80% | Bottom nav + toolbar Planta con menú Acciones en móvil |
-| **Infra demo 2m** | 🟡 en curso | `Sprint-5/infra-demo` — compose demo + backups |
+| **Infra demo 2m** | 🟢 lista | Compose robusto + tunnel + backups + autostart |
 
 **Principio de plataforma:** un solo Flutter (Web + Android), **todos los roles** en ambas plataformas. Misma API y permisos; la UI se adapta al ancho de pantalla y al perfil del usuario.
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import 'emitir_ot_catalogo.dart';
@@ -314,49 +315,42 @@ class _EmitirOtPeriodicaPageState extends ConsumerState<EmitirOtPeriodicaPage> {
 												),
 											),
 										const SizedBox(height: 16),
-										Row(
-											children: [
-												Expanded(
-													child: InkWell(
-														onTap: _pickFecha,
-														borderRadius: BorderRadius.circular(8),
-														child: InputDecorator(
-															decoration: const InputDecoration(
-																labelText: 'Fecha de programación',
-																border: OutlineInputBorder(),
-																suffixIcon: Icon(
-																	Icons.calendar_today_rounded,
-																	size: 18,
-																),
+										ResponsivePair(
+											first: InkWell(
+												onTap: _pickFecha,
+												borderRadius: BorderRadius.circular(8),
+												child: InputDecorator(
+													decoration: const InputDecoration(
+														labelText: 'Fecha de programación',
+														border: OutlineInputBorder(),
+														suffixIcon: Icon(
+															Icons.calendar_today_rounded,
+															size: 18,
+														),
+													),
+													child: Text(_dateFormat.format(_fechaProgramacion)),
+												),
+											),
+											second: DropdownButtonFormField<_PrioridadOt>(
+												value: _prioridad,
+												decoration: const InputDecoration(
+													labelText: 'Prioridad',
+													border: OutlineInputBorder(),
+												),
+												items: _PrioridadOt.values
+														.map(
+															(p) => DropdownMenuItem(
+																value: p,
+																child: Text(_prioridadLabel(p)),
 															),
-															child: Text(_dateFormat.format(_fechaProgramacion)),
-														),
-													),
-												),
-												const SizedBox(width: 12),
-												Expanded(
-													child: DropdownButtonFormField<_PrioridadOt>(
-														value: _prioridad,
-														decoration: const InputDecoration(
-															labelText: 'Prioridad',
-															border: OutlineInputBorder(),
-														),
-														items: _PrioridadOt.values
-																.map(
-																	(p) => DropdownMenuItem(
-																		value: p,
-																		child: Text(_prioridadLabel(p)),
-																	),
-																)
-																.toList(),
-														onChanged: (value) {
-															if (value != null) {
-																setState(() => _prioridad = value);
-															}
-														},
-													),
-												),
-											],
+														)
+														.toList(),
+												onChanged: (value) {
+													if (value != null) {
+														setState(() => _prioridad = value);
+													}
+												},
+											),
 										),
 										const SizedBox(height: 16),
 										DropdownButtonFormField<String?>(

@@ -1,47 +1,64 @@
 import 'package:flutter/material.dart';
 
-/// Paleta corporativa Sika + neutros y semánticos de OT.
+/// Paleta de marca GESTION (Mantenimiento | Stock | Eficiencia).
 class AppColors {
-  const AppColors._();
+	const AppColors._();
 
-  // —— Marca Sika ——
-  static const Color brandYellow = Color(0xFFFFB11B);
-  static const Color brandRed = Color(0xFFE30613);
-  static const Color white = Color(0xFFFFFFFF);
-  static const Color black = Color(0xFF000000);
+	// —— Marca (logo) ——
+	/// Mantenimiento — violeta / magenta del hexágono.
+	static const Color brandPurple = Color(0xFFC026FF);
 
-  /// Negro suave para texto principal (mejor lectura que #000 puro).
-  static const Color ink = Color(0xFF1A1A1A);
+	/// Stock — verde lima del logo.
+	static const Color brandGreen = Color(0xFF39E639);
 
-  // —— Alias de tema ——
-  static const Color primary = brandYellow;
-  static const Color onPrimary = ink;
-  static const Color accent = brandRed;
-  static const Color onAccent = white;
+	/// Eficiencia — rojo-naranja del logo.
+	static const Color brandOrange = Color(0xFFFF3B1F);
 
-  static const Color secondary = Color(0xFF5C5C5C);
-  static const Color secondaryLight = Color(0xFF8A8A8A);
+	static const Color white = Color(0xFFFFFFFF);
+	static const Color black = Color(0xFF000000);
 
-  // —— Semánticos OT (SGwing-17) ——
-  static const Color success = Color(0xFF16A34A);
-  static const Color warning = Color(0xFFE6A000);
-  static const Color danger = brandRed;
+	/// Negro suave para texto principal en tema claro.
+	static const Color ink = Color(0xFF1A1A1A);
 
-  // —— Superficies ——
-  static const Color surfaceLight = white;
-  static const Color backgroundLight = Color(0xFFFAFAFA);
-  static const Color surfaceDark = Color(0xFF1A1A1A);
-  static const Color backgroundDark = Color(0xFF0A0A0A);
-  static const Color cardDark = Color(0xFF1A1A1A);
-  static const Color cardElevated = Color(0xFF242424);
-  static const Color cardBorder = Color(0xFF2E2E2E);
-  static const Color mutedText = Color(0xFF8A8A8A);
+	/// Violeta más oscuro: texto / bordes sobre fondos claros.
+	static const Color brandPurpleDark = Color(0xFF9B1AD9);
 
-  /// Panel explorador lateral (sin tinte azul).
-  static const Color explorerPanel = Color(0xFF131313);
-  static const Color explorerSelected = Color(0xFF3A3530);
-  static const Color surfaceMuted = Color(0xFFF5F5F5);
+	/// Verde más oscuro: contraste en tema claro.
+	static const Color brandGreenDark = Color(0xFF1A9E1A);
 
-  // Compatibilidad con código existente
-  static const Color primaryDark = brandYellow;
+	// Compat: nombres legacy → nuevos acentos de marca.
+	static const Color brandYellow = brandPurple;
+	static const Color brandRed = brandOrange;
+
+	// —— Alias de tema ——
+	static const Color primary = brandPurple;
+	static const Color onPrimary = white;
+	static const Color accent = brandOrange;
+	static const Color onAccent = white;
+
+	static const Color secondary = Color(0xFF5C5C5C);
+	static const Color secondaryLight = Color(0xFF8A8A8A);
+
+	// —— Semánticos ——
+	static const Color success = brandGreen;
+	static const Color warning = Color(0xFFFF8A1A);
+	static const Color danger = brandOrange;
+
+	// —— Superficies ——
+	static const Color surfaceLight = white;
+	static const Color backgroundLight = Color(0xFFF7F5FA);
+	static const Color surfaceDark = Color(0xFF141216);
+	static const Color backgroundDark = Color(0xFF000000);
+	static const Color cardDark = Color(0xFF141216);
+	static const Color cardElevated = Color(0xFF1E1A24);
+	static const Color cardBorder = Color(0xFF2E2838);
+	static const Color mutedText = Color(0xFF9A94A6);
+
+	/// Panel explorador lateral (tinte violeta suave).
+	static const Color explorerPanel = Color(0xFF0E0C12);
+	static const Color explorerSelected = Color(0xFF2A1838);
+	static const Color surfaceMuted = Color(0xFFF3EFF8);
+
+	// Compatibilidad con código existente
+	static const Color primaryDark = brandPurpleDark;
 }

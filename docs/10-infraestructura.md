@@ -108,15 +108,24 @@ Cloudflare Tunnel → HTTPS
 | Push | Firebase FCM |
 | Acceso 4G | Tunnel + dominio + HTTPS |
 
-### Demo 2 meses (Sprint 5)
+### Demo 2 meses (Sprint 5) — PC Windows 24/7
 
-Stack completo en un host (sin notebook de desarrollo):
+Stack endurecido: Postgres + API (storage local) + backup diario + Cloudflare Tunnel.
 
-```bash
-cp .env.example .env.demo   # ajustar JWT, claves, FIREBASE_*, IP pública MinIO
-docker compose -f docker-compose.demo.yml --env-file .env.demo up -d --build
-powershell -File scripts/backup-postgres.ps1
+```powershell
+cp .env.demo.example .env.demo
+# Editar secretos, PUBLIC_BASE_URL, CLOUDFLARE_TUNNEL_TOKEN
+powershell -File scripts/demo-up.ps1 -WithTunnel -Seed
+powershell -File scripts/install-autostart.ps1
 ```
+
+| Acceso | URL |
+|--------|-----|
+| Público (móvil) | `https://api.sorjuanaliberte.store/v1` |
+| LAN fallback | `http://<IP-PC>:3000/v1` |
+| Health | `GET /v1/health` · Ready `GET /v1/ready` |
+
+Solo se publica el puerto **3000**. Fotos/firmas van por la API (`STORAGE_PROVIDER=local`), no hace falta MinIO público.
 
 Checklist y detalle: [`faltantes/sprint-5-infra-demo.md`](faltantes/sprint-5-infra-demo.md).
 

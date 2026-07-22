@@ -263,7 +263,8 @@ class PlantaToolbar extends StatelessWidget {
 		final scheme = Theme.of(context).colorScheme;
 		final actions = _buildActions();
 		final width = MediaQuery.sizeOf(context).width;
-		final isMobile = Breakpoints.isMobile(width);
+		// Alineado con AppShell (tablet = 900): bottom nav + menú Acciones.
+		final isMobile = width < Breakpoints.tablet;
 
 		return Container(
 			padding: EdgeInsets.fromLTRB(isMobile ? 14 : 20, 12, isMobile ? 14 : 20, 12),
@@ -477,7 +478,7 @@ class _ActionChip extends StatelessWidget {
 			border = AppColors.danger.withValues(alpha: 0.45);
 		} else if (highlight) {
 			bg = AppColors.brandYellow;
-			fg = AppColors.ink;
+			fg = AppColors.onPrimary;
 			border = AppColors.brandYellow;
 		} else if (emphasized) {
 			bg = isDark ? AppColors.cardElevated : scheme.surfaceContainerHighest;

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/layout/collapsible_panel.dart';
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../planta/presentation/planta_equipo_picker_dialog.dart';
 import '../../auth/application/auth_controller.dart';
@@ -1111,10 +1112,10 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 		final isNew = widget.initial == null;
 
 		return ListView(
-			padding: const EdgeInsets.all(24),
+			padding: responsivePagePadding(context),
 			children: [
 				Container(
-					padding: const EdgeInsets.all(24),
+					padding: responsivePagePadding(context),
 					decoration: BoxDecoration(
 						gradient: const LinearGradient(
 							colors: [Color(0xFF115E59), Color(0xFF0F766E)],
@@ -1282,41 +1283,53 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 								)
 							else
 								...List.generate(_planillaLabelCtrls.length, (index) {
+									final keyField = TextField(
+										controller: _planillaKeyCtrls[index],
+										decoration: const InputDecoration(
+											labelText: 'Clave',
+											border: OutlineInputBorder(),
+											isDense: true,
+										),
+									);
+									final labelField = TextField(
+										controller: _planillaLabelCtrls[index],
+										decoration: const InputDecoration(
+											labelText: 'Descripción',
+											border: OutlineInputBorder(),
+											isDense: true,
+										),
+									);
+									final removeBtn = IconButton(
+										tooltip: 'Quitar ítem',
+										onPressed: () => _quitarPlanillaItem(index),
+										icon: const Icon(Icons.close_rounded, size: 20),
+									);
 									return Padding(
 										padding: const EdgeInsets.only(bottom: 10),
-										child: Row(
-											crossAxisAlignment: CrossAxisAlignment.start,
-											children: [
-												Expanded(
-													flex: 2,
-													child: TextField(
-														controller: _planillaKeyCtrls[index],
-														decoration: const InputDecoration(
-															labelText: 'Clave',
-															border: OutlineInputBorder(),
-															isDense: true,
-														),
+										child: isCompactLayout(context)
+												? Column(
+														crossAxisAlignment: CrossAxisAlignment.stretch,
+														children: [
+															keyField,
+															const SizedBox(height: 8),
+															Row(
+																crossAxisAlignment: CrossAxisAlignment.start,
+																children: [
+																	Expanded(child: labelField),
+																	removeBtn,
+																],
+															),
+														],
+													)
+												: Row(
+														crossAxisAlignment: CrossAxisAlignment.start,
+														children: [
+															Expanded(flex: 2, child: keyField),
+															const SizedBox(width: 8),
+															Expanded(flex: 4, child: labelField),
+															removeBtn,
+														],
 													),
-												),
-												const SizedBox(width: 8),
-												Expanded(
-													flex: 4,
-													child: TextField(
-														controller: _planillaLabelCtrls[index],
-														decoration: const InputDecoration(
-															labelText: 'Descripción',
-															border: OutlineInputBorder(),
-															isDense: true,
-														),
-													),
-												),
-												IconButton(
-													tooltip: 'Quitar ítem',
-													onPressed: () => _quitarPlanillaItem(index),
-													icon: const Icon(Icons.close_rounded, size: 20),
-												),
-											],
-										),
 									);
 								}),
 							Align(
@@ -1335,62 +1348,48 @@ class _ProcedimientoFormState extends ConsumerState<_ProcedimientoForm> {
 					title: 'Valores estimados',
 					child: Column(
 						children: [
-							Row(
-								children: [
-									Expanded(
-										child: _TimeField(
-											label: 'H.H. necesarias',
-											hours: _hhHoras,
-											minutes: _hhMinutos,
-											onChanged: (h, m) => setState(() {
-												_hhHoras = h;
-												_hhMinutos = m;
-											}),
-										),
+							ResponsivePair(
+								first: _TimeField(
+									label: 'H.H. necesarias',
+									hours: _hhHoras,
+									minutes: _hhMinutos,
+									onChanged: (h, m) => setState(() {
+										_hhHoras = h;
+										_hhMinutos = m;
+									}),
+								),
+								second: TextFormField(
+									initialValue: '$_cantOperarios',
+									decoration: const InputDecoration(
+										labelText: 'Cant. operarios',
+										border: OutlineInputBorder(),
 									),
-									const SizedBox(width: 12),
-									Expanded(
-										child: TextFormField(
-											initialValue: '$_cantOperarios',
-											decoration: const InputDecoration(
-												labelText: 'Cant. operarios',
-												border: OutlineInputBorder(),
-											),
-											keyboardType: TextInputType.number,
-											inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-											onChanged: (v) =>
-													_cantOperarios = int.tryParse(v) ?? 1,
-										),
-									),
-								],
+									keyboardType: TextInputType.number,
+									inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+									onChanged: (v) =>
+											_cantOperarios = int.tryParse(v) ?? 1,
+								),
 							),
 							const SizedBox(height: 16),
-							Row(
-								children: [
-									Expanded(
-										child: _TimeField(
-											label: 'Duración (hs)',
-											hours: _durHoras,
-											minutes: _durMinutos,
-											onChanged: (h, m) => setState(() {
-												_durHoras = h;
-												_durMinutos = m;
-											}),
-										),
-									),
-									const SizedBox(width: 12),
-									Expanded(
-										child: _TimeField(
-											label: 'Indisponibilidad',
-											hours: _indHoras,
-											minutes: _indMinutos,
-											onChanged: (h, m) => setState(() {
-												_indHoras = h;
-												_indMinutos = m;
-											}),
-										),
-									),
-								],
+							ResponsivePair(
+								first: _TimeField(
+									label: 'Duración (hs)',
+									hours: _durHoras,
+									minutes: _durMinutos,
+									onChanged: (h, m) => setState(() {
+										_durHoras = h;
+										_durMinutos = m;
+									}),
+								),
+								second: _TimeField(
+									label: 'Indisponibilidad',
+									hours: _indHoras,
+									minutes: _indMinutos,
+									onChanged: (h, m) => setState(() {
+										_indHoras = h;
+										_indMinutos = m;
+									}),
+								),
 							),
 							const SizedBox(height: 16),
 							TextFormField(
@@ -2052,7 +2051,7 @@ class _EquiposAsociadosCardState extends ConsumerState<_EquiposAsociadosCard> {
 							),
 						)
 					else ...[
-						if (asociados.isNotEmpty) ...[
+						if (asociados.isNotEmpty && !isCompactLayout(context)) ...[
 							Padding(
 								padding: const EdgeInsets.only(bottom: 8),
 								child: Row(
@@ -2128,6 +2127,90 @@ class _EquiposAsociadosCardState extends ConsumerState<_EquiposAsociadosCard> {
 									equipo['ubicacion'] as Map<String, dynamic>?;
 							final estado = asociacion['estado'] as String? ?? 'activo';
 							final habilitado = estado == 'activo';
+							if (isCompactLayout(context)) {
+								return Card(
+									margin: const EdgeInsets.only(bottom: 8),
+									child: Padding(
+										padding: const EdgeInsets.all(12),
+										child: Column(
+											crossAxisAlignment: CrossAxisAlignment.stretch,
+											children: [
+												Row(
+													children: [
+														const Icon(
+															Icons.precision_manufacturing_outlined,
+															size: 20,
+														),
+														const SizedBox(width: 8),
+														Expanded(
+															child: Text(
+																'${equipo['codigo']} — ${equipo['nombre']}',
+																style: const TextStyle(
+																	fontSize: 13,
+																	fontWeight: FontWeight.w700,
+																),
+															),
+														),
+														if (widget.canAsociar)
+															IconButton(
+																tooltip: 'Desasociar',
+																onPressed: _busy
+																		? null
+																		: () => _desasociar(asociacion),
+																icon: const Icon(
+																	Icons.link_off_rounded,
+																	size: 20,
+																),
+															),
+													],
+												),
+												Text(
+													ubicacion?['nombre'] as String? ?? 'Equipo',
+													style: TextStyle(
+														fontSize: 12,
+														color: Theme.of(context).colorScheme.onSurfaceVariant,
+													),
+												),
+												const SizedBox(height: 8),
+												Row(
+													children: [
+														const Text('Habilitado', style: TextStyle(fontSize: 12)),
+														const Spacer(),
+														if (widget.canAsociar)
+															Switch(
+																value: habilitado,
+																onChanged: _busy
+																		? null
+																		: (value) => _cambiarHabilitado(
+																					asociacion,
+																					value,
+																				),
+															)
+														else
+															Text(
+																_estadoLabel(estado),
+																style: TextStyle(
+																	fontSize: 12,
+																	color: habilitado
+																			? AppColors.success
+																			: AppColors.mutedText,
+																),
+															),
+													],
+												),
+												Text(
+													'Prog.: ${_formatDate(asociacion['fechaProgramacion'])}',
+													style: const TextStyle(fontSize: 12),
+												),
+												Text(
+													'Últ. emisión: ${_formatDate(asociacion['ultimaEmision'])}',
+													style: const TextStyle(fontSize: 12),
+												),
+											],
+										),
+									),
+								);
+							}
 							return Padding(
 								padding: const EdgeInsets.symmetric(vertical: 4),
 								child: Row(

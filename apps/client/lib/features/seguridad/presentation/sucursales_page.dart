@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import 'sucursal_form_sheet.dart';
@@ -141,8 +142,18 @@ class _SucursalesPageState extends ConsumerState<SucursalesPage> {
 												item['nombre'] as String,
 												style: const TextStyle(fontWeight: FontWeight.w600),
 											),
-											subtitle: Text('Código: ${item['codigo']} · $count usuarios'),
-											trailing: Row(
+											subtitle: Text(
+												'Código: ${item['codigo']} · $count usuarios · ${activa ? 'Activa' : 'Inactiva'}',
+											),
+											trailing: isCompactLayout(context)
+													? (puedeBorrar && activa
+															? IconButton(
+																	tooltip: 'Desactivar',
+																	onPressed: () => _desactivar(item),
+																	icon: const Icon(Icons.block_outlined, size: 20),
+																)
+															: null)
+													: Row(
 												mainAxisSize: MainAxisSize.min,
 												children: [
 													Chip(

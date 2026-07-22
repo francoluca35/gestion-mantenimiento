@@ -72,7 +72,7 @@ class _SeguimientoPageState extends ConsumerState<SeguimientoPage> {
 				),
 			'reserva' => (
 					ui.softYellow,
-					ui.isDark ? AppColors.brandYellow : const Color(0xFF9A6B00),
+					ui.isDark ? AppColors.brandPurple : AppColors.brandPurpleDark,
 					Icons.lock_outline_rounded,
 					'Reserva',
 				),

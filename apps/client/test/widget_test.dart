@@ -20,7 +20,7 @@ void main() {
 
 		await tester.pumpAndSettle();
 
-		expect(find.text('Gestión de Mantenimiento'), findsOneWidget);
+		expect(find.text('GestionMantenimiento'), findsOneWidget);
 		expect(find.text('Ingresar'), findsOneWidget);
 	});
 }

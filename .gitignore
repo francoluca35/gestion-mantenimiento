@@ -4,6 +4,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.demo.example
 *.log
 .DS_Store
 Thumbs.db
@@ -24,7 +25,8 @@ apps/api/.env
 
 # Root
 node_modules/
-package-lock.json
+/package-lock.json
+!apps/api/package-lock.json
 
 # IDE
 .idea/
@@ -47,5 +49,6 @@ apps/client/gestion-mantenimiento.apk
 
 # Demo backups
 backups/
+!backups/.gitkeep
 *.sql.gz
 

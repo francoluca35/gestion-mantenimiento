@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/sika_ui.dart';
+import '../../../core/layout/responsive.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 
@@ -190,47 +191,90 @@ class _PerfilDerechosPageState extends ConsumerState<PerfilDerechosPage> {
 					color: scheme.surfaceContainerLowest,
 					borderRadius: BorderRadius.circular(12),
 					child: Padding(
-						padding: EdgeInsets.fromLTRB(12 + depth * 16.0, 8, 12, 8),
-						child: Row(
+						padding: EdgeInsets.fromLTRB(
+							12 + (depth.clamp(0, 6) * (isCompactLayout(context) ? 10.0 : 16.0)),
+							8,
+							12,
+							8,
+						),
+						child: Column(
+							crossAxisAlignment: CrossAxisAlignment.stretch,
 							children: [
-								if (node.hasChildren)
-									IconButton(
-										visualDensity: VisualDensity.compact,
-										onPressed: () => setState(() => node.expanded = !node.expanded),
-										icon: Icon(
-											node.expanded
-													? Icons.expand_more_rounded
-													: Icons.chevron_right_rounded,
-											size: 20,
+								Row(
+									children: [
+										if (node.hasChildren)
+											IconButton(
+												visualDensity: VisualDensity.compact,
+												onPressed: () =>
+														setState(() => node.expanded = !node.expanded),
+												icon: Icon(
+													node.expanded
+															? Icons.expand_more_rounded
+															: Icons.chevron_right_rounded,
+													size: 20,
+												),
+											)
+										else
+											const SizedBox(width: 40),
+										Checkbox(
+											value: marcado,
+											onChanged: heredado
+													? null
+													: (v) =>
+															setState(() => _setHabilitado(node, v ?? false)),
 										),
-									)
-								else
-									const SizedBox(width: 40),
-								Checkbox(
-									value: marcado,
-									onChanged: heredado
-											? null
-											: (v) => setState(() => _setHabilitado(node, v ?? false)),
-								),
-								Expanded(
-									child: Column(
-										crossAxisAlignment: CrossAxisAlignment.start,
-										children: [
-											Text(
-												node.nombre,
-												style: const TextStyle(fontWeight: FontWeight.w600),
+										Expanded(
+											child: Column(
+												crossAxisAlignment: CrossAxisAlignment.start,
+												children: [
+													Text(
+														node.nombre,
+														style: const TextStyle(fontWeight: FontWeight.w600),
+													),
+													Text(
+														node.codigo,
+														style: TextStyle(
+															fontSize: 12,
+															color: scheme.onSurfaceVariant,
+														),
+													),
+												],
 											),
-											Text(
-												node.codigo,
-												style: TextStyle(
-													fontSize: 12,
-													color: scheme.onSurfaceVariant,
+										),
+										if (!isCompactLayout(context) &&
+												node.hasChildren &&
+												node.habilitado &&
+												!heredado)
+											SegmentedButton<bool>(
+												segments: const [
+													ButtonSegment(value: true, label: Text('Total')),
+													ButtonSegment(value: false, label: Text('Parcial')),
+												],
+												selected: {node.modoTotal},
+												onSelectionChanged: (s) =>
+														setState(() => _setModoTotal(node, s.first)),
+												style: const ButtonStyle(
+													visualDensity: VisualDensity.compact,
 												),
 											),
-										],
-									),
+										if (heredado)
+											Padding(
+												padding: const EdgeInsets.only(left: 8),
+												child: Text(
+													'Heredado',
+													style: TextStyle(
+														fontSize: 11,
+														color: AppColors.accent.withValues(alpha: 0.9),
+													),
+												),
+											),
+									],
 								),
-								if (node.hasChildren && node.habilitado && !heredado)
+								if (isCompactLayout(context) &&
+										node.hasChildren &&
+										node.habilitado &&
+										!heredado) ...[
+									const SizedBox(height: 8),
 									SegmentedButton<bool>(
 										segments: const [
 											ButtonSegment(value: true, label: Text('Total')),
@@ -243,17 +287,7 @@ class _PerfilDerechosPageState extends ConsumerState<PerfilDerechosPage> {
 											visualDensity: VisualDensity.compact,
 										),
 									),
-								if (heredado)
-									Padding(
-										padding: const EdgeInsets.only(left: 8),
-										child: Text(
-											'Heredado',
-											style: TextStyle(
-												fontSize: 11,
-												color: AppColors.accent.withValues(alpha: 0.9),
-											),
-										),
-									),
+								],
 							],
 						),
 					),
@@ -273,43 +307,59 @@ class _PerfilDerechosPageState extends ConsumerState<PerfilDerechosPage> {
 
 	@override
 	Widget build(BuildContext context) {
+		final compact = isCompactLayout(context);
+		final actions = Row(
+			mainAxisSize: MainAxisSize.min,
+			children: [
+				TextButton(
+					onPressed: _saving ? null : () => context.pop(),
+					child: const Text('Cancelar'),
+				),
+				const SizedBox(width: 8),
+				FilledButton(
+					onPressed: _saving || _loading ? null : _guardar,
+					child: _saving
+							? const SizedBox(
+									width: 18,
+									height: 18,
+									child: CircularProgressIndicator(strokeWidth: 2),
+								)
+							: const Text('Guardar'),
+				),
+			],
+		);
+
 		return Column(
 			children: [
 				SikaPageHeader(
 					title: _titulo,
 					subtitle: 'Total habilita todos los hijos · Parcial permite elegir por nodo',
 					icon: Icons.account_tree_outlined,
-					trailing: Row(
-						mainAxisSize: MainAxisSize.min,
-						children: [
-							TextButton(
-								onPressed: _saving ? null : () => context.pop(),
-								child: const Text('Cancelar'),
-							),
-							const SizedBox(width: 8),
-							FilledButton(
-								onPressed: _saving || _loading ? null : _guardar,
-								child: _saving
-										? const SizedBox(
-												width: 18,
-												height: 18,
-												child: CircularProgressIndicator(strokeWidth: 2),
-											)
-										: const Text('Guardar'),
-							),
-						],
-					),
+					trailing: compact ? null : actions,
 				),
+				if (compact)
+					Padding(
+						padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+						child: Align(alignment: Alignment.centerRight, child: actions),
+					),
 				if (_error != null)
 					Padding(
-						padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+						padding: EdgeInsets.symmetric(
+							horizontal: compact ? 16 : 24,
+							vertical: 8,
+						),
 						child: Text(_error!, style: const TextStyle(color: AppColors.danger)),
 					),
 				Expanded(
 					child: _loading
 							? const Center(child: CircularProgressIndicator())
 							: ListView(
-									padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+									padding: EdgeInsets.fromLTRB(
+										compact ? 14 : 24,
+										8,
+										compact ? 14 : 24,
+										24,
+									),
 									children: _roots
 											.map(
 												(n) => Padding(

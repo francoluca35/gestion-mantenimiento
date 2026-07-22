@@ -559,7 +559,7 @@ class _PlantaEquipoFichaState extends ConsumerState<PlantaEquipoFicha>
 				),
 				const SizedBox(height: 12),
 				SizedBox(
-					height: 380,
+					height: MediaQuery.sizeOf(context).height < 700 ? 320 : 420,
 					child: TabBarView(
 						controller: _tabs,
 						children: [

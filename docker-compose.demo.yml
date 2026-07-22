@@ -1,23 +1,30 @@
-# Demo 2 meses — Postgres + Redis + MinIO + API Nest en un host estable.
+# Demo robusta — Postgres + Redis + MinIO + API + backup + Cloudflare Tunnel
 # Uso:
-#   cp .env.example .env.demo   # ajustar secretos e IP
-#   docker compose -f docker-compose.demo.yml --env-file .env.demo up -d --build
+#   cp .env.demo.example .env.demo
+#   # Editar secretos, PUBLIC_BASE_URL, CLOUDFLARE_TUNNEL_TOKEN
+#   powershell -File scripts/demo-up.ps1
 #
-# Acceso LAN: http://<IP-SERVIDOR>:3000/v1
-# Android: Perfil → URL API = http://<IP-SERVIDOR>:3000/v1
+# Acceso:
+#   Público (móvil/PC): https://api.sorjuanaliberte.store/v1
+#   LAN fallback:       http://<IP-PC>:3000/v1
+#   Android: Perfil → URL API
 
 name: sika-demo
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
 
 services:
   postgres:
     image: postgres:16-alpine
     container_name: sika-demo-postgres
     restart: unless-stopped
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-sika}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sika_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.demo}
       POSTGRES_DB: ${POSTGRES_DB:-gestion_mantenimiento}
     volumes:
       - demo_postgres_data:/var/lib/postgresql/data
@@ -28,13 +35,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+      start_period: 10s
+    mem_limit: 768m
+    logging: *default-logging
+    networks:
+      - sika-internal
 
   redis:
     image: redis:7-alpine
     container_name: sika-demo-redis
     restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
     volumes:
       - demo_redis_data:/data
     healthcheck:
@@ -42,29 +53,44 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    mem_limit: 128m
+    logging: *default-logging
+    networks:
+      - sika-internal
+    profiles:
+      - with-redis
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     container_name: sika-demo-minio
     restart: unless-stopped
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     command: server /data --console-address ":9001"
     volumes:
       - demo_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    mem_limit: 256m
+    logging: *default-logging
+    networks:
+      - sika-internal
+    profiles:
+      - with-minio
 
   minio-init:
-    image: minio/mc:latest
+    image: minio/mc:RELEASE.2024-11-17T19-35-38Z
     container_name: sika-demo-minio-init
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      sleep 5;
       mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
       mc mb --ignore-existing local/$${STORAGE_BUCKET:-sika-mantenimiento};
       exit 0;
@@ -73,44 +99,152 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-sika-mantenimiento}
+    networks:
+      - sika-internal
+    profiles:
+      - with-minio
 
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    image: sika-demo-api:latest
     container_name: sika-demo-api
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_started
     ports:
       - "${API_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
+      API_PORT: 3000
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-sika}:${POSTGRES_PASSWORD:-sika_dev}@postgres:5432/${POSTGRES_DB:-gestion_mantenimiento}?schema=public
-      JWT_SECRET: ${JWT_SECRET:-change-me-demo-jwt-secret-min-32-chars}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-demo-refresh-secret-min-32}
-      REDIS_URL: redis://redis:6379
-      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-minio}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sika}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gestion_mantenimiento}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.demo}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in .env.demo}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      # Storage local: fotos/firmas pasan por la API (mismo túnel HTTPS)
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      STORAGE_LOCAL_ROOT: /app/storage
       STORAGE_BUCKET: ${STORAGE_BUCKET:-sika-mantenimiento}
-      STORAGE_ENDPOINT: http://minio:9000
-      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-http://localhost:9000/sika-mantenimiento}
-      STORAGE_FORCE_PATH_STYLE: "true"
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
+      STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-true}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://api.sorjuanaliberte.store}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://api.sorjuanaliberte.store,http://localhost:8080,http://localhost:3000}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
       FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
       OT_CRON_ENABLED: ${OT_CRON_ENABLED:-true}
       STOCK_ALERT_CRON_ENABLED: ${STOCK_ALERT_CRON_ENABLED:-true}
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      SEED_ON_START: ${SEED_ON_START:-false}
+    volumes:
+      - demo_api_storage:/app/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/v1/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 50s
+    mem_limit: 768m
+    logging: *default-logging
+    networks:
+      - sika-internal
+
+  web:
+    build:
+      context: ./apps/client
+      dockerfile: Dockerfile.web
+    image: sika-demo-web:latest
+    container_name: sika-demo-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 64m
+    logging: *default-logging
+    networks:
+      - sika-internal
+
+  seed:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: seed
+    image: sika-demo-seed:latest
+    container_name: sika-demo-seed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sika}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gestion_mantenimiento}?schema=public
+    networks:
+      - sika-internal
+    profiles:
+      - seed
+    restart: "no"
+
+  backup:
+    image: postgres:16-alpine
+    container_name: sika-demo-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sika}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-gestion_mantenimiento}
+      PGHOST: postgres
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-5}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup-loop.sh:/backup-loop.sh:ro
+    entrypoint: ["/bin/sh", "/backup-loop.sh"]
+    mem_limit: 128m
+    logging: *default-logging
+    networks:
+      - sika-internal
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: sika-demo-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 128m
+    logging: *default-logging
+    networks:
+      - sika-internal
+    profiles:
+      - tunnel
 
 volumes:
   demo_postgres_data:
   demo_redis_data:
   demo_minio_data:
+  demo_api_storage:
+
+networks:
+  sika-internal:
+    name: sika-demo-net
+    driver: bridge

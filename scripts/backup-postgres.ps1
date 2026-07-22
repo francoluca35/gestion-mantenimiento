@@ -1,6 +1,5 @@
-# Backup diario Postgres (demo 2 meses).
-# Programar con Task Scheduler (Windows) o cron (Linux).
-# Ejemplo Task Scheduler: diario 02:00 → powershell -File scripts/backup-postgres.ps1
+﻿# Backup manual Postgres (además del servicio backup del compose).
+# Programar opcionalmente con Task Scheduler; el contenedor sika-demo-backup ya corre diario.
 
 param(
 	[string]$ComposeFile = "docker-compose.demo.yml",
@@ -16,6 +15,22 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+function Get-EnvValue([string]$path, [string]$key) {
+	if (-not (Test-Path $path)) { return $null }
+	$line = Get-Content $path | Where-Object { $_ -match "^\s*$key\s*=" } | Select-Object -First 1
+	if (-not $line) { return $null }
+	return ($line -split "=", 2)[1].Trim().Trim('"').Trim("'")
+}
+
+if (Test-Path $EnvFile) {
+	$u = Get-EnvValue $EnvFile "POSTGRES_USER"
+	$d = Get-EnvValue $EnvFile "POSTGRES_DB"
+	$k = Get-EnvValue $EnvFile "BACKUP_KEEP_DAYS"
+	if ($u) { $DbUser = $u }
+	if ($d) { $DbName = $d }
+	if ($k) { $KeepDays = [int]$k }
+}
+
 if (-not (Test-Path $BackupDir)) {
 	New-Item -ItemType Directory -Path $BackupDir | Out-Null
 }
@@ -28,10 +43,9 @@ Write-Host "Backup → $outFile"
 
 $running = docker ps --filter "name=$Container" --format "{{.Names}}"
 if (-not $running) {
-	throw "Contenedor $Container no está corriendo. Levantá la demo primero."
+	throw "Contenedor $Container no está corriendo. Levantá la demo primero (scripts/demo-up.ps1)."
 }
 
-# Escribe en el volumen montado ./backups → /backups (evita corrupción binaria en PowerShell).
 docker exec $Container sh -c "pg_dump -U `"$DbUser`" -d `"$DbName`" --no-owner --format=plain | gzip -c > /backups/$fileName"
 
 if (-not (Test-Path $outFile) -or (Get-Item $outFile).Length -lt 100) {
@@ -42,4 +56,4 @@ Get-ChildItem $BackupDir -Filter "gestion_mantenimiento-*.sql.gz" |
 	Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$KeepDays) } |
 	Remove-Item -Force
 
-Write-Host "OK — reteniendo últimos $KeepDays días"
+Write-Host "OK — reteniendo últimos $KeepDays días (compose=$ComposeFile)"

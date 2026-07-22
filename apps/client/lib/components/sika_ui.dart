@@ -2,20 +2,29 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 
-/// Tokens y widgets compartidos — paleta Sika oscura moderna.
+/// Tokens y widgets compartidos — paleta GESTION (claro/oscuro).
 abstract final class SikaUi {
 	static const double radiusSm = 12;
 	static const double radiusMd = 16;
 	static const double radiusLg = 20;
 
-	static BoxDecoration cardDecoration({Color? color, bool selected = false, Color? accent}) {
+	static BoxDecoration cardDecoration({
+		Color? color,
+		bool selected = false,
+		Color? accent,
+		Brightness brightness = Brightness.dark,
+	}) {
+		final isDark = brightness == Brightness.dark;
+		final surface = isDark ? AppColors.cardDark : AppColors.surfaceLight;
+		final border = isDark ? AppColors.cardBorder : const Color(0xFFE4DCEF);
+
 		return BoxDecoration(
-			color: color ?? AppColors.cardDark,
+			color: color ?? surface,
 			borderRadius: BorderRadius.circular(radiusMd),
 			border: Border.all(
 				color: selected
-						? (accent ?? AppColors.brandYellow).withValues(alpha: 0.55)
-						: AppColors.cardBorder,
+						? (accent ?? AppColors.brandPurple).withValues(alpha: 0.55)
+						: border,
 				width: selected ? 1.5 : 1,
 			),
 		);
@@ -26,25 +35,29 @@ abstract final class SikaUi {
 		required String hint,
 		Widget? suffix,
 	}) {
+		final scheme = Theme.of(context).colorScheme;
+		final isDark = scheme.brightness == Brightness.dark;
+		final muted = isDark ? AppColors.mutedText : AppColors.secondary;
+
 		return InputDecoration(
 			hintText: hint,
-			hintStyle: TextStyle(color: AppColors.mutedText.withValues(alpha: 0.8)),
-			prefixIcon: Icon(Icons.search_rounded, size: 20, color: AppColors.mutedText),
+			hintStyle: TextStyle(color: muted.withValues(alpha: 0.8)),
+			prefixIcon: Icon(Icons.search_rounded, size: 20, color: muted),
 			suffixIcon: suffix,
 			isDense: true,
 			filled: true,
-			fillColor: AppColors.cardElevated,
+			fillColor: isDark ? AppColors.cardElevated : AppColors.white,
 			border: OutlineInputBorder(
 				borderRadius: BorderRadius.circular(radiusSm),
-				borderSide: const BorderSide(color: AppColors.cardBorder),
+				borderSide: BorderSide(color: scheme.outline),
 			),
 			enabledBorder: OutlineInputBorder(
 				borderRadius: BorderRadius.circular(radiusSm),
-				borderSide: const BorderSide(color: AppColors.cardBorder),
+				borderSide: BorderSide(color: scheme.outline),
 			),
 			focusedBorder: OutlineInputBorder(
 				borderRadius: BorderRadius.circular(radiusSm),
-				borderSide: const BorderSide(color: AppColors.brandYellow, width: 1.5),
+				borderSide: BorderSide(color: scheme.primary, width: 1.5),
 			),
 			contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
 		);
@@ -86,7 +99,6 @@ class SikaPageHeader extends StatelessWidget {
 									title,
 									style: Theme.of(context).textTheme.titleLarge?.copyWith(
 												fontWeight: FontWeight.w700,
-												color: Colors.white,
 											),
 								),
 								if (subtitle != null) ...[
@@ -150,7 +162,11 @@ class SikaCard extends StatelessWidget {
 	Widget build(BuildContext context) {
 		final content = Container(
 			padding: padding,
-			decoration: SikaUi.cardDecoration(selected: selected, accent: accent),
+			decoration: SikaUi.cardDecoration(
+				selected: selected,
+				accent: accent,
+				brightness: Theme.of(context).brightness,
+			),
 			child: child,
 		);
 
@@ -185,7 +201,9 @@ class SikaStatCard extends StatelessWidget {
 	Widget build(BuildContext context) {
 		return Container(
 			padding: const EdgeInsets.all(16),
-			decoration: SikaUi.cardDecoration(),
+			decoration: SikaUi.cardDecoration(
+				brightness: Theme.of(context).brightness,
+			),
 			child: Row(
 				children: [
 					Container(
@@ -240,14 +258,18 @@ class SikaEmptyState extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
+		final scheme = Theme.of(context).colorScheme;
+		final isDark = scheme.brightness == Brightness.dark;
+
 		return Container(
 			margin: EdgeInsets.symmetric(horizontal: compact ? 8 : 12, vertical: 6),
 			padding: EdgeInsets.all(compact ? 16 : 24),
 			decoration: BoxDecoration(
-				color: AppColors.cardDark.withValues(alpha: 0.5),
+				color: (isDark ? AppColors.cardDark : AppColors.surfaceMuted)
+						.withValues(alpha: isDark ? 0.5 : 1),
 				borderRadius: BorderRadius.circular(SikaUi.radiusMd),
 				border: Border.all(
-					color: AppColors.cardBorder.withValues(alpha: 0.6),
+					color: scheme.outline.withValues(alpha: 0.6),
 					style: BorderStyle.solid,
 				),
 			),

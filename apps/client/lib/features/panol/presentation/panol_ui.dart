@@ -38,30 +38,30 @@ class PanolPalette {
 		final dark = Theme.of(context).brightness == Brightness.dark;
 		if (dark) {
 			return const PanolPalette(
-				canvas: Color(0xFF0B0D10),
-				surface: Color(0xFF161A20),
-				border: Color(0xFF2A3038),
+				canvas: Color(0xFF000000),
+				surface: Color(0xFF141216),
+				border: Color(0xFF2E2838),
 				ink: Color(0xFFF3F4F6),
-				muted: Color(0xFF9CA3AF),
-				softYellow: Color(0xFF3A3018),
-				softRed: Color(0xFF3A1C1E),
-				softGreen: Color(0xFF163025),
-				rowAlt: Color(0xFF12161C),
-				chipBg: Color(0xFF1E2430),
+				muted: Color(0xFF9A94A6),
+				softYellow: Color(0xFF2A1838),
+				softRed: Color(0xFF3A1814),
+				softGreen: Color(0xFF143018),
+				rowAlt: Color(0xFF100E14),
+				chipBg: Color(0xFF1E1A24),
 				isDark: true,
 			);
 		}
 		return const PanolPalette(
-			canvas: Color(0xFFF2F3F5),
+			canvas: Color(0xFFF7F5FA),
 			surface: Color(0xFFFFFFFF),
-			border: Color(0xFFE6E8EC),
+			border: Color(0xFFE4DCEF),
 			ink: Color(0xFF111827),
 			muted: Color(0xFF6B7280),
-			softYellow: Color(0xFFFFF6E0),
-			softRed: Color(0xFFFDECEC),
-			softGreen: Color(0xFFEAF8EF),
-			rowAlt: Color(0xFFFAFBFC),
-			chipBg: Color(0xFFF3F4F6),
+			softYellow: Color(0xFFF5E8FF),
+			softRed: Color(0xFFFFE8E3),
+			softGreen: Color(0xFFE6FBE6),
+			rowAlt: Color(0xFFFAF8FC),
+			chipBg: Color(0xFFF3EFF8),
 			isDark: false,
 		);
 	}
@@ -353,7 +353,7 @@ class _MiniKpiChip extends StatelessWidget {
 			PanolKpiTone.success => (ui.softGreen, AppColors.success),
 			PanolKpiTone.warning => (
 					ui.softYellow,
-					ui.isDark ? AppColors.brandYellow : const Color(0xFF9A6B00),
+					ui.isDark ? AppColors.brandPurple : AppColors.brandPurpleDark,
 				),
 			PanolKpiTone.neutral => (ui.chipBg, ui.muted),
 		};
@@ -557,7 +557,7 @@ class PanolStatusPill extends StatelessWidget {
 			PanolKpiTone.success => (ui.softGreen, AppColors.success),
 			PanolKpiTone.warning => (
 					ui.softYellow,
-					ui.isDark ? AppColors.brandYellow : const Color(0xFF9A6B00),
+					ui.isDark ? AppColors.brandPurple : AppColors.brandPurpleDark,
 				),
 			PanolKpiTone.neutral => (ui.chipBg, ui.muted),
 		};

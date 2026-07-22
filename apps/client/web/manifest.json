@@ -1,11 +1,11 @@
 {
-    "name": "gestion_mantenimiento",
-    "short_name": "gestion_mantenimiento",
+    "name": "GestionMantenimiento",
+    "short_name": "GestionMantenimiento",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#000000",
+    "theme_color": "#C026FF",
+    "description": "Gestión inteligente de mantenimiento, stock y eficiencia",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

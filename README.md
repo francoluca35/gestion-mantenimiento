@@ -124,4 +124,4 @@ Solo se cambian variables de `.env`. El código de storage es el mismo.
 ## Referencia
 
 - Sistema original: [SGMWin — LyM Ingeniería](https://www.lym.com.ar)
-- Cliente: Sika Argentina S.A.
+

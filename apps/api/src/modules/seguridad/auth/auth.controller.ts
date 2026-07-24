@@ -5,7 +5,9 @@ import { AuthService } from './auth.service';
 import type { AuthUser } from './auth.types';
 import { CambiarClaveDto } from './dto/cambiar-clave.dto';
 import { LoginDto } from './dto/login.dto';
+import { RecuperarClaveDto } from './dto/recuperar-clave.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { RestablecerClaveDto } from './dto/restablecer-clave.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -21,6 +23,18 @@ export class AuthController {
 	@Post('refresh')
 	refresh(@Body() dto: RefreshDto) {
 		return this.authService.refresh(dto.refreshToken ?? '');
+	}
+
+	@Public()
+	@Post('recuperar')
+	recuperar(@Body() dto: RecuperarClaveDto) {
+		return this.authService.solicitarRecuperacion(dto);
+	}
+
+	@Public()
+	@Post('restablecer')
+	restablecer(@Body() dto: RestablecerClaveDto) {
+		return this.authService.restablecerClave(dto);
 	}
 
 	@Post('logout')

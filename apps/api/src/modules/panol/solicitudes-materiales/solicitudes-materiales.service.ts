@@ -9,6 +9,7 @@ import { PushService } from '../../notificaciones/push.service';
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { resolveSucursalId } from '../../planta/planta.scope';
 import { StockService } from '../stock/stock.service';
+import { tryLiberarOtTrasPanol } from '../ot-panol-gate.util';
 import {
 	CreateSolicitudesMaterialesDto,
 	RechazarSolicitudMaterialDto,
@@ -178,7 +179,7 @@ export class SolicitudesMaterialesService {
 				usuarioId: currentUser.id,
 			});
 
-			return tx.solicitudMaterial.update({
+			const row = await tx.solicitudMaterial.update({
 				where: { id },
 				data: {
 					estado: EstadoSolicitudMaterial.aprobado,
@@ -191,6 +192,15 @@ export class SolicitudesMaterialesService {
 					ot: { select: { id: true, numero: true, estado: true } },
 				},
 			});
+
+			await tryLiberarOtTrasPanol(
+				tx,
+				solicitud.otId,
+				currentUser.id,
+				'Pañol confirmó materiales — OT lista para iniciar',
+			);
+
+			return row;
 		});
 
 		return updated;
@@ -247,22 +257,13 @@ export class SolicitudesMaterialesService {
 				},
 			});
 
-			if (
-				pendientes === 0 &&
-				solicitud.ot.estado === EstadoOt.pendiente_panol
-			) {
-				await tx.ordenTrabajo.update({
-					where: { id: solicitud.otId },
-					data: { estado: EstadoOt.pendiente },
-				});
-				await tx.otEstadoHistorial.create({
-					data: {
-						otId: solicitud.otId,
-						estado: EstadoOt.pendiente,
-						usuarioId: currentUser.id,
-						comentario: `Materiales rechazados: ${motivo}`,
-					},
-				});
+			if (pendientes === 0) {
+				await tryLiberarOtTrasPanol(
+					tx,
+					solicitud.otId,
+					currentUser.id,
+					`Materiales rechazados: ${motivo}`,
+				);
 			}
 
 			return row;

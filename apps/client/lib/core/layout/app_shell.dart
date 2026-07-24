@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../components/sika_logo.dart';
 import '../layout/breakpoints.dart';
+import '../layout/shell_back_scope.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_controller.dart';
 
@@ -43,12 +44,15 @@ class AppShell extends ConsumerWidget {
 		required bool canPlanta,
 		required bool canProcedimientos,
 		required bool canBuscarOt,
+		required bool canMisOt,
 		required bool canEmitirNoPeriodica,
 		required bool canSolicitudes,
 		required bool canContadores,
 		required bool canOtNecesarias,
 		required bool canStock,
 		required bool canSolicitudesMateriales,
+		required bool canCompras,
+		required bool canIndicadores,
 		required bool canConfig,
 	}) {
 		return [
@@ -59,6 +63,14 @@ class AppShell extends ConsumerWidget {
 				selectedIcon: Icons.home_rounded,
 				route: '/home',
 			),
+			if (canMisOt)
+				const AppNavItem(
+					id: 'mis-ot',
+					label: 'Mis OT',
+					icon: Icons.assignment_outlined,
+					selectedIcon: Icons.assignment_rounded,
+					route: '/mis-ot',
+				),
 			if (canProcedimientos)
 				const AppNavItem(
 					id: 'procedimientos',
@@ -82,6 +94,22 @@ class AppShell extends ConsumerWidget {
 					icon: Icons.search_rounded,
 					selectedIcon: Icons.manage_search_rounded,
 					route: '/ot',
+				),
+			if (canIndicadores)
+				const AppNavItem(
+					id: 'indicadores',
+					label: 'Indicadores',
+					icon: Icons.insights_outlined,
+					selectedIcon: Icons.insights_rounded,
+					route: '/indicadores',
+				),
+			if (canBuscarOt)
+				const AppNavItem(
+					id: 'graficos',
+					label: 'Gráficos OT',
+					icon: Icons.bar_chart_outlined,
+					selectedIcon: Icons.bar_chart_rounded,
+					route: '/ot/graficos',
 				),
 			if (canEmitirNoPeriodica)
 				const AppNavItem(
@@ -114,6 +142,14 @@ class AppShell extends ConsumerWidget {
 					icon: Icons.shopping_bag_outlined,
 					selectedIcon: Icons.shopping_bag_rounded,
 					route: '/solicitudes-materiales',
+				),
+			if (canCompras)
+				const AppNavItem(
+					id: 'compras',
+					label: 'Compras',
+					icon: Icons.local_shipping_outlined,
+					selectedIcon: Icons.local_shipping_rounded,
+					route: '/compras',
 				),
 			if (canContadores)
 				const AppNavItem(
@@ -151,6 +187,10 @@ class AppShell extends ConsumerWidget {
 
 	String _selectedId() {
 		if (location.startsWith('/mis-ot')) return 'mis-ot';
+		if (location.startsWith('/indicadores')) return 'indicadores';
+		if (location.startsWith('/compras')) return 'compras';
+		if (location.startsWith('/ot/graficos')) return 'graficos';
+		if (location.startsWith('/ot/gantt')) return 'buscar-ot';
 		if (location.startsWith('/ot/necesarias')) return 'ot-necesarias';
 		if (location.startsWith('/ot/emitir-no-periodica')) return 'emitir-no-periodica';
 		if (location.startsWith('/ot/emitir-periodica')) return 'emitir-no-periodica';
@@ -182,42 +222,57 @@ class AppShell extends ConsumerWidget {
 		if (context.mounted) context.go('/login');
 	}
 
-	List<AppNavItem> _technicianItems({bool includePerfil = true}) {
-		return [
-			const AppNavItem(
-				id: 'mis-ot',
-				label: 'Mis OT',
-				icon: Icons.assignment_outlined,
-				selectedIcon: Icons.assignment_rounded,
-				route: '/mis-ot',
-			),
-			if (includePerfil)
-				const AppNavItem(
-					id: 'perfil',
-					label: 'Perfil',
-					icon: Icons.person_outline,
-					selectedIcon: Icons.person_rounded,
-					route: '/perfil',
-				),
-		];
-	}
-
 	static const _moreItem = AppNavItem(
 		id: 'more',
 		label: 'Más',
-		icon: Icons.keyboard_arrow_up_rounded,
-		selectedIcon: Icons.keyboard_arrow_up_rounded,
+		icon: Icons.apps_rounded,
+		selectedIcon: Icons.apps_rounded,
 		route: '',
 	);
 
 	List<AppNavItem> _mobilePrimaryItems({
-		required bool isTechnician,
+		required bool preferMisOt,
 		required bool canBuscarOt,
+		required bool canMisOt,
+		required bool canSolicitudes,
+		required bool canSolicitudesMateriales,
+		required bool canIndicadores,
 		required bool canPlanta,
 	}) {
-		if (isTechnician) {
-			return _technicianItems();
-		}
+		// Slot operativo: bandejas del día a día (supervisor/jefe) antes que planta.
+		final AppNavItem? opsSlot = canSolicitudes
+				? const AppNavItem(
+						id: 'solicitudes',
+						label: 'Solic.',
+						icon: Icons.campaign_outlined,
+						selectedIcon: Icons.campaign_rounded,
+						route: '/solicitudes',
+					)
+				: canSolicitudesMateriales
+						? const AppNavItem(
+								id: 'solicitudes-materiales',
+								label: 'Pañol',
+								icon: Icons.shopping_bag_outlined,
+								selectedIcon: Icons.shopping_bag_rounded,
+								route: '/solicitudes-materiales',
+							)
+						: canIndicadores
+								? const AppNavItem(
+										id: 'indicadores',
+										label: 'Indica.',
+										icon: Icons.insights_outlined,
+										selectedIcon: Icons.insights_rounded,
+										route: '/indicadores',
+									)
+								: canPlanta
+										? const AppNavItem(
+												id: 'equipos',
+												label: 'Planta',
+												icon: Icons.precision_manufacturing_outlined,
+												selectedIcon: Icons.precision_manufacturing_rounded,
+												route: '/planta',
+											)
+										: null;
 
 		return [
 			const AppNavItem(
@@ -227,7 +282,15 @@ class AppShell extends ConsumerWidget {
 				selectedIcon: Icons.home_rounded,
 				route: '/home',
 			),
-			if (canBuscarOt)
+			if (preferMisOt && canMisOt)
+				const AppNavItem(
+					id: 'mis-ot',
+					label: 'Mis OT',
+					icon: Icons.assignment_outlined,
+					selectedIcon: Icons.assignment_rounded,
+					route: '/mis-ot',
+				)
+			else if (canBuscarOt)
 				const AppNavItem(
 					id: 'buscar-ot',
 					label: 'OT',
@@ -236,14 +299,7 @@ class AppShell extends ConsumerWidget {
 					route: '/ot',
 				),
 			_moreItem,
-			if (canPlanta)
-				const AppNavItem(
-					id: 'equipos',
-					label: 'Planta',
-					icon: Icons.precision_manufacturing_outlined,
-					selectedIcon: Icons.precision_manufacturing_rounded,
-					route: '/planta',
-				),
+			if (opsSlot != null) opsSlot,
 			const AppNavItem(
 				id: 'perfil',
 				label: 'Perfil',
@@ -255,7 +311,17 @@ class AppShell extends ConsumerWidget {
 	}
 
 	List<AppNavItem> _mobileMoreItems(List<AppNavItem> allItems) {
-		const primaryIds = {'home', 'buscar-ot', 'equipos', 'perfil', 'more'};
+		const primaryIds = {
+			'home',
+			'buscar-ot',
+			'mis-ot',
+			'solicitudes',
+			'solicitudes-materiales',
+			'indicadores',
+			'equipos',
+			'perfil',
+			'more',
+		};
 		return allItems.where((item) => !primaryIds.contains(item.id)).toList();
 	}
 
@@ -268,6 +334,8 @@ class AppShell extends ConsumerWidget {
 
 		final route = await showModalBottomSheet<String>(
 			context: context,
+			isScrollControlled: true,
+			useSafeArea: true,
 			backgroundColor:
 					Theme.of(context).brightness == Brightness.dark
 							? AppColors.cardElevated
@@ -278,17 +346,25 @@ class AppShell extends ConsumerWidget {
 			builder: (sheetContext) {
 				final scheme = Theme.of(sheetContext).colorScheme;
 				final onBg = scheme.onSurface;
+				final media = MediaQuery.of(sheetContext);
+				final maxHeight = (media.size.height - media.padding.top) * 0.82;
 
-				return SafeArea(
+				return ConstrainedBox(
+					constraints: BoxConstraints(maxHeight: maxHeight),
 					child: Padding(
-						padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+						padding: EdgeInsets.fromLTRB(
+							16,
+							8,
+							16,
+							8 + media.viewPadding.bottom,
+						),
 						child: Column(
 							mainAxisSize: MainAxisSize.min,
 							children: [
 								Container(
 									width: 40,
 									height: 4,
-									margin: const EdgeInsets.only(bottom: 16),
+									margin: const EdgeInsets.only(bottom: 12),
 									decoration: BoxDecoration(
 										color: onBg.withValues(alpha: 0.25),
 										borderRadius: BorderRadius.circular(2),
@@ -296,70 +372,77 @@ class AppShell extends ConsumerWidget {
 								),
 								Align(
 									alignment: Alignment.centerLeft,
-									child: Text(
-										'Menú',
-										style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-													color: onBg,
-													fontWeight: FontWeight.w700,
-												),
+									child: Padding(
+										padding: const EdgeInsets.only(bottom: 8),
+										child: Text(
+											'Menú',
+											style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
+														color: onBg,
+														fontWeight: FontWeight.w700,
+													),
+										),
 									),
 								),
-								const SizedBox(height: 12),
-								...moreItems.map((item) {
-									final selected = item.id == selectedId;
-									return Padding(
-										padding: const EdgeInsets.only(bottom: 4),
-										child: Material(
-											color: selected
-													? scheme.primary
-													: Colors.transparent,
-											borderRadius: BorderRadius.circular(12),
-											child: InkWell(
+								Flexible(
+									child: ListView.separated(
+										shrinkWrap: true,
+										physics: const ClampingScrollPhysics(),
+										itemCount: moreItems.length,
+										separatorBuilder: (_, __) => const SizedBox(height: 2),
+										itemBuilder: (context, index) {
+											final item = moreItems[index];
+											final selected = item.id == selectedId;
+											return Material(
+												color: selected ? scheme.primary : Colors.transparent,
 												borderRadius: BorderRadius.circular(12),
-												onTap: () => Navigator.of(sheetContext).pop(item.route),
-												child: Padding(
-													padding: const EdgeInsets.symmetric(
-														horizontal: 14,
-														vertical: 14,
-													),
-													child: Row(
-														children: [
-															Icon(
-																selected ? item.selectedIcon : item.icon,
-																size: 22,
-																color: selected
-																		? scheme.onPrimary
-																		: onBg.withValues(alpha: 0.85),
-															),
-															const SizedBox(width: 14),
-															Expanded(
-																child: Text(
-																	item.label,
-																	style: TextStyle(
-																		fontWeight: selected
-																				? FontWeight.w700
-																				: FontWeight.w500,
-																		color: selected
-																				? scheme.onPrimary
-																				: onBg.withValues(alpha: 0.9),
-																		fontSize: 15,
+												child: InkWell(
+													borderRadius: BorderRadius.circular(12),
+													onTap: () =>
+															Navigator.of(sheetContext).pop(item.route),
+													child: Padding(
+														padding: const EdgeInsets.symmetric(
+															horizontal: 14,
+															vertical: 12,
+														),
+														child: Row(
+															children: [
+																Icon(
+																	selected ? item.selectedIcon : item.icon,
+																	size: 22,
+																	color: selected
+																			? scheme.onPrimary
+																			: onBg.withValues(alpha: 0.85),
+																),
+																const SizedBox(width: 14),
+																Expanded(
+																	child: Text(
+																		item.label,
+																		style: TextStyle(
+																			fontWeight: selected
+																					? FontWeight.w700
+																					: FontWeight.w500,
+																			color: selected
+																					? scheme.onPrimary
+																					: onBg.withValues(alpha: 0.9),
+																			fontSize: 15,
+																		),
 																	),
 																),
-															),
-															Icon(
-																Icons.chevron_right_rounded,
-																size: 20,
-																color: selected
-																		? scheme.onPrimary.withValues(alpha: 0.6)
-																		: onBg.withValues(alpha: 0.35),
-															),
-														],
+																Icon(
+																	Icons.chevron_right_rounded,
+																	size: 20,
+																	color: selected
+																			? scheme.onPrimary.withValues(alpha: 0.6)
+																			: onBg.withValues(alpha: 0.35),
+																),
+															],
+														),
 													),
 												),
-											),
-										),
-									);
-								}),
+											);
+										},
+									),
+								),
 							],
 						),
 					),
@@ -403,29 +486,50 @@ class AppShell extends ConsumerWidget {
 		final canOtNecesarias =
 				user?.tieneDerecho('programacion.ordenes_trabajo.emitir_periodica') == true ||
 				user?.esAdministrador == true;
-		final isTechnician = user?.esTecnico == true;
-		final isPanolero = user?.esPanolero == true;
+		final canCompras =
+				user?.tieneDerecho('stock.ordenes_compra.buscar_y_actualizar') == true ||
+				user?.tieneDerecho('stock.ordenes_compra.emitir') == true ||
+				user?.esAdministrador == true;
+		final canIndicadores =
+				user?.tieneDerecho('analisis.trabajos.indices_gestion') == true ||
+				user?.tieneDerecho('programacion.ordenes_trabajo.buscar_y_actualizar') == true ||
+				user?.esAdministrador == true;
+		final canMisOt =
+				user?.esTecnico == true ||
+				user?.tieneDerecho('programacion.ordenes_trabajo.buscar_y_actualizar') == true ||
+				user?.esAdministrador == true;
+		final preferMisOt = user?.esTecnico == true;
+		final homeRoute = preferMisOt
+				? '/mis-ot'
+				: user?.esPanolero == true
+						? '/panol'
+						: '/home';
 
 		final width = MediaQuery.sizeOf(context).width;
 		final isMobile = width < Breakpoints.tablet;
 
-		final items = isTechnician
-				? _technicianItems(includePerfil: !isMobile)
-				: _items(
-						canPlanta: canPlanta,
-						canProcedimientos: canProcedimientos,
-						canBuscarOt: canBuscarOt,
-						canEmitirNoPeriodica: canEmitirNoPeriodica,
-						canSolicitudes: canSolicitudes,
-						canContadores: canContadores,
-						canOtNecesarias: canOtNecesarias,
-						canStock: canStock,
-						canSolicitudesMateriales: canSolicitudesMateriales,
-						canConfig: canConfig,
-					);
-		final mobileItems = _mobilePrimaryItems(
-			isTechnician: isTechnician,
+		final items = _items(
+			canPlanta: canPlanta,
+			canProcedimientos: canProcedimientos,
 			canBuscarOt: canBuscarOt,
+			canMisOt: canMisOt,
+			canEmitirNoPeriodica: canEmitirNoPeriodica,
+			canSolicitudes: canSolicitudes,
+			canContadores: canContadores,
+			canOtNecesarias: canOtNecesarias,
+			canStock: canStock,
+			canSolicitudesMateriales: canSolicitudesMateriales,
+			canCompras: canCompras,
+			canIndicadores: canIndicadores,
+			canConfig: canConfig,
+		);
+		final mobileItems = _mobilePrimaryItems(
+			preferMisOt: preferMisOt,
+			canBuscarOt: canBuscarOt,
+			canMisOt: canMisOt,
+			canSolicitudes: canSolicitudes,
+			canSolicitudesMateriales: canSolicitudesMateriales,
+			canIndicadores: canIndicadores,
 			canPlanta: canPlanta,
 		);
 		final moreItems = _mobileMoreItems(items);
@@ -436,10 +540,11 @@ class AppShell extends ConsumerWidget {
 		final navBg = isDark ? AppColors.black : AppColors.white;
 		final moreSelected = moreItems.any((item) => item.id == selectedId);
 
-		if (isTechnician || isPanolero) {
-			return Scaffold(
-				backgroundColor: isPanolero ? AppColors.backgroundLight : pageBg,
-				body: SafeArea(child: child),
+		Widget wrapBack(Widget body) {
+			return ShellBackScope(
+				location: location,
+				homeRoute: homeRoute,
+				child: body,
 			);
 		}
 
@@ -451,11 +556,11 @@ class AppShell extends ConsumerWidget {
 
 			return Scaffold(
 				backgroundColor: pageBg,
-				// bottom: false — la NavigationBar ya respeta el notch inferior
-				body: SafeArea(bottom: false, child: child),
-				bottomNavigationBar: NavigationBar(
+				body: SafeArea(bottom: false, child: wrapBack(child)),
+				bottomNavigationBar: _MobileBottomNav(
+					items: mobileItems,
 					selectedIndex: navIndex,
-					onDestinationSelected: (index) {
+					onSelected: (index) {
 						if (index >= mobileItems.length) return;
 						final item = mobileItems[index];
 						if (item.id == 'more') {
@@ -468,19 +573,6 @@ class AppShell extends ConsumerWidget {
 						}
 						_go(context, item.route);
 					},
-					destinations: mobileItems
-							.map(
-								(item) => NavigationDestination(
-									icon: item.id == 'more'
-											? const Icon(Icons.keyboard_arrow_up_rounded, size: 28)
-											: Icon(item.icon),
-									selectedIcon: item.id == 'more'
-											? const Icon(Icons.keyboard_arrow_up_rounded, size: 28)
-											: Icon(item.selectedIcon),
-									label: item.label,
-								),
-							)
-							.toList(),
 				),
 			);
 		}
@@ -494,17 +586,14 @@ class AppShell extends ConsumerWidget {
 						items: items,
 						selectedId: selectedId,
 						onNavigate: (route) => _go(context, route),
-						onHome: () => _go(
-							context,
-							isTechnician ? '/mis-ot' : '/home',
-						),
+						onHome: () => _go(context, homeRoute),
 						onLogout: () => _logout(context, ref),
 						userName: user?.nombreUsuario ?? '',
 						perfilNombre: user?.perfilNombre ??
 								(user?.esAdministrador == true ? 'Administrador' : ''),
 						sucursalNombre: user?.sucursalNombre ?? '',
 					),
-					Expanded(child: child),
+					Expanded(child: wrapBack(child)),
 				],
 			),
 		);
@@ -955,5 +1044,142 @@ class _NavActionTile extends StatelessWidget {
 		);
 
 		return collapsed ? Tooltip(message: label, child: tile) : tile;
+	}
+}
+
+/// Bottom nav mobile con "Más" destacado (círculo de marca, sin flotar sobre el contenido).
+class _MobileBottomNav extends StatelessWidget {
+	const _MobileBottomNav({
+		required this.items,
+		required this.selectedIndex,
+		required this.onSelected,
+	});
+
+	final List<AppNavItem> items;
+	final int selectedIndex;
+	final ValueChanged<int> onSelected;
+
+	@override
+	Widget build(BuildContext context) {
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final bg = isDark ? AppColors.black : AppColors.white;
+		final border = isDark
+				? Colors.white.withValues(alpha: 0.08)
+				: const Color(0xFFE8E0F0);
+		final muted = isDark
+				? Colors.white.withValues(alpha: 0.55)
+				: AppColors.ink.withValues(alpha: 0.55);
+		final selected = AppColors.brandPurple;
+
+		return Material(
+			color: bg,
+			elevation: 0,
+			child: SafeArea(
+				top: false,
+				child: Container(
+					height: 68,
+					decoration: BoxDecoration(
+						border: Border(top: BorderSide(color: border)),
+					),
+					padding: const EdgeInsets.symmetric(horizontal: 4),
+					child: Row(
+						children: [
+							for (var i = 0; i < items.length; i++)
+								Expanded(
+									child: _MobileNavSlot(
+										item: items[i],
+										selected: i == selectedIndex && items[i].id != 'more',
+										accent: selected,
+										muted: muted,
+										onTap: () => onSelected(i),
+									),
+								),
+						],
+					),
+				),
+			),
+		);
+	}
+}
+
+class _MobileNavSlot extends StatelessWidget {
+	const _MobileNavSlot({
+		required this.item,
+		required this.selected,
+		required this.accent,
+		required this.muted,
+		required this.onTap,
+	});
+
+	final AppNavItem item;
+	final bool selected;
+	final Color accent;
+	final Color muted;
+	final VoidCallback onTap;
+
+	bool get _isMore => item.id == 'more';
+
+	@override
+	Widget build(BuildContext context) {
+		final color = selected || _isMore ? accent : muted;
+
+		return InkWell(
+			onTap: onTap,
+			borderRadius: BorderRadius.circular(16),
+			child: Column(
+				mainAxisAlignment: MainAxisAlignment.center,
+				children: [
+					if (_isMore)
+						Container(
+							width: 42,
+							height: 42,
+							decoration: BoxDecoration(
+								color: accent,
+								borderRadius: BorderRadius.circular(14),
+								boxShadow: [
+									BoxShadow(
+										color: accent.withValues(alpha: 0.28),
+										blurRadius: 10,
+										offset: const Offset(0, 3),
+									),
+								],
+							),
+							child: const Icon(
+								Icons.apps_rounded,
+								color: Colors.white,
+								size: 22,
+							),
+						)
+					else
+						AnimatedContainer(
+							duration: const Duration(milliseconds: 180),
+							padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+							decoration: BoxDecoration(
+								color: selected
+										? accent.withValues(alpha: 0.12)
+										: Colors.transparent,
+								borderRadius: BorderRadius.circular(18),
+							),
+							child: Icon(
+								selected ? item.selectedIcon : item.icon,
+								color: color,
+								size: 24,
+							),
+						),
+					const SizedBox(height: 4),
+					Text(
+						item.label,
+						maxLines: 1,
+						overflow: TextOverflow.ellipsis,
+						style: TextStyle(
+							fontSize: 11,
+							fontWeight: selected || _isMore ? FontWeight.w700 : FontWeight.w500,
+							color: color,
+							height: 1.1,
+						),
+					),
+				],
+			),
+		);
 	}
 }

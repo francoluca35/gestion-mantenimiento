@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/breakpoints.dart';
+import '../../../core/layout/shell_back_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../auth/application/auth_controller.dart';
@@ -104,6 +105,8 @@ class PanolShell extends ConsumerWidget {
 				bottom: false,
 				child: Row(
 					children: [
+						const ShellBackButton(),
+						const SizedBox(width: 4),
 						InkWell(
 							onTap: () => go('/panol'),
 							borderRadius: BorderRadius.circular(8),
@@ -171,10 +174,14 @@ class PanolShell extends ConsumerWidget {
 						PopupMenuButton<String>(
 							tooltip: 'Cuenta',
 							onSelected: (value) {
+								if (value == 'home') context.go('/home');
+								if (value == 'compras') context.go('/compras');
 								if (value == 'perfil') context.go('/perfil');
 								if (value == 'logout') logout();
 							},
 							itemBuilder: (context) => const [
+								PopupMenuItem(value: 'home', child: Text('Inicio app')),
+								PopupMenuItem(value: 'compras', child: Text('Compras')),
 								PopupMenuItem(value: 'perfil', child: Text('Perfil')),
 								PopupMenuItem(value: 'logout', child: Text('Cerrar sesión')),
 							],
@@ -275,7 +282,10 @@ class PanolShell extends ConsumerWidget {
 				.clamp(0, mobileTabs.length - 1);
 		final showBottomNav = !isWide && !isHome;
 
-		return Scaffold(
+		return ShellBackScope(
+			location: location,
+			homeRoute: '/panol',
+			child: Scaffold(
 			backgroundColor: ui.canvas,
 			body: IconTheme(
 				data: IconThemeData(color: ui.ink),
@@ -347,6 +357,7 @@ class PanolShell extends ConsumerWidget {
 								),
 							),
 						),
+			),
 		);
 	}
 }

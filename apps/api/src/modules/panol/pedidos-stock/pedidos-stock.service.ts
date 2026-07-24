@@ -7,6 +7,7 @@ import { EstadoPedidoStock, TipoMovimientoStock } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { resolveSucursalId } from '../../planta/planta.scope';
+import { tryLiberarOtTrasPanol } from '../ot-panol-gate.util';
 import { CreatePedidoStockDto, UpdatePedidoStockDto } from './dto/pedido-stock.dto';
 
 @Injectable()
@@ -136,10 +137,11 @@ export class PedidosStockService {
 						usuarioId: currentUser.id,
 						origen: 'pedido_stock',
 						notas: `Pedido PD-${String(pedido.numero).padStart(4, '0')}`,
+						otId: pedido.otId ?? undefined,
 					},
 				});
 
-				return tx.pedidoStock.update({
+				const updated = await tx.pedidoStock.update({
 					where: { id },
 					data: {
 						estado: EstadoPedidoStock.completado,
@@ -155,6 +157,17 @@ export class PedidosStockService {
 						usuario: { select: { id: true, nombreUsuario: true } },
 					},
 				});
+
+				if (pedido.otId) {
+					await tryLiberarOtTrasPanol(
+						tx,
+						pedido.otId,
+						currentUser.id,
+						'Pañol completó reposición — OT lista para iniciar',
+					);
+				}
+
+				return updated;
 			});
 		}
 

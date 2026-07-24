@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../components/sika_ui.dart';
 import '../../../core/config/app_config.dart';
-import '../../../core/layout/collapsible_panel.dart';
+import '../../../core/layout/shell_back_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_user.dart';
@@ -16,6 +16,7 @@ import 'ot_firma_sheet.dart';
 import 'ot_list_toolbar.dart';
 import 'ot_motivo_pendiente_dialog.dart';
 import 'ot_pdf.dart';
+import 'ot_preparacion_sheet.dart';
 import 'ot_print.dart';
 import 'ot_ui.dart';
 import '../../panol/presentation/solicitar_materiales_sheet.dart';
@@ -42,11 +43,6 @@ class OtPage extends ConsumerStatefulWidget {
 
 class _OtPageState extends ConsumerState<OtPage> {
 	static final _dateFormat = DateFormat('dd/MM/yyyy');
-
-	static const _listExpandedWidth = 360.0;
-	static const _listCollapsedWidth = 56.0;
-	static const _mapExpandedWidth = 300.0;
-	static const _mapCollapsedWidth = 0.0;
 
 	List<Map<String, dynamic>> _ordenes = [];
 	List<Map<String, dynamic>> _tecnicos = [];
@@ -77,8 +73,8 @@ class _OtPageState extends ConsumerState<OtPage> {
 	String? _mapFiltroEquipoId;
 	String? _mapFiltroUbicacionId;
 	String? _highlightEquipoId;
-	bool _listCollapsed = false;
-	bool _mapCollapsed = false;
+	/// Ancho del panel lista en vista desktop lista+mapa (null = ~45% inicial).
+	double? _browseListWidth;
 
 	static (DateTime, DateTime) _rangoMesActual() {
 		final now = DateTime.now();
@@ -122,15 +118,46 @@ class _OtPageState extends ConsumerState<OtPage> {
 	bool get _canManage =>
 			_user?.tieneDerecho('programacion.ordenes_trabajo.buscar_y_actualizar') == true;
 
+	bool _preparacionCompleta(Map<String, dynamic> ot) {
+		final decision = ot['decisionMateriales'] as String? ?? 'pendiente';
+		return ot['lecturaRegistradaAt'] != null &&
+				(decision == 'no_necesita' || decision == 'necesita');
+	}
+
 	bool _puedeEjecutarOt(Map<String, dynamic> ot) {
 		final estado = ot['estado'] as String?;
-		if (!['pendiente', 'en_ejecucion'].contains(estado)) return false;
+		if (!['pendiente', 'en_ejecucion', 'pendiente_panol'].contains(estado)) {
+			return false;
+		}
 		if (_user?.esAdministrador == true || _user?.supervisaSucursales == true) {
 			return true;
 		}
 		final tecnicoId =
 				ot['tecnicoAsignado']?['id'] as String? ?? ot['tecnicoAsignadoId'] as String?;
 		return tecnicoId != null && tecnicoId == _user?.id;
+	}
+
+	Future<bool> _ensurePreparacion(Map<String, dynamic> ot) async {
+		if (_preparacionCompleta(ot)) return true;
+		final done = await showOtPreparacionSheet(
+			context: context,
+			ref: ref,
+			ot: ot,
+		);
+		if (!done || !mounted) return false;
+		await _bootstrap(keepSelection: true);
+		final refreshed = _selected;
+		if (refreshed == null) return false;
+		return _preparacionCompleta(refreshed);
+	}
+
+	Future<void> _abrirPreparacion(Map<String, dynamic> ot) async {
+		final done = await showOtPreparacionSheet(
+			context: context,
+			ref: ref,
+			ot: ot,
+		);
+		if (done && mounted) await _bootstrap(keepSelection: true);
 	}
 
 	@override
@@ -160,6 +187,15 @@ class _OtPageState extends ConsumerState<OtPage> {
 		return '${date.year.toString().padLeft(4, '0')}-'
 				'${date.month.toString().padLeft(2, '0')}-'
 				'${date.day.toString().padLeft(2, '0')}';
+	}
+
+	void _openGantt() {
+		final q = {
+			'fechaDesde': _toApiDate(_fechaDesde),
+			'fechaHasta': _toApiDate(_fechaHasta),
+			if (widget.misOtOnly) 'misOt': 'true',
+		};
+		context.push(Uri(path: '/ot/gantt', queryParameters: q).toString());
 	}
 
 	String _buildOtQuery() {
@@ -305,10 +341,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 					return;
 				}
 			}
-
-			if (lista.isNotEmpty && MediaQuery.sizeOf(context).width >= 900) {
-				await _selectOt(lista.first, silent: true);
-			}
+			// Desktop: no auto-seleccionar — primero lista + mapa.
 		} catch (error) {
 			if (mounted) setState(() => _error = error.toString());
 		} finally {
@@ -344,6 +377,15 @@ class _OtPageState extends ConsumerState<OtPage> {
 			initialDate: initial,
 			firstDate: DateTime(2020),
 			lastDate: DateTime(2035),
+			helpText: desde ? 'Fecha desde' : 'Fecha hasta',
+			cancelText: 'Cancelar',
+			confirmText: 'Aceptar',
+			builder: (context, child) {
+				return Theme(
+					data: Theme.of(context),
+					child: child ?? const SizedBox.shrink(),
+				);
+			},
 		);
 		if (picked == null || !mounted) return;
 
@@ -360,6 +402,31 @@ class _OtPageState extends ConsumerState<OtPage> {
 				}
 			}
 		});
+	}
+
+	Future<void> _pickRangoFechas() async {
+		final picked = await showDateRangePicker(
+			context: context,
+			firstDate: DateTime(2020),
+			lastDate: DateTime(2035),
+			initialDateRange: DateTimeRange(start: _fechaDesde, end: _fechaHasta),
+			helpText: 'Rango de fechas',
+			cancelText: 'Cancelar',
+			confirmText: 'Aplicar',
+			saveText: 'Aplicar',
+			builder: (context, child) {
+				return Theme(
+					data: Theme.of(context),
+					child: child ?? const SizedBox.shrink(),
+				);
+			},
+		);
+		if (picked == null || !mounted) return;
+		setState(() {
+			_fechaDesde = DateTime(picked.start.year, picked.start.month, picked.start.day);
+			_fechaHasta = DateTime(picked.end.year, picked.end.month, picked.end.day);
+		});
+		await _bootstrap(keepSelection: true);
 	}
 
 	List<Map<String, dynamic>> get _filtradas {
@@ -831,12 +898,28 @@ class _OtPageState extends ConsumerState<OtPage> {
 	}
 
 	Future<void> _abrirEjecucion(Map<String, dynamic> ot) async {
-		final detalle = await OtEjecucionSheet.show(context, ot);
+		if (!await _ensurePreparacion(ot)) return;
+		final current = _selected ?? ot;
+		final detalle = await OtEjecucionSheet.show(context, current);
 		if (detalle == null || !mounted) return;
 		setState(() => _selected = detalle);
 		ScaffoldMessenger.of(context).showSnackBar(
 			const SnackBar(content: Text('Trabajo guardado')),
 		);
+	}
+
+	Future<void> _iniciarConPreparacion(Map<String, dynamic> ot) async {
+		if (!await _ensurePreparacion(ot)) return;
+		await _cambiarEstado(
+			ot['id'] as String,
+			'en_ejecucion',
+			comentario: 'Técnico inició ejecución',
+		);
+	}
+
+	Future<void> _firmarConPreparacion(Map<String, dynamic> ot) async {
+		if (!await _ensurePreparacion(ot)) return;
+		await _firmarYCerrar(_selected ?? ot);
 	}
 
 	@override
@@ -872,73 +955,135 @@ class _OtPageState extends ConsumerState<OtPage> {
 			return _wrapTecnicoShell(_buildMobile(scheme));
 		}
 
+		// Desktop / tablet Mis OT: lista+mapa → detalle completo al seleccionar.
 		if (widget.misOtOnly) {
-			final listFlex = width >= 1100 ? 2 : 3;
-			final detailFlex = width >= 1100 ? 5 : 4;
 			return _wrapTecnicoShell(
-				Row(
-					children: [
-						Expanded(
-							flex: listFlex,
-							child: _buildListPanel(scheme, comfortable: true),
-						),
-						const VerticalDivider(width: 1),
-						Expanded(
-							flex: detailFlex,
-							child: _buildMainPanel(scheme, mobile: width < 1100),
-						),
-					],
-				),
+				_buildDesktopShell(scheme, comfortableList: true),
 			);
 		}
 
-		return Row(
-			children: [
-				CollapsiblePanel(
-					collapsed: _listCollapsed,
-					expandedWidth: _listExpandedWidth,
-					collapsedWidth: _listCollapsedWidth,
-					collapsedChild: Material(
-						color: scheme.surface,
-						child: Column(
-							children: [
-								const SizedBox(height: 16),
-								Icon(Icons.assignment_rounded, color: AppColors.accent, size: 22),
-								const Spacer(),
-							],
+		// Desktop Buscar OT: misma lógica (lista+mapa → detalle).
+		return _buildDesktopShell(scheme);
+	}
+
+	Widget _buildDesktopShell(ColorScheme scheme, {bool comfortableList = false}) {
+		final showingDetail = _selected != null;
+		return AnimatedSwitcher(
+			duration: const Duration(milliseconds: 340),
+			switchInCurve: Curves.easeOutCubic,
+			switchOutCurve: Curves.easeInCubic,
+			layoutBuilder: (currentChild, previousChildren) {
+				return Stack(
+					fit: StackFit.expand,
+					alignment: Alignment.center,
+					children: [
+						...previousChildren,
+						if (currentChild != null) currentChild,
+					],
+				);
+			},
+			transitionBuilder: (child, animation) {
+				final curved = CurvedAnimation(
+					parent: animation,
+					curve: Curves.easeOutCubic,
+					reverseCurve: Curves.easeInCubic,
+				);
+				final isDetail = child.key == const ValueKey('ot-detail');
+				final begin = isDetail
+						? const Offset(0.06, 0)
+						: const Offset(-0.04, 0);
+				return FadeTransition(
+					opacity: curved,
+					child: SlideTransition(
+						position: Tween<Offset>(begin: begin, end: Offset.zero).animate(curved),
+						child: child,
+					),
+				);
+			},
+			child: showingDetail
+					? KeyedSubtree(
+							key: const ValueKey('ot-detail'),
+							child: _buildDesktopDetail(scheme),
+						)
+					: KeyedSubtree(
+							key: const ValueKey('ot-browse'),
+							child: _buildDesktopBrowse(scheme, comfortableList: comfortableList),
 						),
+		);
+	}
+
+	/// Lista de OT + mapa de planta (sin panel de detalle).
+	Widget _buildDesktopBrowse(ColorScheme scheme, {bool comfortableList = false}) {
+		return _ResizableHSplit(
+			initialListFraction: 0.42,
+			listWidth: _browseListWidth,
+			onListWidthChanged: (w) => _browseListWidth = w,
+			left: _buildListPanel(scheme, comfortable: comfortableList),
+			right: PlantaMapPanel(
+				compact: true,
+				selection: _mapSelection,
+				highlightEquipoId: _highlightEquipoId,
+				onSelectionChanged: _onMapSelectionChanged,
+				onSearch: () => _aplicarFiltroMapa(),
+			),
+		);
+	}
+
+	/// Detalle de OT a pantalla completa con volver a lista+mapa.
+	Widget _buildDesktopDetail(ColorScheme scheme) {
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final barBg = isDark ? AppColors.black : AppColors.white;
+		final fg = isDark ? Colors.white : AppColors.ink;
+		final border = isDark ? AppColors.cardBorder : const Color(0xFFE8E0F0);
+
+		return Column(
+			children: [
+				Container(
+					height: 56,
+					padding: const EdgeInsets.symmetric(horizontal: 8),
+					decoration: BoxDecoration(
+						color: barBg,
+						border: Border(bottom: BorderSide(color: border)),
 					),
-					child: _buildListPanel(scheme),
-				),
-				PanelCollapseHandle(
-					collapsed: _listCollapsed,
-					onToggle: () => setState(() => _listCollapsed = !_listCollapsed),
-					edge: PanelCollapseEdge.start,
-					expandTooltip: 'Expandir listado',
-					collapseTooltip: 'Contraer listado',
-				),
-				Expanded(flex: 3, child: _buildMainPanel(scheme)),
-				PanelCollapseHandle(
-					collapsed: _mapCollapsed,
-					onToggle: () => setState(() => _mapCollapsed = !_mapCollapsed),
-					edge: PanelCollapseEdge.end,
-					topOffset: 16,
-					expandTooltip: 'Mostrar mapa',
-					collapseTooltip: 'Ocultar mapa',
-				),
-				CollapsiblePanel(
-					collapsed: _mapCollapsed,
-					expandedWidth: _mapExpandedWidth,
-					collapsedWidth: _mapCollapsedWidth,
-					child: PlantaMapPanel(
-						compact: true,
-						selection: _mapSelection,
-						highlightEquipoId:
-								_showMapaMobile ? null : _highlightEquipoId,
-						onSelectionChanged: _onMapSelectionChanged,
-						onSearch: () => _aplicarFiltroMapa(),
+					child: Row(
+						children: [
+							IconButton(
+								tooltip: 'Volver al listado',
+								onPressed: () => setState(() {
+									_selected = null;
+									_highlightEquipoId = null;
+								}),
+								icon: Icon(Icons.arrow_back_rounded, color: fg),
+							),
+							const SizedBox(width: 4),
+							Expanded(
+								child: Text(
+									'OT #${_selected?['numero'] ?? ''}',
+									maxLines: 1,
+									overflow: TextOverflow.ellipsis,
+									style: TextStyle(
+										fontWeight: FontWeight.w700,
+										fontSize: 18,
+										color: fg,
+									),
+								),
+							),
+							if (_user?.sucursalNombre != null)
+								Padding(
+									padding: const EdgeInsets.only(right: 8),
+									child: Text(
+										_user!.sucursalNombre!,
+										style: const TextStyle(
+											color: AppColors.accent,
+											fontWeight: FontWeight.w600,
+											fontSize: 12,
+										),
+									),
+								),
+						],
 					),
 				),
+				Expanded(child: _buildMainPanel(scheme, mobile: false)),
 			],
 		);
 	}
@@ -1069,14 +1214,17 @@ class _OtPageState extends ConsumerState<OtPage> {
 	}
 
 	Widget _buildListPanel(ColorScheme scheme, {bool comfortable = false}) {
-		final plantaLine = _user?.sucursalNombre != null
-				? '${_user!.sucursalNombre!} · ${_dateFormat.format(_fechaDesde)} – ${_dateFormat.format(_fechaHasta)}'
-				: null;
 		final hPad = comfortable ? 20.0 : 16.0;
 		final titleSize = comfortable ? 24.0 : 22.0;
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final panelBg = isDark ? AppColors.black : AppColors.white;
+		final titleColor = isDark ? Colors.white : AppColors.ink;
+		final iconMuted = isDark
+				? Colors.white.withValues(alpha: 0.75)
+				: AppColors.ink.withValues(alpha: 0.65);
 
 		return Container(
-			color: AppColors.black,
+			color: panelBg,
 			child: Column(
 				crossAxisAlignment: CrossAxisAlignment.stretch,
 				children: [
@@ -1085,6 +1233,10 @@ class _OtPageState extends ConsumerState<OtPage> {
 						child: Row(
 							crossAxisAlignment: CrossAxisAlignment.start,
 							children: [
+								Padding(
+									padding: const EdgeInsets.only(top: 2, right: 4),
+									child: ShellBackButton(color: titleColor),
+								),
 								Expanded(
 									child: Column(
 										crossAxisAlignment: CrossAxisAlignment.start,
@@ -1094,15 +1246,15 @@ class _OtPageState extends ConsumerState<OtPage> {
 												style: TextStyle(
 													fontWeight: FontWeight.w700,
 													fontSize: titleSize,
-													color: Colors.white,
+													color: titleColor,
 													height: 1.2,
 												),
 											),
-											if (plantaLine != null) ...[
+											if (_user?.sucursalNombre != null) ...[
 												const SizedBox(height: 8),
 												Text(
-													plantaLine,
-													maxLines: 2,
+													_user!.sucursalNombre!,
+													maxLines: 1,
 													overflow: TextOverflow.ellipsis,
 													style: const TextStyle(
 														color: AppColors.accent,
@@ -1112,8 +1264,19 @@ class _OtPageState extends ConsumerState<OtPage> {
 													),
 												),
 											],
+											const SizedBox(height: 10),
+											_DateRangeChip(
+												label:
+														'${_dateFormat.format(_fechaDesde)} — ${_dateFormat.format(_fechaHasta)}',
+												onTap: _pickRangoFechas,
+											),
 										],
 									),
+								),
+								IconButton(
+									tooltip: 'Gantt / carga',
+									onPressed: _openGantt,
+									icon: Icon(Icons.view_timeline_rounded, color: iconMuted),
 								),
 								if (!widget.misOtOnly)
 									IconButton(
@@ -1125,7 +1288,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 													: Icons.filter_list_rounded,
 											color: _hayFiltrosActivos
 													? AppColors.brandYellow
-													: Colors.white.withValues(alpha: 0.7),
+													: iconMuted,
 										),
 									),
 							],
@@ -1151,6 +1314,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 								formatDate: _dateFormat.format,
 								onPickDesde: () => _pickFecha(desde: true),
 								onPickHasta: () => _pickFecha(desde: false),
+								onPickRango: _pickRangoFechas,
 								onMesActual: _resetMesActual,
 								onTipoChanged: (value) => setState(() => _filtroTipo = value),
 								onTecnicoChanged: (value) => setState(() => _filtroTecnicoId = value),
@@ -1166,7 +1330,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 					Padding(
 						padding: EdgeInsets.symmetric(horizontal: hPad),
 						child: TextField(
-							style: const TextStyle(color: Colors.white),
+							style: TextStyle(color: titleColor),
 							decoration: SikaUi.searchDecoration(
 								context: context,
 								hint: widget.misOtOnly
@@ -1200,6 +1364,7 @@ class _OtPageState extends ConsumerState<OtPage> {
 							onExportarFiltradas: _exportFiltradas,
 							onImprimir: _imprimirListado,
 							onImprimirPdf: _checkedIds.isNotEmpty ? _imprimirPdfSeleccion : null,
+							onGantt: _openGantt,
 						),
 					],
 					Expanded(
@@ -1309,13 +1474,9 @@ class _OtPageState extends ConsumerState<OtPage> {
 				formatDate: _formatDate,
 				includeActionBar: includeActionBar,
 				onPdf: () => _abrirPdf(_selected!['id'] as String),
-				onIniciar: () => _cambiarEstado(
-					_selected!['id'] as String,
-					'en_ejecucion',
-					comentario: 'Técnico inició ejecución',
-				),
+				onIniciar: () => _iniciarConPreparacion(_selected!),
 				onEjecucion: () => _abrirEjecucion(_selected!),
-				onFirmar: () => _firmarYCerrar(_selected!),
+				onFirmar: () => _firmarConPreparacion(_selected!),
 				onAnular: () => _cambiarEstado(
 					_selected!['id'] as String,
 					'anulada',
@@ -1325,6 +1486,9 @@ class _OtPageState extends ConsumerState<OtPage> {
 				onEmitirNoPeriodica: () => _navegarEmitirNoPeriodicaDesdeOt(_selected!),
 				onDerivar: () => _derivarOt(_selected!),
 				onSolicitarMateriales: () => _solicitarMateriales(_selected!),
+				onPreparar: () => _abrirPreparacion(_selected!),
+				needsPreparacion: !_preparacionCompleta(_selected!),
+				esperandoPanol: (_selected!['estado'] as String?) == 'pendiente_panol',
 				ocultarPdf: widget.misOtOnly,
 			);
 		}
@@ -1340,13 +1504,9 @@ class _OtPageState extends ConsumerState<OtPage> {
 				canEmitirNoPeriodica: _canEmitirNoPeriodica,
 				canSolicitarMateriales: _canSolicitarMateriales,
 				onPdf: () => _abrirPdf(ot['id'] as String),
-				onIniciar: () => _cambiarEstado(
-					ot['id'] as String,
-					'en_ejecucion',
-					comentario: 'Técnico inició ejecución',
-				),
+				onIniciar: () => _iniciarConPreparacion(ot),
 				onEjecucion: () => _abrirEjecucion(ot),
-				onFirmar: () => _firmarYCerrar(ot),
+				onFirmar: () => _firmarConPreparacion(ot),
 				onAnular: () => _cambiarEstado(
 					ot['id'] as String,
 					'anulada',
@@ -1356,12 +1516,17 @@ class _OtPageState extends ConsumerState<OtPage> {
 				onEmitirNoPeriodica: () => _navegarEmitirNoPeriodicaDesdeOt(ot),
 				onDerivar: () => _derivarOt(ot),
 				onSolicitarMateriales: () => _solicitarMateriales(ot),
+				onPreparar: () => _abrirPreparacion(ot),
+				needsPreparacion: !_preparacionCompleta(ot),
+				esperandoPanol: (ot['estado'] as String?) == 'pendiente_panol',
 				ocultarPdf: widget.misOtOnly,
 			);
 		}
 
 		return Container(
-			color: AppColors.black,
+			color: Theme.of(context).brightness == Brightness.dark
+					? AppColors.black
+					: AppColors.backgroundLight,
 			child: Column(
 				children: [
 					if (!widget.misOtOnly)
@@ -1425,6 +1590,137 @@ class _OtPageState extends ConsumerState<OtPage> {
 		final parsed = DateTime.tryParse(value.toString());
 		if (parsed == null) return value.toString();
 		return _dateFormat.format(parsed.toLocal());
+	}
+}
+
+/// Separador horizontal con arrastre fluido (estado local + handle animado).
+class _ResizableHSplit extends StatefulWidget {
+	const _ResizableHSplit({
+		required this.left,
+		required this.right,
+		required this.initialListFraction,
+		required this.listWidth,
+		required this.onListWidthChanged,
+	});
+
+	final Widget left;
+	final Widget right;
+	final double initialListFraction;
+	final double? listWidth;
+	final ValueChanged<double> onListWidthChanged;
+
+	@override
+	State<_ResizableHSplit> createState() => _ResizableHSplitState();
+}
+
+class _ResizableHSplitState extends State<_ResizableHSplit> {
+	static const _handleHit = 12.0;
+	bool _dragging = false;
+	bool _hover = false;
+	double? _localWidth;
+
+	double _clampWidth(double total, double width) {
+		final minList = (total * 0.28).clamp(260.0, 420.0);
+		final maxList = (total * 0.72).clamp(360.0, total - 280.0);
+		return width.clamp(minList, maxList);
+	}
+
+	@override
+	Widget build(BuildContext context) {
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final idle = isDark ? AppColors.cardBorder : const Color(0xFFE0D8EC);
+		final active = AppColors.accent;
+		final handleColor = (_dragging || _hover) ? active : idle;
+
+		return LayoutBuilder(
+			builder: (context, constraints) {
+				final total = constraints.maxWidth;
+				final target = _clampWidth(
+					total,
+					_localWidth ??
+							widget.listWidth ??
+							(total * widget.initialListFraction),
+				);
+
+				return Row(
+					children: [
+						AnimatedContainer(
+							duration: _dragging
+									? Duration.zero
+									: const Duration(milliseconds: 220),
+							curve: Curves.easeOutCubic,
+							width: target,
+							child: widget.left,
+						),
+						MouseRegion(
+							cursor: SystemMouseCursors.resizeColumn,
+							onEnter: (_) => setState(() => _hover = true),
+							onExit: (_) {
+								if (!_dragging) setState(() => _hover = false);
+							},
+							child: GestureDetector(
+								behavior: HitTestBehavior.opaque,
+								onHorizontalDragStart: (_) {
+									setState(() {
+										_dragging = true;
+										_hover = true;
+										_localWidth = target;
+									});
+								},
+								onHorizontalDragUpdate: (details) {
+									final next = _clampWidth(
+										total,
+										(_localWidth ?? target) + details.delta.dx,
+									);
+									setState(() => _localWidth = next);
+									widget.onListWidthChanged(next);
+								},
+								onHorizontalDragEnd: (_) {
+									setState(() {
+										_dragging = false;
+										_hover = false;
+									});
+								},
+								onHorizontalDragCancel: () {
+									setState(() {
+										_dragging = false;
+										_hover = false;
+									});
+								},
+								child: Tooltip(
+									message: 'Arrastrá para agrandar o achicar',
+									child: SizedBox(
+										width: _handleHit,
+										child: Center(
+											child: AnimatedContainer(
+												duration: const Duration(milliseconds: 160),
+												curve: Curves.easeOutCubic,
+												width: _dragging || _hover ? 5 : 3.5,
+												height: _dragging || _hover ? 64 : 48,
+												decoration: BoxDecoration(
+													color: handleColor,
+													borderRadius: BorderRadius.circular(99),
+													boxShadow: _dragging || _hover
+															? [
+																	BoxShadow(
+																		color: active.withValues(alpha: 0.28),
+																		blurRadius: 10,
+																		spreadRadius: 0.5,
+																	),
+																]
+															: null,
+												),
+											),
+										),
+									),
+								),
+							),
+						),
+						Expanded(child: widget.right),
+					],
+				);
+			},
+		);
 	}
 }
 
@@ -1515,25 +1811,28 @@ class _MainTopBar extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final bg = isDark ? AppColors.black : AppColors.white;
+		final fg = isDark ? Colors.white : AppColors.ink;
+		final border = isDark ? AppColors.cardBorder : const Color(0xFFE8E0F0);
+
 		return Container(
 			height: 64,
 			padding: const EdgeInsets.symmetric(horizontal: 20),
-			decoration: const BoxDecoration(
-				color: AppColors.black,
-				border: Border(
-					bottom: BorderSide(color: AppColors.cardBorder),
-				),
+			decoration: BoxDecoration(
+				color: bg,
+				border: Border(bottom: BorderSide(color: border)),
 			),
 			child: Row(
 				children: [
 					const Icon(Icons.assignment_rounded, color: AppColors.accent),
 					const SizedBox(width: 10),
-					const Text(
+					Text(
 						'Detalle de OT',
 						style: TextStyle(
 							fontWeight: FontWeight.w700,
 							fontSize: 20,
-							color: Colors.white,
+							color: fg,
 						),
 					),
 					if (plantaNombre.isNotEmpty) ...[
@@ -1557,7 +1856,7 @@ class _MainTopBar extends StatelessWidget {
 					const Spacer(),
 					IconButton(
 						onPressed: onRefresh,
-						icon: const Icon(Icons.refresh_rounded),
+						icon: Icon(Icons.refresh_rounded, color: fg),
 						tooltip: 'Actualizar',
 					),
 				],
@@ -1703,6 +2002,7 @@ class _FiltrosPanel extends StatelessWidget {
 		required this.formatDate,
 		required this.onPickDesde,
 		required this.onPickHasta,
+		required this.onPickRango,
 		required this.onMesActual,
 		required this.onTipoChanged,
 		required this.onTecnicoChanged,
@@ -1730,6 +2030,7 @@ class _FiltrosPanel extends StatelessWidget {
 	final String Function(DateTime) formatDate;
 	final VoidCallback onPickDesde;
 	final VoidCallback onPickHasta;
+	final VoidCallback onPickRango;
 	final VoidCallback onMesActual;
 	final ValueChanged<String?> onTipoChanged;
 	final ValueChanged<String?> onTecnicoChanged;
@@ -1742,18 +2043,72 @@ class _FiltrosPanel extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		final scheme = Theme.of(context).colorScheme;
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final panelBg = isDark ? const Color(0xFF1A1A1A) : AppColors.surfaceMuted;
+		final panelBorder = isDark ? Colors.white24 : const Color(0xFFE0D8EC);
+		final fg = isDark ? Colors.white : AppColors.ink;
+		final muted = isDark ? Colors.white70 : AppColors.ink.withValues(alpha: 0.55);
+		final dropdownBg = isDark ? const Color(0xFF222222) : AppColors.white;
+
+		InputDecoration deco(String label) => _inputDecoration(label: label, isDark: isDark);
 
 		return Container(
 			padding: const EdgeInsets.all(14),
 			decoration: BoxDecoration(
-				color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+				color: panelBg,
 				borderRadius: BorderRadius.circular(14),
-				border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.35)),
+				border: Border.all(color: panelBorder),
 			),
 			child: Column(
 				crossAxisAlignment: CrossAxisAlignment.stretch,
 				children: [
+					Material(
+						color: AppColors.brandPurple.withValues(alpha: isDark ? 0.18 : 0.1),
+						borderRadius: BorderRadius.circular(10),
+						child: InkWell(
+							onTap: onPickRango,
+							borderRadius: BorderRadius.circular(10),
+							child: Padding(
+								padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+								child: Row(
+									children: [
+										const Icon(
+											Icons.calendar_month_rounded,
+											color: AppColors.brandPurple,
+											size: 22,
+										),
+										const SizedBox(width: 10),
+										Expanded(
+											child: Column(
+												crossAxisAlignment: CrossAxisAlignment.start,
+												children: [
+													Text(
+														'Rango de fechas',
+														style: TextStyle(
+															color: muted,
+															fontSize: 11,
+															fontWeight: FontWeight.w600,
+														),
+													),
+													const SizedBox(height: 2),
+													Text(
+														'${formatDate(fechaDesde)} — ${formatDate(fechaHasta)}',
+														style: TextStyle(
+															color: fg,
+															fontSize: 14,
+															fontWeight: FontWeight.w700,
+														),
+													),
+												],
+											),
+										),
+										Icon(Icons.edit_calendar_rounded, color: muted, size: 18),
+									],
+								),
+							),
+						),
+					),
+					const SizedBox(height: 10),
 					Row(
 						children: [
 							Expanded(
@@ -1777,11 +2132,9 @@ class _FiltrosPanel extends StatelessWidget {
 					DropdownButtonFormField<String?>(
 						value: filtroTipo,
 						isExpanded: true,
-						decoration: const InputDecoration(
-							labelText: 'Tipo',
-							isDense: true,
-							border: OutlineInputBorder(),
-						),
+						dropdownColor: dropdownBg,
+						style: TextStyle(color: fg),
+						decoration: deco('Tipo'),
 						items: const [
 							DropdownMenuItem(value: null, child: Text('Todos los tipos')),
 							DropdownMenuItem(value: 'preventivo', child: Text('Preventivo')),
@@ -1795,11 +2148,9 @@ class _FiltrosPanel extends StatelessWidget {
 					DropdownButtonFormField<String?>(
 						value: filtroTecnicoId,
 						isExpanded: true,
-						decoration: const InputDecoration(
-							labelText: 'Técnico',
-							isDense: true,
-							border: OutlineInputBorder(),
-						),
+						dropdownColor: dropdownBg,
+						style: TextStyle(color: fg),
+						decoration: deco('Técnico'),
 						items: [
 							const DropdownMenuItem(value: null, child: Text('Todos los técnicos')),
 							...tecnicos.map(
@@ -1815,11 +2166,9 @@ class _FiltrosPanel extends StatelessWidget {
 					DropdownButtonFormField<String?>(
 						value: filtroPrioridad,
 						isExpanded: true,
-						decoration: const InputDecoration(
-							labelText: 'Prioridad',
-							isDense: true,
-							border: OutlineInputBorder(),
-						),
+						dropdownColor: dropdownBg,
+						style: TextStyle(color: fg),
+						decoration: deco('Prioridad'),
 						items: const [
 							DropdownMenuItem(value: null, child: Text('Todas')),
 							DropdownMenuItem(value: 'baja', child: Text('Baja')),
@@ -1833,17 +2182,15 @@ class _FiltrosPanel extends StatelessWidget {
 					DropdownButtonFormField<String?>(
 						value: filtroSectorId,
 						isExpanded: true,
-						decoration: const InputDecoration(
-							labelText: 'Sector responsable',
-							isDense: true,
-							border: OutlineInputBorder(),
-						),
+						dropdownColor: dropdownBg,
+						style: TextStyle(color: fg),
+						decoration: deco('Sector'),
 						items: [
 							const DropdownMenuItem(value: null, child: Text('Todos los sectores')),
 							...sectores.map(
 								(s) => DropdownMenuItem(
 									value: s['id'] as String,
-									child: Text(s['nombre'] as String),
+									child: Text('${s['nombre']}'),
 								),
 							),
 						],
@@ -1853,11 +2200,9 @@ class _FiltrosPanel extends StatelessWidget {
 					DropdownButtonFormField<String?>(
 						value: filtroMotivoId,
 						isExpanded: true,
-						decoration: const InputDecoration(
-							labelText: 'Motivo pendiente',
-							isDense: true,
-							border: OutlineInputBorder(),
-						),
+						dropdownColor: dropdownBg,
+						style: TextStyle(color: fg),
+						decoration: deco('Motivo pendiente'),
 						items: [
 							const DropdownMenuItem(value: null, child: Text('Todos los motivos')),
 							...motivos.map(
@@ -1874,11 +2219,9 @@ class _FiltrosPanel extends StatelessWidget {
 						DropdownButtonFormField<String?>(
 							value: filtroTipoEquipoId,
 							isExpanded: true,
-							decoration: const InputDecoration(
-								labelText: 'Tipo de equipo',
-								isDense: true,
-								border: OutlineInputBorder(),
-							),
+							dropdownColor: dropdownBg,
+							style: TextStyle(color: fg),
+							decoration: deco('Tipo de equipo'),
 							items: [
 								const DropdownMenuItem(
 									value: null,
@@ -1896,11 +2239,8 @@ class _FiltrosPanel extends StatelessWidget {
 					],
 					const SizedBox(height: 10),
 					TextField(
-						decoration: const InputDecoration(
-							labelText: 'Nº OT',
-							isDense: true,
-							border: OutlineInputBorder(),
-						),
+						style: TextStyle(color: fg),
+						decoration: deco('Nº OT'),
 						keyboardType: TextInputType.number,
 						onChanged: onNumeroChanged,
 					),
@@ -1909,6 +2249,7 @@ class _FiltrosPanel extends StatelessWidget {
 						children: [
 							TextButton.icon(
 								onPressed: onMesActual,
+								style: TextButton.styleFrom(foregroundColor: muted),
 								icon: const Icon(Icons.calendar_month_rounded, size: 18),
 								label: const Text('Mes actual'),
 							),
@@ -1922,6 +2263,92 @@ class _FiltrosPanel extends StatelessWidget {
 						],
 					),
 				],
+			),
+		);
+	}
+
+	static InputDecoration _inputDecoration({
+		required String label,
+		required bool isDark,
+	}) {
+		final fill = isDark ? const Color(0xFF2A2A2A) : AppColors.white;
+		final borderColor = isDark ? Colors.white24 : const Color(0xFFE0D8EC);
+		final labelColor = isDark
+				? Colors.white70
+				: AppColors.ink.withValues(alpha: 0.55);
+
+		return InputDecoration(
+			labelText: label.isEmpty ? null : label,
+			isDense: true,
+			filled: true,
+			fillColor: fill,
+			labelStyle: TextStyle(color: labelColor),
+			border: OutlineInputBorder(
+				borderRadius: BorderRadius.circular(10),
+				borderSide: BorderSide(color: borderColor),
+			),
+			enabledBorder: OutlineInputBorder(
+				borderRadius: BorderRadius.circular(10),
+				borderSide: BorderSide(color: borderColor),
+			),
+			focusedBorder: OutlineInputBorder(
+				borderRadius: BorderRadius.circular(10),
+				borderSide: const BorderSide(color: AppColors.brandPurple, width: 1.5),
+			),
+		);
+	}
+}
+
+class _DateRangeChip extends StatelessWidget {
+	const _DateRangeChip({required this.label, required this.onTap});
+
+	final String label;
+	final VoidCallback onTap;
+
+	@override
+	Widget build(BuildContext context) {
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final fg = isDark ? Colors.white : AppColors.ink;
+		final muted = isDark
+				? Colors.white.withValues(alpha: 0.7)
+				: AppColors.ink.withValues(alpha: 0.55);
+
+		return Material(
+			color: AppColors.brandPurple.withValues(alpha: isDark ? 0.22 : 0.12),
+			borderRadius: BorderRadius.circular(999),
+			child: InkWell(
+				onTap: onTap,
+				borderRadius: BorderRadius.circular(999),
+				child: Padding(
+					padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+					child: Row(
+						mainAxisSize: MainAxisSize.min,
+						children: [
+							const Icon(
+								Icons.date_range_rounded,
+								size: 18,
+								color: AppColors.brandPurple,
+							),
+							const SizedBox(width: 8),
+							Flexible(
+								child: Text(
+									label,
+									style: TextStyle(
+										color: fg,
+										fontWeight: FontWeight.w700,
+										fontSize: 13,
+									),
+								),
+							),
+							const SizedBox(width: 6),
+							Icon(
+								Icons.expand_more_rounded,
+								size: 18,
+								color: muted,
+							),
+						],
+					),
+				),
 			),
 		);
 	}
@@ -1940,17 +2367,44 @@ class _DateField extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final fill = isDark ? const Color(0xFF2A2A2A) : AppColors.white;
+		final borderColor = isDark ? Colors.white24 : const Color(0xFFE0D8EC);
+		final fg = isDark ? Colors.white : AppColors.ink;
+		final muted = isDark ? Colors.white70 : AppColors.ink.withValues(alpha: 0.55);
+
 		return InkWell(
 			onTap: onTap,
-			borderRadius: BorderRadius.circular(8),
+			borderRadius: BorderRadius.circular(10),
 			child: InputDecorator(
 				decoration: InputDecoration(
 					labelText: label,
 					isDense: true,
-					border: const OutlineInputBorder(),
-					suffixIcon: const Icon(Icons.calendar_today_rounded, size: 18),
+					filled: true,
+					fillColor: fill,
+					labelStyle: TextStyle(color: muted),
+					border: OutlineInputBorder(
+						borderRadius: BorderRadius.circular(10),
+						borderSide: BorderSide(color: borderColor),
+					),
+					enabledBorder: OutlineInputBorder(
+						borderRadius: BorderRadius.circular(10),
+						borderSide: BorderSide(color: borderColor),
+					),
+					suffixIcon: Icon(
+						Icons.calendar_today_rounded,
+						size: 18,
+						color: muted,
+					),
 				),
-				child: Text(value, style: const TextStyle(fontSize: 13)),
+				child: Text(
+					value,
+					style: TextStyle(
+						fontSize: 13,
+						color: fg,
+						fontWeight: FontWeight.w600,
+					),
+				),
 			),
 		);
 	}
@@ -1970,6 +2424,10 @@ class _FiltrosEstado extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		const estados = [null, 'pendiente', 'en_ejecucion'];
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final chipBg = isDark ? AppColors.cardElevated : AppColors.surfaceMuted;
+		final chipBorder = isDark ? AppColors.cardBorder : const Color(0xFFE0D8EC);
+		final unselectedFg = isDark ? AppColors.mutedText : AppColors.ink.withValues(alpha: 0.65);
 
 		return Padding(
 			padding: const EdgeInsets.only(bottom: 4),
@@ -1992,21 +2450,21 @@ class _FiltrosEstado extends StatelessWidget {
 								selected: selected,
 								showCheckmark: false,
 								visualDensity: VisualDensity.comfortable,
-								selectedColor: chipColor.withValues(alpha: 0.15),
-								backgroundColor: AppColors.cardElevated,
+								selectedColor: chipColor.withValues(alpha: isDark ? 0.15 : 0.18),
+								backgroundColor: chipBg,
 								side: BorderSide(
 									color: selected
 											? (estado == null
 													? AppColors.brandYellow
 													: chipColor.withValues(alpha: 0.5))
-											: AppColors.cardBorder,
+											: chipBorder,
 								),
 								labelStyle: TextStyle(
 									fontSize: 13,
 									fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
 									color: selected
 											? (estado == null ? AppColors.brandYellow : chipColor)
-											: AppColors.mutedText,
+											: unselectedFg,
 								),
 								onSelected: (_) => onChanged(estado),
 							),
@@ -2054,15 +2512,33 @@ class _OtListTile extends StatelessWidget {
 		final gut = OtUi.formatDuracionMinutos(procedimiento?['duracionEstimada']);
 		final color = OtUi.estadoColor(estado);
 		final isRealizada = estado == 'realizada';
-		final cardBg = switch (estado) {
-			'realizada' => const Color(0xFF14532D),
-			'pendiente' => const Color(0xFF3D2020),
-			'en_ejecucion' => const Color(0xFF3D3018),
-			'anulada' => const Color(0xFF2A2A2A),
-			_ => AppColors.cardDark,
-		};
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final cardBg = isDark
+				? switch (estado) {
+						'realizada' => const Color(0xFF14532D),
+						'pendiente' => const Color(0xFF3D2020),
+						'en_ejecucion' => const Color(0xFF3D3018),
+						'anulada' => const Color(0xFF2A2A2A),
+						_ => AppColors.cardDark,
+					}
+				: switch (estado) {
+						'realizada' => const Color(0xFFE8F8EC),
+						'pendiente' => const Color(0xFFFCEEEE),
+						'en_ejecucion' => const Color(0xFFFFF6E5),
+						'anulada' => const Color(0xFFF0EDF4),
+						_ => AppColors.white,
+					};
 		final onCard = isRealizada || estado == 'pendiente' || estado == 'en_ejecucion';
+		final titleColor = isDark ? Colors.white : AppColors.ink;
+		final bodyColor = isDark
+				? (onCard ? Colors.white.withValues(alpha: 0.85) : AppColors.mutedText)
+				: AppColors.ink.withValues(alpha: 0.75);
+		final metaColor = isDark
+				? (onCard ? Colors.white.withValues(alpha: 0.6) : AppColors.mutedText)
+				: AppColors.ink.withValues(alpha: 0.55);
+		final badgeOnCard = isDark && onCard;
 		final pad = comfortable ? 18.0 : 16.0;
+		final checkSide = isDark ? Colors.white54 : AppColors.ink.withValues(alpha: 0.35);
 
 		return Padding(
 			padding: EdgeInsets.only(bottom: comfortable ? 14 : 10),
@@ -2073,12 +2549,15 @@ class _OtListTile extends StatelessWidget {
 				child: InkWell(
 					onTap: onTap,
 					child: Container(
-						decoration: selected
-								? BoxDecoration(
-										border: Border.all(color: AppColors.brandYellow, width: 2),
-										borderRadius: BorderRadius.circular(16),
-									)
-								: null,
+						decoration: BoxDecoration(
+							border: Border.all(
+								color: selected
+										? AppColors.brandYellow
+										: (isDark ? Colors.transparent : const Color(0xFFE8E0F0)),
+								width: selected ? 2 : 1,
+							),
+							borderRadius: BorderRadius.circular(16),
+						),
 						padding: EdgeInsets.all(pad),
 						child: Column(
 							crossAxisAlignment: CrossAxisAlignment.start,
@@ -2090,7 +2569,7 @@ class _OtListTile extends StatelessWidget {
 											Checkbox(
 												value: checked,
 												onChanged: (_) => onCheckChanged?.call(),
-												side: const BorderSide(color: Colors.white54),
+												side: BorderSide(color: checkSide),
 												activeColor: AppColors.brandYellow,
 												materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
 											),
@@ -2103,17 +2582,17 @@ class _OtListTile extends StatelessWidget {
 												children: [
 													SikaBadge(
 														label: OtUi.estadoLabel(estado),
-														color: onCard ? Colors.white : color,
+														color: badgeOnCard ? Colors.white : color,
 													),
 													SikaBadge(
 														label: tipo.toUpperCase(),
-														color: onCard
+														color: badgeOnCard
 																? Colors.white.withValues(alpha: 0.65)
 																: AppColors.mutedText,
 													),
 													SikaBadge(
 														label: prioridad.toUpperCase(),
-														color: onCard
+														color: badgeOnCard
 																? Colors.white.withValues(alpha: 0.55)
 																: AppColors.secondary,
 													),
@@ -2125,15 +2604,17 @@ class _OtListTile extends StatelessWidget {
 												width: 32,
 												height: 32,
 												decoration: BoxDecoration(
-													color: Colors.white.withValues(alpha: 0.12),
+													color: (isDark ? Colors.white : AppColors.brandGreenDark)
+															.withValues(alpha: isDark ? 0.12 : 0.12),
 													shape: BoxShape.circle,
 													border: Border.all(
-														color: Colors.white.withValues(alpha: 0.35),
+														color: (isDark ? Colors.white : AppColors.brandGreenDark)
+																.withValues(alpha: 0.35),
 													),
 												),
-												child: const Icon(
+												child: Icon(
 													Icons.check_rounded,
-													color: Colors.white,
+													color: isDark ? Colors.white : AppColors.brandGreenDark,
 													size: 18,
 												),
 											),
@@ -2143,7 +2624,7 @@ class _OtListTile extends StatelessWidget {
 								Text(
 									'OT #${ot['numero']}',
 									style: TextStyle(
-										color: Colors.white,
+										color: titleColor,
 										fontWeight: FontWeight.w800,
 										fontSize: comfortable ? 22 : 20,
 									),
@@ -2156,9 +2637,7 @@ class _OtListTile extends StatelessWidget {
 									maxLines: 2,
 									overflow: TextOverflow.ellipsis,
 									style: TextStyle(
-										color: onCard
-												? Colors.white.withValues(alpha: 0.85)
-												: AppColors.mutedText,
+										color: bodyColor,
 										fontSize: 14,
 										height: 1.3,
 									),
@@ -2170,9 +2649,7 @@ class _OtListTile extends StatelessWidget {
 										maxLines: 1,
 										overflow: TextOverflow.ellipsis,
 										style: TextStyle(
-											color: onCard
-													? Colors.white.withValues(alpha: 0.65)
-													: AppColors.mutedText.withValues(alpha: 0.8),
+											color: metaColor,
 											fontSize: 13,
 										),
 									),
@@ -2182,9 +2659,7 @@ class _OtListTile extends StatelessWidget {
 									'Prog: ${formatDate(ot['fechaProgramacion'])}'
 											'${ot['fechaEjecucion'] != null ? ' · Ejec: ${formatDate(ot['fechaEjecucion'])}' : ''}',
 									style: TextStyle(
-										color: onCard
-												? Colors.white.withValues(alpha: 0.6)
-												: AppColors.mutedText,
+										color: metaColor,
 										fontSize: 12,
 									),
 								),
@@ -2195,9 +2670,7 @@ class _OtListTile extends StatelessWidget {
 										maxLines: 1,
 										overflow: TextOverflow.ellipsis,
 										style: TextStyle(
-											color: onCard
-													? Colors.white.withValues(alpha: 0.75)
-													: AppColors.mutedText,
+											color: bodyColor,
 											fontSize: 12,
 											fontWeight: FontWeight.w600,
 										),
@@ -2210,9 +2683,7 @@ class _OtListTile extends StatelessWidget {
 										maxLines: 2,
 										overflow: TextOverflow.ellipsis,
 										style: TextStyle(
-											color: onCard
-													? AppColors.warning.withValues(alpha: 0.9)
-													: AppColors.warning,
+											color: AppColors.warning,
 											fontSize: 12,
 											fontWeight: FontWeight.w600,
 										),
@@ -2223,9 +2694,7 @@ class _OtListTile extends StatelessWidget {
 									Text(
 										'GUT est.: $gut',
 										style: TextStyle(
-											color: onCard
-													? Colors.white.withValues(alpha: 0.55)
-													: AppColors.mutedText,
+											color: metaColor,
 											fontSize: 12,
 										),
 									),
@@ -2258,7 +2727,10 @@ class _OtDetailContent extends StatelessWidget {
 		required this.onEmitirNoPeriodica,
 		required this.onDerivar,
 		this.onSolicitarMateriales,
+		this.onPreparar,
 		this.canSolicitarMateriales = false,
+		this.needsPreparacion = false,
+		this.esperandoPanol = false,
 		this.ocultarPdf = false,
 	});
 
@@ -2269,6 +2741,8 @@ class _OtDetailContent extends StatelessWidget {
 	final bool canReabrir;
 	final bool canEmitirNoPeriodica;
 	final bool canSolicitarMateriales;
+	final bool needsPreparacion;
+	final bool esperandoPanol;
 	final bool ocultarPdf;
 	final String Function(dynamic) formatDate;
 	final bool includeActionBar;
@@ -2281,6 +2755,7 @@ class _OtDetailContent extends StatelessWidget {
 	final VoidCallback onEmitirNoPeriodica;
 	final VoidCallback onDerivar;
 	final VoidCallback? onSolicitarMateriales;
+	final VoidCallback? onPreparar;
 
 	@override
 	Widget build(BuildContext context) {
@@ -2303,9 +2778,16 @@ class _OtDetailContent extends StatelessWidget {
 		final fotos = (ot['fotos'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
 
 		final estadoColor = OtUi.estadoColor(estado);
-		final heroBg = estado == 'realizada'
-				? const Color(0xFF14532D)
-				: estadoColor;
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final heroBg = isDark
+				? (estado == 'realizada' ? const Color(0xFF14532D) : estadoColor)
+				: (estado == 'realizada'
+						? const Color(0xFFE8F8EC)
+						: estadoColor.withValues(alpha: 0.14));
+		final heroFg = isDark ? Colors.white : AppColors.ink;
+		final heroMuted = isDark
+				? Colors.white.withValues(alpha: 0.7)
+				: AppColors.ink.withValues(alpha: 0.65);
 
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2329,15 +2811,17 @@ class _OtDetailContent extends StatelessWidget {
 											children: [
 												SikaBadge(
 													label: OtUi.estadoLabel(estado),
-													color: Colors.white,
+													color: isDark ? Colors.white : estadoColor,
 												),
 												SikaBadge(
 													label: tipo.toUpperCase(),
-													color: AppColors.mutedText,
+													color: isDark ? AppColors.mutedText : AppColors.secondary,
 												),
 												SikaBadge(
 													label: OtUi.prioridadLabel(prioridad),
-													color: Colors.white.withValues(alpha: 0.7),
+													color: isDark
+															? Colors.white.withValues(alpha: 0.7)
+															: AppColors.ink.withValues(alpha: 0.55),
 												),
 											],
 										),
@@ -2345,7 +2829,7 @@ class _OtDetailContent extends StatelessWidget {
 										Text(
 											'OT #${ot['numero']}',
 											style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-														color: Colors.white,
+														color: heroFg,
 														fontWeight: FontWeight.w800,
 													),
 										),
@@ -2355,7 +2839,9 @@ class _OtDetailContent extends StatelessWidget {
 													? '${equipo['codigo']} — ${equipo['nombre']}'
 													: 'Sin equipo',
 											style: TextStyle(
-												color: Colors.white.withValues(alpha: 0.9),
+												color: isDark
+														? Colors.white.withValues(alpha: 0.9)
+														: heroMuted,
 												fontSize: 16,
 												height: 1.35,
 											),
@@ -2365,7 +2851,7 @@ class _OtDetailContent extends StatelessWidget {
 											Text(
 												ubicacion['nombre'] as String? ?? '',
 												style: TextStyle(
-													color: Colors.white.withValues(alpha: 0.7),
+													color: heroMuted,
 													fontSize: 13,
 												),
 											),
@@ -2381,18 +2867,114 @@ class _OtDetailContent extends StatelessWidget {
 									child: Icon(
 										Icons.check_circle_outline_rounded,
 										size: 120,
-										color: Colors.white.withValues(alpha: 0.08),
+										color: (isDark ? Colors.white : AppColors.brandGreenDark)
+												.withValues(alpha: 0.08),
 									),
 								),
 						],
 					),
 				),
+				if (esperandoPanol) ...[
+					const SizedBox(height: 16),
+					Container(
+						padding: const EdgeInsets.all(14),
+						decoration: BoxDecoration(
+							color: AppColors.brandOrange.withValues(alpha: isDark ? 0.14 : 0.1),
+							borderRadius: BorderRadius.circular(12),
+							border: Border.all(
+								color: AppColors.brandOrange.withValues(alpha: 0.4),
+							),
+						),
+						child: Row(
+							children: [
+								const Icon(Icons.hourglass_top_rounded, color: AppColors.brandOrange),
+								const SizedBox(width: 12),
+								Expanded(
+									child: Column(
+										crossAxisAlignment: CrossAxisAlignment.start,
+										children: [
+											Text(
+												'Esperando confirmación de Pañol',
+												style: TextStyle(
+													fontWeight: FontWeight.w800,
+													color: scheme.onSurface,
+												),
+											),
+											const SizedBox(height: 2),
+											Text(
+												'Cuando Pañol confirme el pedido, podrás iniciar la OT.',
+												style: TextStyle(
+													fontSize: 13,
+													color: scheme.onSurface.withValues(alpha: 0.7),
+												),
+											),
+										],
+									),
+								),
+							],
+						),
+					),
+				] else if (needsPreparacion && onPreparar != null && canEjecutar) ...[
+					const SizedBox(height: 16),
+					Material(
+						color: AppColors.accent.withValues(alpha: isDark ? 0.14 : 0.1),
+						borderRadius: BorderRadius.circular(12),
+						child: InkWell(
+							onTap: onPreparar,
+							borderRadius: BorderRadius.circular(12),
+							child: Container(
+								padding: const EdgeInsets.all(14),
+								decoration: BoxDecoration(
+									borderRadius: BorderRadius.circular(12),
+									border: Border.all(
+										color: AppColors.accent.withValues(alpha: 0.4),
+									),
+								),
+								child: Row(
+									children: [
+										const Icon(
+											Icons.inventory_2_rounded,
+											color: AppColors.accent,
+										),
+										const SizedBox(width: 12),
+										Expanded(
+											child: Column(
+												crossAxisAlignment: CrossAxisAlignment.start,
+												children: [
+													Text(
+														'Pedir a Pañol',
+														style: TextStyle(
+															fontWeight: FontWeight.w800,
+															color: scheme.onSurface,
+														),
+													),
+													const SizedBox(height: 2),
+													Text(
+														'Lectura + materiales/repuestos. Pañol confirma y recién ahí iniciás.',
+														style: TextStyle(
+															fontSize: 13,
+															color: scheme.onSurface.withValues(alpha: 0.7),
+														),
+													),
+												],
+											),
+										),
+										Icon(
+											Icons.chevron_right_rounded,
+											color: scheme.onSurface.withValues(alpha: 0.35),
+										),
+									],
+								),
+							),
+						),
+					),
+				],
 				if (estado == 'realizada' && !ocultarPdf) ...[
 					const SizedBox(height: 16),
 					Container(
 						padding: const EdgeInsets.all(14),
 						decoration: BoxDecoration(
-							color: AppColors.success.withValues(alpha: 0.12),
+							color: AppColors.success.withValues(alpha: isDark ? 0.12 : 0.1),
 							borderRadius: BorderRadius.circular(12),
 							border: Border.all(
 								color: AppColors.success.withValues(alpha: 0.35),
@@ -2400,14 +2982,19 @@ class _OtDetailContent extends StatelessWidget {
 						),
 						child: Row(
 							children: [
-								const Icon(Icons.check_circle_rounded, color: AppColors.success),
+								Icon(
+									Icons.check_circle_rounded,
+									color: isDark ? AppColors.success : AppColors.brandGreenDark,
+								),
 								const SizedBox(width: 12),
 								Expanded(
 									child: Text(
 										'OT completada y firmada. Usá «Descargar PDF completado» '
 										'para imprimir el documento con checklist, novedades y firma.',
 										style: TextStyle(
-											color: Colors.white.withValues(alpha: 0.9),
+											color: isDark
+													? Colors.white.withValues(alpha: 0.9)
+													: AppColors.ink.withValues(alpha: 0.85),
 											fontSize: 13,
 										),
 									),
@@ -2596,6 +3183,9 @@ class _OtDetailContent extends StatelessWidget {
 						onEmitirNoPeriodica: onEmitirNoPeriodica,
 						onDerivar: onDerivar,
 						onSolicitarMateriales: onSolicitarMateriales,
+						onPreparar: onPreparar,
+						needsPreparacion: needsPreparacion,
+						esperandoPanol: esperandoPanol,
 						ocultarPdf: ocultarPdf,
 					),
 			],
@@ -2618,6 +3208,9 @@ class _InfoTile extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final valueFg = valueColor ?? (isDark ? Colors.white : AppColors.ink);
+
 		return Container(
 			padding: const EdgeInsets.all(14),
 			decoration: SikaUi.cardDecoration(),
@@ -2628,14 +3221,19 @@ class _InfoTile extends StatelessWidget {
 					const SizedBox(height: 8),
 					Text(
 						label,
-						style: const TextStyle(color: AppColors.mutedText, fontSize: 12),
+						style: TextStyle(
+							color: isDark
+									? AppColors.mutedText
+									: AppColors.ink.withValues(alpha: 0.55),
+							fontSize: 12,
+						),
 					),
 					const SizedBox(height: 2),
 					Text(
 						value,
 						style: TextStyle(
 							fontWeight: FontWeight.w700,
-							color: valueColor ?? Colors.white,
+							color: valueFg,
 						),
 						maxLines: 2,
 						overflow: TextOverflow.ellipsis,
@@ -2769,7 +3367,10 @@ class _ActionBar extends StatelessWidget {
 		required this.onEmitirNoPeriodica,
 		required this.onDerivar,
 		this.onSolicitarMateriales,
+		this.onPreparar,
 		this.canSolicitarMateriales = false,
+		this.needsPreparacion = false,
+		this.esperandoPanol = false,
 		this.ocultarPdf = false,
 	});
 
@@ -2780,6 +3381,8 @@ class _ActionBar extends StatelessWidget {
 	final bool canReabrir;
 	final bool canEmitirNoPeriodica;
 	final bool canSolicitarMateriales;
+	final bool needsPreparacion;
+	final bool esperandoPanol;
 	final bool ocultarPdf;
 	final VoidCallback onPdf;
 	final VoidCallback onIniciar;
@@ -2790,6 +3393,7 @@ class _ActionBar extends StatelessWidget {
 	final VoidCallback onEmitirNoPeriodica;
 	final VoidCallback onDerivar;
 	final VoidCallback? onSolicitarMateriales;
+	final VoidCallback? onPreparar;
 
 	@override
 	Widget build(BuildContext context) {
@@ -2798,6 +3402,36 @@ class _ActionBar extends StatelessWidget {
 		final pad = const EdgeInsets.symmetric(horizontal: 20, vertical: 14);
 
 		final actions = <Widget>[];
+
+		// Técnico asignado: al recibir la OT habilita Pedir a Pañol.
+		if (['pendiente', 'pendiente_panol'].contains(estado) &&
+				needsPreparacion &&
+				onPreparar != null &&
+				canEjecutar) {
+			actions.add(
+				FilledButton.icon(
+					style: FilledButton.styleFrom(
+						backgroundColor: AppColors.accent,
+						minimumSize: minSize,
+						padding: pad,
+					),
+					onPressed: onPreparar,
+					icon: const Icon(Icons.inventory_2_rounded),
+					label: const Text('Pedir a Pañol'),
+				),
+			);
+		}
+
+		if (esperandoPanol && canEjecutar) {
+			actions.add(
+				FilledButton.tonalIcon(
+					style: FilledButton.styleFrom(minimumSize: minSize, padding: pad),
+					onPressed: null,
+					icon: const Icon(Icons.hourglass_top_rounded),
+					label: const Text('Esperando confirmación de Pañol'),
+				),
+			);
+		}
 
 		if (!ocultarPdf && estado == 'realizada') {
 			actions.add(
@@ -2814,20 +3448,26 @@ class _ActionBar extends StatelessWidget {
 			);
 		}
 
-		if (['pendiente', 'en_ejecucion', 'pendiente_panol'].contains(estado) &&
+		// Pedido extra solo en ejecución (repuestos mid-trabajo).
+		if (estado == 'en_ejecucion' &&
 				canSolicitarMateriales &&
+				canEjecutar &&
 				onSolicitarMateriales != null) {
 			actions.add(
 				FilledButton.tonalIcon(
 					style: FilledButton.styleFrom(minimumSize: minSize, padding: pad),
 					onPressed: onSolicitarMateriales,
 					icon: const Icon(Icons.inventory_2_outlined),
-					label: const Text('Solicitar materiales'),
+					label: const Text('Pedir a Pañol'),
 				),
 			);
 		}
 
-		if (estado == 'pendiente' && (canManage || canEjecutar)) {
+		// Iniciar solo si Pañol ya liberó (no pendiente_panol) y preparación ok.
+		if (estado == 'pendiente' &&
+				!needsPreparacion &&
+				!esperandoPanol &&
+				(canManage || canEjecutar)) {
 			actions.add(
 				FilledButton.icon(
 					style: FilledButton.styleFrom(
@@ -2837,12 +3477,15 @@ class _ActionBar extends StatelessWidget {
 					),
 					onPressed: onIniciar,
 					icon: const Icon(Icons.play_arrow_rounded),
-					label: const Text('Iniciar ejecución'),
+					label: const Text('Iniciar'),
 				),
 			);
 		}
 
-		if (['pendiente', 'en_ejecucion'].contains(estado) && canEjecutar) {
+		if (['pendiente', 'en_ejecucion'].contains(estado) &&
+				!esperandoPanol &&
+				!needsPreparacion &&
+				canEjecutar) {
 			actions.add(
 				FilledButton.tonalIcon(
 					style: FilledButton.styleFrom(minimumSize: minSize, padding: pad),
@@ -2853,7 +3496,10 @@ class _ActionBar extends StatelessWidget {
 			);
 		}
 
-		if (['pendiente', 'en_ejecucion'].contains(estado) && canEjecutar) {
+		if (['pendiente', 'en_ejecucion'].contains(estado) &&
+				!esperandoPanol &&
+				!needsPreparacion &&
+				canEjecutar) {
 			actions.add(
 				FilledButton.icon(
 					style: FilledButton.styleFrom(

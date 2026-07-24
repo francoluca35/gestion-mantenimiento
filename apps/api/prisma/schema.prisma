@@ -84,11 +84,27 @@ enum EstadoPedidoStock {
 	completado
 }
 
+enum DecisionMaterialesOt {
+	pendiente
+	no_necesita
+	necesita
+}
+
+enum EstadoOrdenCompra {
+	solicitada
+	autorizada
+	no_autorizada
+	anulada
+	recibida
+}
+
 model Sucursal {
 	id        String   @id @default(uuid()) @db.Uuid
 	nombre    String   @db.VarChar(100)
 	codigo    String   @unique @db.VarChar(20)
 	activa    Boolean  @default(true)
+	logoKey   String?  @map("logo_key") @db.VarChar(500)
+	logoUrl   String?  @map("logo_url") @db.VarChar(800)
 	createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 	updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -102,6 +118,8 @@ model Sucursal {
 	equipoDocumentos     EquipoDocumento[]
 	motivosOtPendiente   MotivoOtPendiente[]
 	panoles              Panol[]
+	proveedores          Proveedor[]
+	ordenesCompra        OrdenCompra[]
 
 	@@map("sucursales")
 }
@@ -185,6 +203,7 @@ model Usuario {
 	sucursal Sucursal?  @relation(fields: [sucursalId], references: [id])
 	perfil   Perfil?    @relation(fields: [perfilId], references: [id])
 	sesiones              Sesion[]
+	passwordResetTokens  PasswordResetToken[]
 	dispositivosFcm      DispositivoFcm[]
 	lecturas              Lectura[]
 	ordenesAsignadas      OrdenTrabajo[]      @relation("OtTecnico")
@@ -196,6 +215,8 @@ model Usuario {
 	solicitudesMaterial   SolicitudMaterial[] @relation("SolicitudMaterialSolicitante")
 	solicitudesMaterialResueltas SolicitudMaterial[] @relation("SolicitudMaterialPanolero")
 	pedidosStock          PedidoStock[]
+	ordenesCompraCreadas  OrdenCompra[] @relation("OcCreador")
+	ordenesCompraAutorizadas OrdenCompra[] @relation("OcAutorizador")
 
 	@@map("usuarios")
 }
@@ -224,6 +245,20 @@ model Sesion {
 
 	@@index([usuarioId])
 	@@map("sesiones")
+}
+
+model PasswordResetToken {
+	id         String   @id @default(uuid()) @db.Uuid
+	usuarioId  String   @map("usuario_id") @db.Uuid
+	codigoHash String   @map("codigo_hash") @db.VarChar(255)
+	expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+	usado      Boolean  @default(false)
+	createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+	usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+	@@index([usuarioId, usado])
+	@@map("password_reset_tokens")
 }
 
 model Ubicacion {
@@ -374,9 +409,25 @@ model Procedimiento {
 	equipos           ProcedimientoEquipo[]
 	alcances          ProcedimientoAlcance[]
 	ordenes           OrdenTrabajo[]
+	versiones         ProcedimientoVersion[]
 
 	@@index([sucursalId, activo])
 	@@map("procedimientos")
+}
+
+model ProcedimientoVersion {
+	id              String   @id @default(uuid()) @db.Uuid
+	procedimientoId String   @map("procedimiento_id") @db.Uuid
+	version         Int
+	snapshot        Json
+	createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	createdById     String?  @map("created_by_id") @db.Uuid
+
+	procedimiento Procedimiento @relation(fields: [procedimientoId], references: [id], onDelete: Cascade)
+
+	@@unique([procedimientoId, version])
+	@@index([procedimientoId, createdAt])
+	@@map("procedimiento_versiones")
 }
 
 model ProcedimientoEquipo {
@@ -434,6 +485,10 @@ model OrdenTrabajo {
 	checklistCompletado       Json              @default("[]") @map("checklist_completado")
 	firmaDigital              String?           @map("firma_digital") @db.Text
 	fotos                     Json              @default("[]")
+	otOrigenId                String?           @map("ot_origen_id") @db.Uuid
+	lecturaRegistradaAt       DateTime?         @map("lectura_registrada_at") @db.Timestamptz(6)
+	decisionMateriales        DecisionMaterialesOt @default(pendiente) @map("decision_materiales")
+	materialesTextoLibre      String?           @map("materiales_texto_libre") @db.Text
 	createdAt                 DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 	updatedAt                 DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -444,16 +499,20 @@ model OrdenTrabajo {
 	tecnicoAsignado   Usuario?              @relation("OtTecnico", fields: [tecnicoAsignadoId], references: [id])
 	creador           Usuario?              @relation("OtCreador", fields: [creadorId], references: [id])
 	motivoPendiente   MotivoOtPendiente?    @relation(fields: [motivoPendienteId], references: [id])
+	otOrigen          OrdenTrabajo?         @relation("OtDerivadas", fields: [otOrigenId], references: [id])
+	otsDerivadas      OrdenTrabajo[]        @relation("OtDerivadas")
 	historialEstados  OtEstadoHistorial[]
 	lecturas          Lectura[]
 	solicitudOrigen   SolicitudTrabajo?     @relation("SolicitudOtGenerada")
 	historialEquipo   HistorialEquipo[]
 	solicitudesMaterial SolicitudMaterial[]
 	movimientosStock  MovimientoStock[]
+	pedidosStock      PedidoStock[]
 
 	@@index([sucursalId, estado])
 	@@index([tecnicoAsignadoId, estado])
 	@@index([equipoId])
+	@@index([otOrigenId])
 	@@map("ordenes_trabajo")
 }
 
@@ -555,6 +614,7 @@ model Material {
 	movimientos MovimientoStock[]
 	solicitudes SolicitudMaterial[]
 	pedidos     PedidoStock[]
+	ordenesCompraDetalle OrdenCompraDetalle[]
 
 	@@index([activo, nombre])
 	@@map("materiales")
@@ -629,6 +689,7 @@ model PedidoStock {
 	numero     Int              @unique @default(autoincrement())
 	panolId    String           @map("panol_id") @db.Uuid
 	materialId String           @map("material_id") @db.Uuid
+	otId       String?          @map("ot_id") @db.Uuid
 	cantidad   Decimal          @db.Decimal(10, 2)
 	estado     EstadoPedidoStock @default(pendiente)
 	usuarioId  String?          @map("usuario_id") @db.Uuid
@@ -637,11 +698,76 @@ model PedidoStock {
 	updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 	completadoAt DateTime?      @map("completado_at") @db.Timestamptz(6)
 
-	panol    Panol    @relation(fields: [panolId], references: [id])
-	material Material @relation(fields: [materialId], references: [id])
-	usuario  Usuario? @relation(fields: [usuarioId], references: [id])
+	panol    Panol         @relation(fields: [panolId], references: [id])
+	material Material      @relation(fields: [materialId], references: [id])
+	usuario  Usuario?      @relation(fields: [usuarioId], references: [id])
+	ot       OrdenTrabajo? @relation(fields: [otId], references: [id])
 
 	@@index([panolId, estado])
 	@@index([estado, createdAt])
+	@@index([otId])
 	@@map("pedidos_stock")
+}
+
+model Proveedor {
+	id           String   @id @default(uuid()) @db.Uuid
+	sucursalId   String   @map("sucursal_id") @db.Uuid
+	nombre       String   @db.VarChar(200)
+	cuit         String?  @db.VarChar(20)
+	contacto     String?  @db.VarChar(200)
+	telefono     String?  @db.VarChar(50)
+	email        String?  @db.VarChar(100)
+	calificacion Decimal? @db.Decimal(3, 1)
+	activo       Boolean  @default(true)
+	createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal      Sucursal      @relation(fields: [sucursalId], references: [id])
+	ordenesCompra OrdenCompra[]
+
+	@@index([sucursalId, activo])
+	@@index([sucursalId, nombre])
+	@@map("proveedores")
+}
+
+model OrdenCompra {
+	id                 String           @id @default(uuid()) @db.Uuid
+	numero             Int
+	sucursalId         String           @map("sucursal_id") @db.Uuid
+	proveedorId        String           @map("proveedor_id") @db.Uuid
+	estado             EstadoOrdenCompra @default(solicitada)
+	montoTotal         Decimal          @default(0) @map("monto_total") @db.Decimal(15, 2)
+	creadoPorId        String?          @map("creado_por_id") @db.Uuid
+	autorizadoPorId    String?          @map("autorizado_por_id") @db.Uuid
+	fechaSolicitud     DateTime         @default(now()) @map("fecha_solicitud") @db.Timestamptz(6)
+	fechaAutorizacion  DateTime?        @map("fecha_autorizacion") @db.Timestamptz(6)
+	notas              String?          @db.Text
+	createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+	updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+	sucursal      Sucursal             @relation(fields: [sucursalId], references: [id])
+	proveedor     Proveedor            @relation(fields: [proveedorId], references: [id])
+	creadoPor     Usuario?             @relation("OcCreador", fields: [creadoPorId], references: [id])
+	autorizadoPor Usuario?             @relation("OcAutorizador", fields: [autorizadoPorId], references: [id])
+	detalles      OrdenCompraDetalle[]
+
+	@@unique([sucursalId, numero])
+	@@index([sucursalId, estado])
+	@@index([proveedorId])
+	@@map("ordenes_compra")
+}
+
+model OrdenCompraDetalle {
+	id             String  @id @default(uuid()) @db.Uuid
+	ordenCompraId  String  @map("orden_compra_id") @db.Uuid
+	materialId     String  @map("material_id") @db.Uuid
+	cantidad       Decimal @db.Decimal(10, 2)
+	precioUnitario Decimal @map("precio_unitario") @db.Decimal(15, 2)
+
+	ordenCompra OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+	material    Material    @relation(fields: [materialId], references: [id])
+
+	@@index([ordenCompraId])
+	@@index([materialId])
+	@@map("ordenes_compra_detalle")
 }

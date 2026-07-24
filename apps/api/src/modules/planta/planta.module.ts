@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MantenimientoModule } from '../mantenimiento/mantenimiento.module';
 import { ComponentesController } from './componentes/componentes.controller';
 import { ComponentesService } from './componentes/componentes.service';
 import { EquipoDocumentosController } from './documentos/equipo-documentos.controller';
@@ -13,6 +14,7 @@ import { UbicacionesController } from './ubicaciones/ubicaciones.controller';
 import { UbicacionesService } from './ubicaciones/ubicaciones.service';
 
 @Module({
+	imports: [MantenimientoModule],
 	controllers: [
 		UbicacionesController,
 		TiposEquipoController,

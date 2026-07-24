@@ -252,6 +252,38 @@ export class ProcedimientosService {
 
 		const periodicidad = this.resolvePeriodicidad(tipo, dto, existing);
 
+		const debeVersionar =
+			dto.planillaLecturas !== undefined ||
+			dto.nombre !== undefined ||
+			dto.descripcion !== undefined ||
+			dto.observaciones !== undefined ||
+			dto.tipo !== undefined ||
+			dto.periodicidadTipo !== undefined ||
+			dto.periodicidadValor !== undefined;
+
+		if (debeVersionar) {
+			await this.prisma.procedimientoVersion.create({
+				data: {
+					procedimientoId: existing.id,
+					version: existing.versionActual,
+					createdById: currentUser.id,
+					snapshot: {
+						nombre: existing.nombre,
+						tipo: existing.tipo,
+						descripcion: existing.descripcion,
+						planillaLecturas: existing.planillaLecturas,
+						observaciones: existing.observaciones,
+						periodicidadTipo: existing.periodicidadTipo,
+						periodicidadValor: existing.periodicidadValor,
+						criterioProgramacion: existing.criterioProgramacion,
+						tolerancia: existing.tolerancia,
+						duracionEstimada: existing.duracionEstimada,
+						versionActual: existing.versionActual,
+					},
+				},
+			});
+		}
+
 		return this.prisma.procedimiento.update({
 			where: { id: existing.id },
 			data: {
@@ -271,12 +303,24 @@ export class ProcedimientosService {
 				indisponibilidadEstimada: dto.indisponibilidadEstimada,
 				costoEstimado: dto.costoEstimado,
 				activo: dto.activo,
-				versionActual:
-					dto.planillaLecturas !== undefined
-						? existing.versionActual + 1
-						: undefined,
+				versionActual: debeVersionar ? existing.versionActual + 1 : undefined,
 			},
 			include: PROCEDIMIENTO_INCLUDE,
+		});
+	}
+
+	async listarVersiones(id: string, currentUser: AuthUser) {
+		await this.findOne(id, currentUser);
+		return this.prisma.procedimientoVersion.findMany({
+			where: { procedimientoId: id },
+			orderBy: { version: 'desc' },
+			select: {
+				id: true,
+				version: true,
+				createdAt: true,
+				createdById: true,
+				snapshot: true,
+			},
 		});
 	}
 

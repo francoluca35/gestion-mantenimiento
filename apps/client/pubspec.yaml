@@ -1,7 +1,7 @@
 name: gestion_mantenimiento
 description: GestionMantenimiento — mantenimiento, stock y eficiencia
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.0+5
 
 environment:
   sdk: ^3.8.0
@@ -19,6 +19,9 @@ dependencies:
   file_picker: ^8.1.7
   firebase_core: ^4.11.0
   firebase_messaging: ^16.4.1
+  path_provider: ^2.1.5
+  fl_chart: ^0.70.2
+  excel: ^4.0.6
 
 dev_dependencies:
   flutter_test:

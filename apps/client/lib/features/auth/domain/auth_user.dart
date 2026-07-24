@@ -26,7 +26,7 @@ class AuthUser {
 		return derechos.contains(codigo);
 	}
 
-	/// Perfil operativo de campo — solo Mis OT, sin emisión ni supervisión.
+	/// Preferencia de aterrizaje: perfil operativo de campo.
 	bool get esTecnico {
 		if (esAdministrador || supervisaSucursales) return false;
 		final perfil = perfilNombre?.toLowerCase().trim() ?? '';
@@ -40,7 +40,7 @@ class AuthUser {
 				!tieneDerecho('configuracion.usuarios.listar');
 	}
 
-	/// Rol pañolero: stock / pedidos / seguimiento (sin home completo).
+	/// Preferencia de aterrizaje: perfil pañol.
 	bool get esPanolero {
 		if (esAdministrador || supervisaSucursales || esTecnico) return false;
 		final perfil = perfilNombre?.toLowerCase().trim() ?? '';

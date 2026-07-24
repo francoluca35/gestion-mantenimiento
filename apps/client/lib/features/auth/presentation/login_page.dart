@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../components/sika_logo.dart';
 import '../../../components/sika_ui.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../application/auth_controller.dart';
 
@@ -157,6 +158,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 																	style: TextStyle(fontWeight: FontWeight.w700),
 																),
 												),
+											const SizedBox(height: 12),
+												TextButton(
+													onPressed: auth.loading
+															? null
+															: () => _abrirRecuperarClave(context),
+													child: const Text('¿Olvidaste tu clave?'),
+												),
 											],
 										),
 									),
@@ -168,5 +176,149 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 			),
 			),
 		);
+	}
+
+	Future<void> _abrirRecuperarClave(BuildContext context) async {
+		final userCtrl = TextEditingController(text: _userController.text);
+		final codigoCtrl = TextEditingController();
+		final claveCtrl = TextEditingController();
+		String? codigoDemo;
+		String? mensaje;
+		var paso = 1;
+		var busy = false;
+
+		await showDialog<void>(
+			context: context,
+			builder: (dialogContext) {
+				return StatefulBuilder(
+					builder: (context, setLocal) {
+						Future<void> pedirCodigo() async {
+							if (userCtrl.text.trim().isEmpty) return;
+							setLocal(() => busy = true);
+							try {
+								final api = ApiClient();
+								final res = await api.postJson(
+									'auth/recuperar',
+									{'nombreUsuario': userCtrl.text.trim()},
+									auth: false,
+								);
+								codigoDemo = res['codigoDemo']?.toString();
+								mensaje = res['mensaje']?.toString();
+								if (codigoDemo != null) {
+									codigoCtrl.text = codigoDemo!;
+								}
+								setLocal(() => paso = 2);
+							} catch (e) {
+								mensaje = e.toString();
+								setLocal(() {});
+							} finally {
+								setLocal(() => busy = false);
+							}
+						}
+
+						Future<void> restablecer() async {
+							setLocal(() => busy = true);
+							try {
+								final api = ApiClient();
+								await api.postJson(
+									'auth/restablecer',
+									{
+										'nombreUsuario': userCtrl.text.trim(),
+										'codigo': codigoCtrl.text.trim(),
+										'claveNueva': claveCtrl.text,
+									},
+									auth: false,
+								);
+								if (dialogContext.mounted) {
+									Navigator.of(dialogContext).pop();
+								}
+								if (!mounted) return;
+								ScaffoldMessenger.of(context).showSnackBar(
+									const SnackBar(
+										content: Text('Clave actualizada. Ingresá con la nueva.'),
+									),
+								);
+							} catch (e) {
+								mensaje = e.toString();
+								setLocal(() {});
+							} finally {
+								setLocal(() => busy = false);
+							}
+						}
+
+						return AlertDialog(
+							title: Text(paso == 1 ? 'Recuperar clave' : 'Nueva clave'),
+							content: SizedBox(
+								width: 360,
+								child: Column(
+									mainAxisSize: MainAxisSize.min,
+									crossAxisAlignment: CrossAxisAlignment.stretch,
+									children: [
+										if (paso == 1) ...[
+											TextField(
+												controller: userCtrl,
+												decoration: const InputDecoration(
+													labelText: 'Usuario',
+												),
+											),
+										] else ...[
+											TextField(
+												controller: codigoCtrl,
+												decoration: const InputDecoration(
+													labelText: 'Código',
+												),
+											),
+											const SizedBox(height: 12),
+											TextField(
+												controller: claveCtrl,
+												obscureText: true,
+												decoration: const InputDecoration(
+													labelText: 'Nueva clave',
+												),
+											),
+											if (codigoDemo != null) ...[
+												const SizedBox(height: 8),
+												Text(
+													'Código demo: $codigoDemo',
+													style: const TextStyle(
+														color: AppColors.brandGreen,
+														fontWeight: FontWeight.w700,
+													),
+												),
+											],
+										],
+										if (mensaje != null) ...[
+											const SizedBox(height: 12),
+											Text(
+												mensaje!,
+												style: const TextStyle(fontSize: 13),
+											),
+										],
+									],
+								),
+							),
+							actions: [
+								TextButton(
+									onPressed: busy
+											? null
+											: () => Navigator.of(dialogContext).pop(),
+									child: const Text('Cancelar'),
+								),
+								FilledButton(
+									onPressed: busy
+											? null
+											: () => paso == 1 ? pedirCodigo() : restablecer(),
+									child: Text(paso == 1 ? 'Enviar código' : 'Guardar'),
+								),
+							],
+						);
+					},
+				);
+			},
+		);
+
+		userCtrl.dispose();
+		codigoCtrl.dispose();
+		claveCtrl.dispose();
 	}
 }

@@ -5,12 +5,12 @@ class AppConfig {
 
 	static const String _prefsKey = 'api_base_url';
 
-	/// Emulador Android: `http://10.0.2.2:3000/v1`
-	/// Web / desktop: localhost.
-	/// Dispositivo físico: IP de la PC, hotspot, o `http://127.0.0.1:3000/v1` con adb reverse.
+	/// Emulador Android: `--dart-define=API_BASE_URL=http://10.0.2.2:3000/v1`
+	/// Web / desktop local: `--dart-define=API_BASE_URL=http://localhost:3000/v1`
+	/// Release / Play Store / celular: API pública (Cloudflare Tunnel).
 	static const String compileTimeApiBaseUrl = String.fromEnvironment(
 		'API_BASE_URL',
-		defaultValue: 'http://localhost:3000/v1',
+		defaultValue: 'https://api.sorjuanaliberte.store/v1',
 	);
 
 	static String? _override;

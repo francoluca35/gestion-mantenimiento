@@ -36,12 +36,24 @@ async function bootstrap() {
 		}),
 	);
 
-	const origins = config.get<string>(
+	const configuredOrigins = config.get<string>(
 		'CORS_ORIGINS',
 		config.get<string>('CORS_ORIGIN', 'http://localhost:8080'),
 	);
+	const localDevOrigins = [
+		'http://localhost:8080',
+		'http://localhost:5173',
+		'http://localhost:5170',
+		'http://127.0.0.1:8080',
+		'http://127.0.0.1:5173',
+		'http://127.0.0.1:5170',
+	];
+	const origins = [
+		...configuredOrigins.split(',').map((origin) => origin.trim()),
+		...(nodeEnv === 'production' ? [] : localDevOrigins),
+	].filter(Boolean);
 	app.enableCors({
-		origin: origins.split(',').map((origin) => origin.trim()).filter(Boolean),
+		origin: [...new Set(origins)],
 		credentials: true,
 	});
 

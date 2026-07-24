@@ -1,48 +1,62 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
-    id("com.android.application")
-    // START: FlutterFire Configuration
-    id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
-    id("dev.flutter.flutter-gradle-plugin")
+	id("com.android.application")
+	// START: FlutterFire Configuration
+	id("com.google.gms.google-services")
+	// END: FlutterFire Configuration
+	id("kotlin-android")
+	// The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+	id("dev.flutter.flutter-gradle-plugin")
 }
 
-android {
-    namespace = "com.sika.mantenimiento.gestion_mantenimiento"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+	keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
+	android {
+	namespace = "com.gestion.v1"
+	// Google Play: target API 36 (Android 16) obligatorio desde ago 2026.
+	compileSdk = 36
+	ndkVersion = "27.0.12077973"
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
-    }
+	compileOptions {
+		sourceCompatibility = JavaVersion.VERSION_11
+		targetCompatibility = JavaVersion.VERSION_11
+	}
 
-    defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.sika.mantenimiento.gestion_mantenimiento"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // firebase_messaging requiere minSdk >= 23
-        minSdk = 23
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-    }
+	kotlinOptions {
+		jvmTarget = JavaVersion.VERSION_11.toString()
+	}
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
-        }
-    }
+	defaultConfig {
+		applicationId = "com.gestion.v1"
+		// firebase_messaging requiere minSdk >= 23
+		minSdk = 23
+		targetSdk = 36
+		versionCode = flutter.versionCode
+		versionName = flutter.versionName
+	}
+
+	signingConfigs {
+		create("release") {
+			keyAlias = keystoreProperties["keyAlias"] as String
+			keyPassword = keystoreProperties["keyPassword"] as String
+			storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+			storePassword = keystoreProperties["storePassword"] as String
+		}
+	}
+
+	buildTypes {
+		release {
+			signingConfig = signingConfigs.getByName("release")
+		}
+	}
 }
 
 flutter {
-    source = "../.."
+	source = "../.."
 }

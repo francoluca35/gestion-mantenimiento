@@ -4,7 +4,7 @@ import {
 	Injectable,
 	NotFoundException,
 } from '@nestjs/common';
-import { EstadoOt, Prisma, TipoMantenimiento } from '@prisma/client';
+import { EstadoOt, EstadoPedidoStock, EstadoSolicitudMaterial, Prisma, TipoMantenimiento } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import type { AuthUser } from '../../seguridad/auth/auth.types';
 import { PushService } from '../../notificaciones/push.service';
@@ -18,14 +18,31 @@ import { DerivarOtDto } from './dto/derivar-ot.dto';
 import { EmitirOtDto } from './dto/emitir-ot.dto';
 import { EmitirOtPeriodicaDto } from './dto/emitir-ot-periodica.dto';
 import { EmitirOtNecesariasDto } from './dto/emitir-ot-necesarias.dto';
+import {
+	AnalizarMaterialesOtDto,
+	ConfirmarMaterialesOtDto,
+	DecidirSinMaterialesOtDto,
+	RegistrarLecturaOtDto,
+} from './dto/preparacion-ot.dto';
 import { RegistrarFirmaDto } from './dto/registrar-firma.dto';
 import { ReabrirOtDto } from './dto/reabrir-ot.dto';
+import {
+	AgrupadoGraficos,
+	EjeXGraficos,
+	EjeYGraficos,
+	GraficosOtDto,
+} from './dto/graficos-ot.dto';
+import {
+	matchMaterialesContraStock,
+	type StockCandidate,
+} from './material-match.util';
 import { renderOtPdfHtml, type OtPdfData } from './ot-pdf.template';
 
 const TRANSICIONES: Record<EstadoOt, EstadoOt[]> = {
 	necesaria_de_emitir: ['pendiente', 'anulada'],
 	pendiente: ['en_ejecucion', 'pendiente_panol', 'anulada', 'realizada'],
-	pendiente_panol: ['en_ejecucion', 'anulada'],
+	// Solo el pañol (aprobar/completar) libera a pendiente; no saltar a ejecución.
+	pendiente_panol: ['pendiente', 'anulada'],
 	en_ejecucion: ['realizada', 'anulada'],
 	realizada: [],
 	anulada: [],
@@ -68,6 +85,20 @@ export class OtService {
 			motivoPendiente: {
 				select: { id: true, codigo: true, descripcion: true },
 			},
+			otOrigen: {
+				select: { id: true, numero: true, estado: true },
+			},
+			otsDerivadas: {
+				select: { id: true, numero: true, estado: true, createdAt: true },
+				orderBy: { numero: 'asc' as const },
+			},
+			lecturas: {
+				orderBy: { fecha: 'desc' as const },
+				take: 5,
+				include: {
+					usuario: { select: { id: true, nombreUsuario: true } },
+				},
+			},
 		};
 	}
 
@@ -91,6 +122,22 @@ export class OtService {
 
 		if (ot.tecnicoAsignadoId !== user.id) {
 			throw new ForbiddenException('Solo podés operar OT asignadas a vos');
+		}
+	}
+
+	private assertPreparacionOt(ot: {
+		lecturaRegistradaAt: Date | null;
+		decisionMateriales: string;
+	}) {
+		if (!ot.lecturaRegistradaAt) {
+			throw new BadRequestException(
+				'Primero registrá la lectura del equipo antes de continuar la OT',
+			);
+		}
+		if (ot.decisionMateriales === 'pendiente') {
+			throw new BadRequestException(
+				'Indicá si necesitás materiales o no antes de ejecutar la OT',
+			);
 		}
 	}
 
@@ -668,29 +715,74 @@ export class OtService {
 		const manana = new Date(hoy);
 		manana.setDate(manana.getDate() + 1);
 
-		const [pendientes, enEjecucion, realizadas, realizadasHoy, totalEquipos, totalPeriodo] =
-			await Promise.all([
-				this.prisma.ordenTrabajo.count({
-					where: { ...baseWhere, estado: 'pendiente' },
-				}),
-				this.prisma.ordenTrabajo.count({
-					where: { ...baseWhere, estado: 'en_ejecucion' },
-				}),
-				this.prisma.ordenTrabajo.count({
-					where: { ...baseWhere, estado: 'realizada' },
-				}),
-				this.prisma.ordenTrabajo.count({
-					where: {
-						...baseWhere,
-						estado: 'realizada',
-						updatedAt: { gte: hoy, lt: manana },
-					},
-				}),
-				this.prisma.equipo.count({
-					where: { sucursalId, activo: true, fueraDeServicio: false },
-				}),
-				this.prisma.ordenTrabajo.count({ where: baseWhere }),
-			]);
+		const inicioSemana = new Date(hoy);
+		const day = inicioSemana.getDay(); // 0=domingo
+		const diffToMonday = day === 0 ? -6 : 1 - day;
+		inicioSemana.setDate(inicioSemana.getDate() + diffToMonday);
+		inicioSemana.setHours(0, 0, 0, 0);
+
+		const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+		const inicioAnio = new Date(hoy.getFullYear(), 0, 1);
+		const finDia = new Date(hoy);
+		finDia.setHours(23, 59, 59, 999);
+
+		const [
+			pendientes,
+			enEjecucion,
+			realizadas,
+			realizadasHoy,
+			totalEquipos,
+			totalPeriodo,
+			solicitudesPendientes,
+			otSemana,
+			otMes,
+			otAnio,
+		] = await Promise.all([
+			this.prisma.ordenTrabajo.count({
+				where: { ...baseWhere, estado: 'pendiente' },
+			}),
+			this.prisma.ordenTrabajo.count({
+				where: { ...baseWhere, estado: 'en_ejecucion' },
+			}),
+			this.prisma.ordenTrabajo.count({
+				where: { ...baseWhere, estado: 'realizada' },
+			}),
+			this.prisma.ordenTrabajo.count({
+				where: {
+					...baseWhere,
+					estado: 'realizada',
+					updatedAt: { gte: hoy, lt: manana },
+				},
+			}),
+			this.prisma.equipo.count({
+				where: { sucursalId, activo: true, fueraDeServicio: false },
+			}),
+			this.prisma.ordenTrabajo.count({ where: baseWhere }),
+			this.prisma.solicitudTrabajo.count({
+				where: { sucursalId, estado: 'pendiente' },
+			}),
+			this.prisma.ordenTrabajo.count({
+				where: {
+					sucursalId,
+					estado: { not: 'anulada' },
+					fechaProgramacion: { gte: inicioSemana, lte: finDia },
+				},
+			}),
+			this.prisma.ordenTrabajo.count({
+				where: {
+					sucursalId,
+					estado: { not: 'anulada' },
+					fechaProgramacion: { gte: inicioMes, lte: finDia },
+				},
+			}),
+			this.prisma.ordenTrabajo.count({
+				where: {
+					sucursalId,
+					estado: { not: 'anulada' },
+					fechaProgramacion: { gte: inicioAnio, lte: finDia },
+				},
+			}),
+		]);
 
 		return {
 			pendientes,
@@ -699,6 +791,14 @@ export class OtService {
 			realizadasHoy,
 			totalEquipos,
 			totalPeriodo,
+			solicitudesPendientes,
+			otSemana,
+			otMes,
+			otAnio,
+			cumplimientoPct:
+				totalPeriodo > 0
+					? Math.round((realizadas / totalPeriodo) * 100)
+					: 0,
 		};
 	}
 
@@ -767,6 +867,7 @@ export class OtService {
 				prioridad: dto.prioridad ?? 'media',
 				tolerancia: dto.tolerancia ?? 0,
 				comentarios: dto.comentarios,
+				otOrigenId: dto.otOrigenId,
 				historialEstados: {
 					create: {
 						estado: estadoInicial,
@@ -1010,6 +1111,15 @@ export class OtService {
 		this.assertPuedeOperarOt(ot, currentUser);
 		this.validarTransicion(ot.estado, dto.estado);
 
+		if (['en_ejecucion', 'realizada'].includes(dto.estado)) {
+			this.assertPreparacionOt(ot);
+			if (ot.estado === 'pendiente_panol') {
+				throw new BadRequestException(
+					'Pañol debe confirmar los materiales antes de iniciar la OT',
+				);
+			}
+		}
+
 		const extra: Prisma.OrdenTrabajoUpdateInput = {};
 
 		if (dto.estado === 'realizada') {
@@ -1049,6 +1159,7 @@ export class OtService {
 	) {
 		const ot = await this.findOne(id, currentUser);
 		this.assertPuedeOperarOt(ot, currentUser);
+		this.assertPreparacionOt(ot);
 
 		if (!['en_ejecucion', 'pendiente'].includes(ot.estado)) {
 			throw new BadRequestException(
@@ -1081,6 +1192,7 @@ export class OtService {
 	async registrarFirma(id: string, dto: RegistrarFirmaDto, currentUser: AuthUser) {
 		const ot = await this.findOne(id, currentUser);
 		this.assertPuedeOperarOt(ot, currentUser);
+		this.assertPreparacionOt(ot);
 
 		if (!['en_ejecucion', 'pendiente'].includes(ot.estado)) {
 			throw new BadRequestException('La OT no admite firma en este estado');
@@ -1141,6 +1253,7 @@ export class OtService {
 				estado: destino,
 				fechaEjecucion: null,
 				firmaDigital: null,
+				decisionMateriales: destino === 'pendiente' ? 'pendiente' : undefined,
 				historialEstados: {
 					create: {
 						estado: destino,
@@ -1150,6 +1263,260 @@ export class OtService {
 				},
 			},
 			include: this.otInclude(),
+		});
+	}
+
+	async registrarLecturaOt(
+		id: string,
+		dto: RegistrarLecturaOtDto,
+		currentUser: AuthUser,
+	) {
+		const ot = await this.findOne(id, currentUser);
+		this.assertPuedeOperarOt(ot, currentUser);
+
+		if (['realizada', 'anulada'].includes(ot.estado)) {
+			throw new BadRequestException('La OT no admite lectura en este estado');
+		}
+
+		const lectura = await this.prisma.lectura.create({
+			data: {
+				equipoId: ot.equipoId,
+				otId: ot.id,
+				usuarioId: currentUser.id,
+				tipo: dto.tipo.trim(),
+				valor: dto.valor,
+				notas: dto.notas?.trim() || `Lectura OT #${ot.numero}`,
+			},
+		});
+
+		const actualizada = await this.prisma.ordenTrabajo.update({
+			where: { id: ot.id },
+			data: { lecturaRegistradaAt: new Date() },
+			include: this.otInclude(),
+		});
+
+		try {
+			await this.emitirPorContadorEquipo(ot.equipoId);
+		} catch {
+			// no bloquear la preparación si falla emisión automática
+		}
+
+		return { lectura, ot: actualizada };
+	}
+
+	async analizarMaterialesOt(
+		id: string,
+		dto: AnalizarMaterialesOtDto,
+		currentUser: AuthUser,
+	) {
+		const ot = await this.findOne(id, currentUser);
+		this.assertPuedeOperarOt(ot, currentUser);
+		if (!ot.lecturaRegistradaAt) {
+			throw new BadRequestException('Registrá la lectura antes de pedir materiales');
+		}
+
+		const catalogo = await this.buildStockCatalog(ot.sucursalId, dto.panolId);
+		const lineas = matchMaterialesContraStock(dto.texto, catalogo);
+		const tieneFaltantes = lineas.some((l) => l.cantidadFaltante > 0);
+
+		return {
+			texto: dto.texto.trim(),
+			lineas,
+			tieneFaltantes,
+			resumen: {
+				total: lineas.length,
+				ok: lineas.filter((l) => l.estado === 'ok').length,
+				faltantes: lineas.filter((l) => l.cantidadFaltante > 0).length,
+			},
+		};
+	}
+
+	async decidirSinMateriales(
+		id: string,
+		dto: DecidirSinMaterialesOtDto,
+		currentUser: AuthUser,
+	) {
+		const ot = await this.findOne(id, currentUser);
+		this.assertPuedeOperarOt(ot, currentUser);
+		if (!ot.lecturaRegistradaAt) {
+			throw new BadRequestException('Registrá la lectura antes de continuar');
+		}
+
+		return this.prisma.ordenTrabajo.update({
+			where: { id: ot.id },
+			data: {
+				decisionMateriales: 'no_necesita',
+				materialesTextoLibre: dto.comentario?.trim() || null,
+				historialEstados: {
+					create: {
+						estado: ot.estado,
+						usuarioId: currentUser.id,
+						comentario: 'Técnico indicó que no necesita materiales',
+					},
+				},
+			},
+			include: this.otInclude(),
+		});
+	}
+
+	async confirmarMaterialesOt(
+		id: string,
+		dto: ConfirmarMaterialesOtDto,
+		currentUser: AuthUser,
+	) {
+		const ot = await this.findOne(id, currentUser);
+		this.assertPuedeOperarOt(ot, currentUser);
+		if (!ot.lecturaRegistradaAt) {
+			throw new BadRequestException('Registrá la lectura antes de pedir materiales');
+		}
+
+		const analisis = await this.analizarMaterialesOt(id, dto, currentUser);
+		const tieneFaltantes = analisis.tieneFaltantes;
+		if (tieneFaltantes && !dto.procederConFaltantes) {
+			return {
+				requiereConfirmacion: true,
+				mensaje:
+					'Hay materiales faltantes. Confirmá si igual realizás la OT; se generará pedido de lo faltante.',
+				analisis,
+			};
+		}
+
+		const panolDefault = await this.resolvePanol(ot.sucursalId, dto.panolId);
+		const unidadDefault = await this.prisma.unidad.findFirst({
+			orderBy: { nombre: 'asc' },
+		});
+		if (!unidadDefault) {
+			throw new BadRequestException('No hay unidades de medida configuradas');
+		}
+
+		const solicitudes: string[] = [];
+		const pedidos: string[] = [];
+
+		await this.prisma.$transaction(async (tx) => {
+			for (const linea of analisis.lineas) {
+				if (linea.match && linea.cantidadDisponible > 0) {
+					const sol = await tx.solicitudMaterial.create({
+						data: {
+							otId: ot.id,
+							panolId: linea.match.panolId,
+							materialId: linea.match.materialId,
+							cantidadSolicitada: linea.cantidadDisponible,
+							solicitanteId: currentUser.id,
+							estado: EstadoSolicitudMaterial.pendiente,
+						},
+					});
+					solicitudes.push(sol.id);
+				}
+
+				if (linea.cantidadFaltante > 0) {
+					let materialId = linea.match?.materialId;
+					let panolId = linea.match?.panolId ?? panolDefault.id;
+
+					if (!materialId) {
+						const codigo = `REQ-${Date.now().toString(36)}-${Math.floor(Math.random() * 999)}`.slice(0, 50);
+						const material = await tx.material.create({
+							data: {
+								codigo,
+								nombre: linea.descripcion.slice(0, 200),
+								unidadId: unidadDefault.id,
+								uso: 'Mantenimiento',
+								activo: true,
+							},
+						});
+						materialId = material.id;
+					}
+
+					const pedido = await tx.pedidoStock.create({
+						data: {
+							panolId,
+							materialId,
+							otId: ot.id,
+							cantidad: linea.cantidadFaltante,
+							usuarioId: currentUser.id,
+							estado: EstadoPedidoStock.pendiente,
+							notas: `Faltante OT #${ot.numero}: ${linea.raw}`,
+						},
+					});
+					pedidos.push(pedido.id);
+				}
+			}
+
+			await tx.ordenTrabajo.update({
+				where: { id: ot.id },
+				data: {
+					decisionMateriales: 'necesita',
+					materialesTextoLibre: dto.texto.trim(),
+					estado: 'pendiente_panol',
+					historialEstados: {
+						create: {
+							estado: 'pendiente_panol',
+							usuarioId: currentUser.id,
+							comentario: tieneFaltantes
+								? `Materiales con faltantes: ${pedidos.length} pedido(s) generado(s)`
+								: 'Solicitud de materiales enviada (stock disponible)',
+						},
+					},
+				},
+			});
+		});
+
+		const actualizada = await this.findOne(id, currentUser);
+		return {
+			requiereConfirmacion: false,
+			analisis,
+			solicitudesCreadas: solicitudes.length,
+			pedidosCreados: pedidos.length,
+			ot: actualizada,
+		};
+	}
+
+	private async resolvePanol(sucursalId: string, panolId?: string) {
+		if (panolId) {
+			const panol = await this.prisma.panol.findFirst({
+				where: { id: panolId, sucursalId, activo: true },
+			});
+			if (!panol) throw new BadRequestException('Pañol inválido');
+			return panol;
+		}
+		const panol = await this.prisma.panol.findFirst({
+			where: { sucursalId, activo: true },
+			orderBy: { nombre: 'asc' },
+		});
+		if (!panol) throw new BadRequestException('No hay pañol activo en la sucursal');
+		return panol;
+	}
+
+	private async buildStockCatalog(
+		sucursalId: string,
+		panolId?: string,
+	): Promise<StockCandidate[]> {
+		const items = await this.prisma.stockItem.findMany({
+			where: {
+				panol: {
+					sucursalId,
+					activo: true,
+					...(panolId ? { id: panolId } : {}),
+				},
+				material: { activo: true },
+			},
+			include: {
+				material: { include: { unidad: true } },
+				panol: true,
+			},
+		});
+
+		return items.map((item) => {
+			const actual = Number(item.cantidadActual);
+			const reservada = Number(item.cantidadReservada);
+			return {
+				materialId: item.materialId,
+				codigo: item.material.codigo,
+				nombre: item.material.nombre,
+				disponible: Math.max(0, actual - reservada),
+				panolId: item.panolId,
+				panolNombre: item.panol.nombre,
+				unidad: item.material.unidad?.nombre ?? null,
+			};
 		});
 	}
 
@@ -1168,9 +1535,388 @@ export class OtService {
 				prioridad: origen.prioridad,
 				comentarios,
 				sucursalId: origen.sucursalId,
+				otOrigenId: origen.id,
 			},
 			currentUser,
 		);
+	}
+
+	async emitirPorContadorEquipo(equipoId: string) {
+		const equipo = await this.prisma.equipo.findUnique({
+			where: { id: equipoId },
+			select: { id: true, sucursalId: true, activo: true },
+		});
+		if (!equipo?.activo) return { emitidas: 0 };
+
+		const sistemaUser = {
+			id: '00000000-0000-0000-0000-000000000001',
+			nombreUsuario: 'sistema',
+			esAdministrador: true,
+			supervisaSucursales: true,
+			sucursalId: equipo.sucursalId,
+		} as AuthUser;
+
+		const { items } = await this.listarNecesarias(sistemaUser, {
+			sucursalId: equipo.sucursalId,
+		});
+		const delEquipo = items.filter((item) => item.equipo.id === equipoId);
+		if (delEquipo.length === 0) return { emitidas: 0 };
+
+		const hoy = this.toDateOnlyString(new Date());
+		const resultado = await this.emitirNecesarias(
+			{
+				sucursalId: equipo.sucursalId,
+				items: delEquipo.map((item) => ({
+					procedimientoId: item.procedimientoId,
+					equipoId: item.equipo.id,
+					fechaProgramacion: item.fechaNecesaria ?? hoy,
+				})),
+			},
+			sistemaUser,
+		);
+		return { emitidas: resultado.total };
+	}
+
+	async getGantt(
+		currentUser: AuthUser,
+		opts: {
+			sucursalId?: string;
+			fechaDesde?: string;
+			fechaHasta?: string;
+			agruparPor?: 'equipo' | 'sector';
+			ubicacionId?: string;
+			misOt?: boolean;
+		},
+	) {
+		const sucursalId = resolveSucursalId(currentUser, opts.sucursalId);
+		const agruparPor = opts.agruparPor === 'sector' ? 'sector' : 'equipo';
+		const rango = this.rangoFechas(opts.fechaDesde, opts.fechaHasta);
+		const periodoWhere = this.whereOtEnPeriodo(rango);
+
+		let equipoUbicacionFilter: Prisma.OrdenTrabajoWhereInput | undefined;
+		if (opts.ubicacionId) {
+			const ubicacionIds = await this.collectDescendantUbicacionIds(
+				sucursalId,
+				opts.ubicacionId,
+			);
+			equipoUbicacionFilter = {
+				equipo: { ubicacionId: { in: ubicacionIds } },
+			};
+		}
+
+		const ots = await this.prisma.ordenTrabajo.findMany({
+			where: {
+				AND: [
+					{
+						sucursalId,
+						estado: { not: 'anulada' },
+						...(opts.misOt ? { tecnicoAsignadoId: currentUser.id } : {}),
+					},
+					...(periodoWhere ? [periodoWhere] : []),
+					...(equipoUbicacionFilter ? [equipoUbicacionFilter] : []),
+				],
+			},
+			select: {
+				estado: true,
+				fechaProgramacion: true,
+				fechaEjecucion: true,
+				equipo: {
+					select: {
+						id: true,
+						codigo: true,
+						nombre: true,
+						ubicacion: { select: { id: true, nombre: true } },
+					},
+				},
+			},
+			take: 5000,
+		});
+
+		const desde =
+			rango?.gte ??
+			(ots.length
+				? ots.reduce(
+						(min, ot) => (ot.fechaProgramacion < min ? ot.fechaProgramacion : min),
+						ots[0].fechaProgramacion,
+					)
+				: new Date());
+		const hasta =
+			rango?.lte ??
+			(ots.length
+				? ots.reduce(
+						(max, ot) => (ot.fechaProgramacion > max ? ot.fechaProgramacion : max),
+						ots[0].fechaProgramacion,
+					)
+				: new Date());
+
+		const dias: string[] = [];
+		const cursor = new Date(Date.UTC(desde.getUTCFullYear(), desde.getUTCMonth(), desde.getUTCDate()));
+		const end = new Date(Date.UTC(hasta.getUTCFullYear(), hasta.getUTCMonth(), hasta.getUTCDate()));
+		const maxDias = 93;
+		while (cursor <= end && dias.length < maxDias) {
+			dias.push(cursor.toISOString().slice(0, 10));
+			cursor.setUTCDate(cursor.getUTCDate() + 1);
+		}
+
+		type Celda = {
+			pendientes: number;
+			enEjecucion: number;
+			realizadas: number;
+			total: number;
+		};
+		const emptyCelda = (): Celda => ({
+			pendientes: 0,
+			enEjecucion: 0,
+			realizadas: 0,
+			total: 0,
+		});
+
+		const filasMap = new Map<
+			string,
+			{ id: string; label: string; celdas: Map<string, Celda> }
+		>();
+
+		const bucketEstado = (estado: EstadoOt): keyof Celda | null => {
+			if (estado === 'realizada') return 'realizadas';
+			if (estado === 'en_ejecucion') return 'enEjecucion';
+			if (
+				estado === 'pendiente' ||
+				estado === 'pendiente_panol' ||
+				estado === 'necesaria_de_emitir'
+			) {
+				return 'pendientes';
+			}
+			return null;
+		};
+
+		for (const ot of ots) {
+			const diaBase =
+				ot.estado === 'realizada' && ot.fechaEjecucion
+					? ot.fechaEjecucion
+					: ot.fechaProgramacion;
+			const dia = this.toDateOnlyString(diaBase);
+			if (!dias.includes(dia)) continue;
+
+			const rowId =
+				agruparPor === 'sector'
+					? ot.equipo.ubicacion?.id ?? 'sin-sector'
+					: ot.equipo.id;
+			const label =
+				agruparPor === 'sector'
+					? ot.equipo.ubicacion
+						? ot.equipo.ubicacion.nombre
+						: 'Sin sector'
+					: `${ot.equipo.codigo} · ${ot.equipo.nombre}`;
+
+			let fila = filasMap.get(rowId);
+			if (!fila) {
+				fila = { id: rowId, label, celdas: new Map() };
+				filasMap.set(rowId, fila);
+			}
+
+			const bucket = bucketEstado(ot.estado);
+			if (!bucket) continue;
+			const celda = fila.celdas.get(dia) ?? emptyCelda();
+			celda[bucket] += 1;
+			celda.total += 1;
+			fila.celdas.set(dia, celda);
+		}
+
+		const filas = [...filasMap.values()]
+			.sort((a, b) => a.label.localeCompare(b.label, 'es'))
+			.map((fila) => ({
+				id: fila.id,
+				label: fila.label,
+				celdas: Object.fromEntries(
+					dias.map((d) => [d, fila.celdas.get(d) ?? emptyCelda()]),
+				),
+				totales: dias.reduce(
+					(acc, d) => {
+						const c = fila.celdas.get(d) ?? emptyCelda();
+						acc.pendientes += c.pendientes;
+						acc.enEjecucion += c.enEjecucion;
+						acc.realizadas += c.realizadas;
+						acc.total += c.total;
+						return acc;
+					},
+					emptyCelda(),
+				),
+			}));
+
+		return {
+			agruparPor,
+			fechaDesde: this.toDateOnlyString(desde),
+			fechaHasta: this.toDateOnlyString(hasta),
+			dias,
+			filas,
+			totalesGenerales: filas.reduce(
+				(acc, f) => {
+					acc.pendientes += f.totales.pendientes;
+					acc.enEjecucion += f.totales.enEjecucion;
+					acc.realizadas += f.totales.realizadas;
+					acc.total += f.totales.total;
+					return acc;
+				},
+				emptyCelda(),
+			),
+		};
+	}
+
+	async getGraficos(currentUser: AuthUser, dto: GraficosOtDto) {
+		const sucursalId = resolveSucursalId(currentUser, dto.sucursalId);
+		const rango = this.rangoFechas(dto.fechaDesde, dto.fechaHasta);
+		const periodoWhere = this.whereOtEnPeriodo(rango);
+
+		let equipoUbicacionFilter: Prisma.OrdenTrabajoWhereInput | undefined;
+		if (dto.ubicacionId) {
+			const ubicacionIds = await this.collectDescendantUbicacionIds(
+				sucursalId,
+				dto.ubicacionId,
+			);
+			equipoUbicacionFilter = {
+				equipo: { ubicacionId: { in: ubicacionIds } },
+			};
+		}
+
+		const equipoIds =
+			dto.plantaCompleta || !dto.equipoIds?.length ? undefined : dto.equipoIds;
+
+		const equipoFilter: Prisma.EquipoWhereInput = {
+			...(equipoIds ? { id: { in: equipoIds } } : {}),
+			...(dto.tipoEquipoId ? { tipoEquipoId: dto.tipoEquipoId } : {}),
+		};
+
+		const ots = await this.prisma.ordenTrabajo.findMany({
+			where: {
+				AND: [
+					{
+						sucursalId,
+						estado: { not: 'anulada' },
+						tipo: dto.tipoProcedimiento,
+						procedimiento: dto.sectorResponsableId
+							? { sectorResponsableId: dto.sectorResponsableId }
+							: undefined,
+						...(Object.keys(equipoFilter).length
+							? { equipo: equipoFilter }
+							: {}),
+					},
+					...(periodoWhere ? [periodoWhere] : []),
+					...(equipoUbicacionFilter ? [equipoUbicacionFilter] : []),
+				],
+			},
+			select: {
+				estado: true,
+				tipo: true,
+				fechaProgramacion: true,
+				fechaEjecucion: true,
+				equipo: { select: { id: true, codigo: true, nombre: true } },
+				tecnicoAsignado: { select: { id: true, nombreUsuario: true } },
+				procedimiento: {
+					select: {
+						hsHombre: true,
+						costoEstimado: true,
+						indisponibilidadEstimada: true,
+						tipo: true,
+					},
+				},
+			},
+			take: 10000,
+		});
+
+		const metricOf = (ot: (typeof ots)[number]): number => {
+			const proc = ot.procedimiento;
+			switch (dto.ejeY) {
+				case EjeYGraficos.horas_hombre:
+					return Number(proc?.hsHombre ?? 0);
+				case EjeYGraficos.costos:
+					return Number(proc?.costoEstimado ?? 0);
+				case EjeYGraficos.indisponibilidad:
+					return Number(proc?.indisponibilidadEstimada ?? 0);
+				case EjeYGraficos.cantidad_ot:
+				default:
+					return 1;
+			}
+		};
+
+		const labelX = (ot: (typeof ots)[number]): string => {
+			const fecha =
+				ot.estado === 'realizada' && ot.fechaEjecucion
+					? ot.fechaEjecucion
+					: ot.fechaProgramacion;
+			switch (dto.ejeX) {
+				case EjeXGraficos.mes:
+					return `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, '0')}`;
+				case EjeXGraficos.responsable:
+					return ot.tecnicoAsignado?.nombreUsuario ?? 'Sin asignar';
+				case EjeXGraficos.tipo_trabajo:
+					return ot.tipo;
+				case EjeXGraficos.equipos:
+					return `${ot.equipo.codigo} · ${ot.equipo.nombre}`;
+				default:
+					return 'N/D';
+			}
+		};
+
+		const labelGrupo = (ot: (typeof ots)[number]): string => {
+			const fecha =
+				ot.estado === 'realizada' && ot.fechaEjecucion
+					? ot.fechaEjecucion
+					: ot.fechaProgramacion;
+			switch (dto.agrupado) {
+				case AgrupadoGraficos.mes:
+					return `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, '0')}`;
+				case AgrupadoGraficos.responsable:
+					return ot.tecnicoAsignado?.nombreUsuario ?? 'Sin asignar';
+				case AgrupadoGraficos.tipo_trabajo:
+					return ot.tipo;
+				case AgrupadoGraficos.ninguno:
+				default:
+					return 'Total';
+			}
+		};
+
+		const buckets = new Map<string, Map<string, number>>();
+		for (const ot of ots) {
+			const x = labelX(ot);
+			const g = labelGrupo(ot);
+			if (!buckets.has(g)) buckets.set(g, new Map());
+			const series = buckets.get(g)!;
+			series.set(x, (series.get(x) ?? 0) + metricOf(ot));
+		}
+
+		const labelsSet = new Set<string>();
+		for (const series of buckets.values()) {
+			for (const key of series.keys()) labelsSet.add(key);
+		}
+		const labels = [...labelsSet].sort((a, b) => a.localeCompare(b, 'es'));
+
+		const series = [...buckets.entries()]
+			.sort(([a], [b]) => a.localeCompare(b, 'es'))
+			.map(([name, points]) => ({
+				name,
+				points: labels.map((x) => ({
+					x,
+					y: Number((points.get(x) ?? 0).toFixed(2)),
+				})),
+			}));
+
+		const total = series.reduce(
+			(acc, s) => acc + s.points.reduce((a, p) => a + p.y, 0),
+			0,
+		);
+
+		return {
+			tipoGrafico: dto.tipoGrafico,
+			ejeX: dto.ejeX,
+			ejeY: dto.ejeY,
+			agrupado: dto.agrupado,
+			fechaDesde: dto.fechaDesde,
+			fechaHasta: dto.fechaHasta,
+			labels,
+			series,
+			total: Number(total.toFixed(2)),
+			cantidadOt: ots.length,
+		};
 	}
 
 	async emitirNecesariasAutomaticas(sucursalId: string) {

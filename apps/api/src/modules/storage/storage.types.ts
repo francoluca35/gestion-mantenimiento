@@ -1,6 +1,6 @@
 export type StorageProvider = 'minio' | 'r2' | 's3' | 'local';
 
-export type StorageEntityType = 'ot' | 'equipo' | 'documento' | 'backup';
+export type StorageEntityType = 'ot' | 'equipo' | 'documento' | 'backup' | 'sucursal';
 
 export interface PresignUploadInput {
 	sucursalId: string;
@@ -8,7 +8,7 @@ export interface PresignUploadInput {
 	entityId: string;
 	fileName: string;
 	contentType: string;
-	kind?: 'fotos' | 'firmas' | 'pdf' | 'planos' | 'otros';
+	kind?: 'fotos' | 'firmas' | 'pdf' | 'planos' | 'otros' | 'logos';
 }
 
 export interface PresignUploadResult {

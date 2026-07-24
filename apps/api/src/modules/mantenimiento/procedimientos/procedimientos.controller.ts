@@ -52,6 +52,15 @@ export class ProcedimientosController {
 		return this.procedimientosService.findOne(id, user);
 	}
 
+	@Get(':id/versiones')
+	@RequiereDerecho('archivos.procedimientos.listar')
+	listarVersiones(
+		@Param('id', ParseUUIDPipe) id: string,
+		@CurrentUser() user: AuthUser,
+	) {
+		return this.procedimientosService.listarVersiones(id, user);
+	}
+
 	@Post()
 	@RequiereDerecho('archivos.procedimientos.agregar')
 	create(@Body() dto: CreateProcedimientoDto, @CurrentUser() user: AuthUser) {

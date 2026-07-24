@@ -18,6 +18,66 @@ function Write-Step([string]$text) {
 	Write-Host "==> $text" -ForegroundColor Cyan
 }
 
+function New-Secret([int]$bytes = 36) {
+	$data = New-Object byte[] $bytes
+	[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($data)
+	return [Convert]::ToBase64String($data).Replace("+", "A").Replace("/", "B").TrimEnd("=")
+}
+
+function Ensure-EnvFile {
+	if (Test-Path $EnvFile) { return }
+
+	$example = Join-Path $root ".env.demo.example"
+	if (-not (Test-Path $example)) {
+		throw "Falta $EnvFile y no existe .env.demo.example."
+	}
+
+	Write-Step "Creando $EnvFile desde .env.demo.example"
+	$template = Get-Content $example -Raw
+	$template = $template.Replace("CAMBIAR_password_fuerte_demo", (New-Secret 30))
+	$template = $template.Replace("CAMBIAR_jwt_secret_largo_minimo_32_chars!!", (New-Secret 48))
+	$template = $template.Replace("CAMBIAR_refresh_secret_largo_minimo_32!!", (New-Secret 48))
+
+	$sourceEnv = Join-Path $root ".env"
+	if (Test-Path $sourceEnv) {
+		$firebaseKeys = @("FIREBASE_PROJECT_ID", "FIREBASE_CLIENT_EMAIL", "FIREBASE_PRIVATE_KEY")
+		$firebaseLines = @()
+		foreach ($key in $firebaseKeys) {
+			$line = Get-Content $sourceEnv |
+				Where-Object { $_ -match "^\s*$key\s*=" } |
+				Select-Object -First 1
+			if ($line) { $firebaseLines += $line }
+		}
+		if ($firebaseLines.Count -gt 0) {
+			$template += "`n`n# Firebase copiado del entorno local`n" + ($firebaseLines -join "`n") + "`n"
+		}
+	}
+
+	$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+	[System.IO.File]::WriteAllText((Join-Path $root $EnvFile), $template, $utf8NoBom)
+	Write-Host "$EnvFile creado con secretos aleatorios." -ForegroundColor Green
+}
+
+function Invoke-Compose {
+	param([Parameter(Mandatory = $true)][string[]]$ComposeArgs)
+	$prev = $ErrorActionPreference
+	$ErrorActionPreference = "Continue"
+	try {
+		& docker compose @ComposeArgs 2>&1 | ForEach-Object {
+			if ($_ -is [System.Management.Automation.ErrorRecord]) {
+				Write-Host $_.Exception.Message
+			} else {
+				Write-Host $_
+			}
+		}
+		if ($LASTEXITCODE -ne 0) {
+			throw "docker compose falló (código $LASTEXITCODE)."
+		}
+	} finally {
+		$ErrorActionPreference = $prev
+	}
+}
+
 function Wait-Docker([int]$timeoutSeconds = 300) {
 	$deadline = (Get-Date).AddSeconds($timeoutSeconds)
 	while ((Get-Date) -lt $deadline) {
@@ -138,10 +198,7 @@ function Ensure-FlutterWeb {
 	}
 }
 
-if (-not (Test-Path $EnvFile)) {
-	throw "Falta $EnvFile. Ejecutá scripts\setup-sika.ps1 una vez."
-}
-
+Ensure-EnvFile
 Ensure-Docker
 Ensure-Cloudflared
 
@@ -152,17 +209,22 @@ Stop-ProjectDevServer -port 8080
 Ensure-FlutterWeb
 
 Write-Step "Levantando base de datos, API, web y backups"
-$composeArgs = @("-f", $ComposeFile, "--env-file", $EnvFile, "up", "-d")
+$composeArgs = @("-f", $ComposeFile, "--env-file", $EnvFile, "up", "-d", "--remove-orphans")
 if ($Rebuild) { $composeArgs += "--build" }
-& docker compose @composeArgs
-if ($LASTEXITCODE -ne 0) { throw "No se pudo levantar Docker Compose." }
+Invoke-Compose -ComposeArgs $composeArgs
 
 if (-not (Wait-Url "http://127.0.0.1:3000/v1/ready")) {
-	& docker compose -f $ComposeFile --env-file $EnvFile logs api --tail 100
+	$prev = $ErrorActionPreference
+	$ErrorActionPreference = "Continue"
+	& docker compose -f $ComposeFile --env-file $EnvFile logs api --tail 100 2>&1 | Out-Host
+	$ErrorActionPreference = $prev
 	throw "La API no quedó lista."
 }
 if (-not (Wait-Url "http://127.0.0.1:8080/health" 60)) {
-	& docker compose -f $ComposeFile --env-file $EnvFile logs web --tail 60
+	$prev = $ErrorActionPreference
+	$ErrorActionPreference = "Continue"
+	& docker compose -f $ComposeFile --env-file $EnvFile logs web --tail 60 2>&1 | Out-Host
+	$ErrorActionPreference = $prev
 	throw "La web no quedó lista."
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/layout/breakpoints.dart';
+import '../../../core/layout/shell_back_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_user.dart';
@@ -57,6 +58,40 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 	String? _error;
 	/// En mobile/tablet: muestra detalle a pantalla completa tras elegir un nodo.
 	bool _compactShowDetail = false;
+	final Set<String> _expandedIds = {};
+
+	void _seedExpanded(_TreeNode root) {
+		_expandedIds.clear();
+		// Solo planta + ubicaciones de 1er nivel abiertas; sectores/máquinas colapsables.
+		void walk(_TreeNode node, int depth) {
+			if (node.children.isEmpty) return;
+			if (depth <= 1) {
+				_expandedIds.add(node.id);
+			}
+			for (final child in node.children) {
+				walk(child, depth + 1);
+			}
+		}
+		walk(root, 0);
+	}
+
+	void _toggleExpand(String id) {
+		setState(() {
+			if (_expandedIds.contains(id)) {
+				_expandedIds.remove(id);
+			} else {
+				_expandedIds.add(id);
+			}
+		});
+	}
+
+	void _expandMatching(_TreeNode node) {
+		if (node.children.isEmpty) return;
+		_expandedIds.add(node.id);
+		for (final child in node.children) {
+			_expandMatching(child);
+		}
+	}
 
 	AuthUser? get _user => ref.read(authControllerProvider).session?.usuario;
 
@@ -149,6 +184,7 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 			_ubicacionesTree = tree.cast<Map<String, dynamic>>();
 			_equipos = equipos.cast<Map<String, dynamic>>();
 			_equipoDetalle = null;
+			_seedExpanded(_buildExplorerTree());
 		});
 	}
 
@@ -913,7 +949,11 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 
 		if (_error != null) {
 			return Scaffold(
-				appBar: AppBar(title: const Text('Gestión de equipos')),
+				appBar: AppBar(
+					automaticallyImplyLeading: false,
+					leading: const ShellBackButton(),
+					title: const Text('Gestión de equipos'),
+				),
 				body: Center(child: Text(_error!)),
 			);
 		}
@@ -1031,12 +1071,20 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 				crossAxisAlignment: CrossAxisAlignment.stretch,
 				children: [
 					Padding(
-						padding: EdgeInsets.fromLTRB(compact ? 16 : 20, compact ? 12 : 20, 16, 8),
-						child: Text(
-							'Explorador de equipos',
-							style: Theme.of(context).textTheme.titleMedium?.copyWith(
-										fontWeight: FontWeight.w700,
+						padding: EdgeInsets.fromLTRB(compact ? 8 : 12, compact ? 12 : 20, 16, 8),
+						child: Row(
+							children: [
+								const ShellBackButton(),
+								const SizedBox(width: 4),
+								Expanded(
+									child: Text(
+										'Explorador de equipos',
+										style: Theme.of(context).textTheme.titleMedium?.copyWith(
+													fontWeight: FontWeight.w700,
+												),
 									),
+								),
+							],
 						),
 					),
 					if (compact)
@@ -1053,7 +1101,14 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 					Padding(
 						padding: const EdgeInsets.symmetric(horizontal: 16),
 						child: TextField(
-							onChanged: (value) => setState(() => _search = value),
+							onChanged: (value) => setState(() {
+								_search = value;
+								if (value.trim().isNotEmpty) {
+									for (final node in _filterTree(_buildExplorerTree())) {
+										_expandMatching(node);
+									}
+								}
+							}),
 							decoration: InputDecoration(
 								hintText: 'Buscar sector o máquina…',
 								helperText: compact ? null : 'Ej: SILO, sector losa, código de máquina',
@@ -1083,6 +1138,8 @@ class _PlantaPageState extends ConsumerState<PlantaPage> {
 														node: node,
 														selectedId: _selected?.id,
 														depth: 0,
+														expandedIds: _expandedIds,
+														onToggleExpand: _toggleExpand,
 														onSelect: _select,
 														onDrop: _onDrop,
 														canDragEquipo: _canMoverEquipos,
@@ -1306,6 +1363,8 @@ class _ExplorerTile extends StatefulWidget {
 		required this.node,
 		required this.selectedId,
 		required this.depth,
+		required this.expandedIds,
+		required this.onToggleExpand,
 		required this.onSelect,
 		required this.onDrop,
 		required this.canDragEquipo,
@@ -1316,6 +1375,8 @@ class _ExplorerTile extends StatefulWidget {
 	final _TreeNode node;
 	final String? selectedId;
 	final int depth;
+	final Set<String> expandedIds;
+	final void Function(String id) onToggleExpand;
 	final void Function(_TreeNode node) onSelect;
 	final Future<void> Function(PlantaDragPayload payload, _TreeNode target) onDrop;
 	final bool canDragEquipo;
@@ -1386,6 +1447,8 @@ class _ExplorerTileState extends State<_ExplorerTile> {
 	Widget _buildTileContent(bool selected, bool isDark) {
 		final scheme = Theme.of(context).colorScheme;
 		final dragOver = _isDragOver;
+		final hasChildren = node.children.isNotEmpty;
+		final isExpanded = widget.expandedIds.contains(node.id);
 
 		return Material(
 			color: dragOver
@@ -1403,6 +1466,30 @@ class _ExplorerTileState extends State<_ExplorerTile> {
 					padding: EdgeInsets.fromLTRB(8.0 + (widget.depth.clamp(0, 8) * 12.0), 10, 8, 10),
 					child: Row(
 						children: [
+							if (hasChildren)
+								InkWell(
+									borderRadius: BorderRadius.circular(6),
+									onTap: () => widget.onToggleExpand(node.id),
+									child: Container(
+										width: 26,
+										height: 26,
+										alignment: Alignment.center,
+										decoration: BoxDecoration(
+											color: AppColors.brandPurple.withValues(alpha: isDark ? 0.35 : 0.12),
+											borderRadius: BorderRadius.circular(6),
+										),
+										child: Icon(
+											isExpanded
+													? Icons.expand_more_rounded
+													: Icons.chevron_right_rounded,
+											size: 20,
+											color: AppColors.brandPurple,
+										),
+									),
+								)
+							else
+								const SizedBox(width: 26),
+							const SizedBox(width: 8),
 							Icon(_icon, size: 18, color: scheme.onSurfaceVariant),
 							const SizedBox(width: 8),
 							Container(
@@ -1425,6 +1512,15 @@ class _ExplorerTileState extends State<_ExplorerTile> {
 									),
 								),
 							),
+							if (hasChildren)
+								Text(
+									'${node.children.length}',
+									style: TextStyle(
+										fontSize: 11,
+										fontWeight: FontWeight.w700,
+										color: scheme.onSurface.withValues(alpha: 0.4),
+									),
+								),
 						],
 					),
 				),
@@ -1480,18 +1576,21 @@ class _ExplorerTileState extends State<_ExplorerTile> {
 		return Column(
 			children: [
 				row,
-				...node.children.map(
-					(child) => _ExplorerTile(
-						node: child,
-						selectedId: widget.selectedId,
-						depth: widget.depth + 1,
-						onSelect: widget.onSelect,
-						onDrop: widget.onDrop,
-						canDragEquipo: widget.canDragEquipo,
-						canDragUbicacion: widget.canDragUbicacion,
-						isUbicacionHoja: widget.isUbicacionHoja,
+				if (node.children.isNotEmpty && widget.expandedIds.contains(node.id))
+					...node.children.map(
+						(child) => _ExplorerTile(
+							node: child,
+							selectedId: widget.selectedId,
+							depth: widget.depth + 1,
+							expandedIds: widget.expandedIds,
+							onToggleExpand: widget.onToggleExpand,
+							onSelect: widget.onSelect,
+							onDrop: widget.onDrop,
+							canDragEquipo: widget.canDragEquipo,
+							canDragUbicacion: widget.canDragUbicacion,
+							isUbicacionHoja: widget.isUbicacionHoja,
+						),
 					),
-				),
 			],
 		);
 	}

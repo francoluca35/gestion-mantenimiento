@@ -5,8 +5,8 @@ export class PresignUploadDto {
 	@IsAppUuid()
 	sucursalId!: string;
 
-	@IsIn(['ot', 'equipo', 'documento', 'backup'])
-	entityType!: 'ot' | 'equipo' | 'documento' | 'backup';
+	@IsIn(['ot', 'equipo', 'documento', 'backup', 'sucursal'])
+	entityType!: 'ot' | 'equipo' | 'documento' | 'backup' | 'sucursal';
 
 	@IsAppUuid()
 	entityId!: string;
@@ -20,6 +20,6 @@ export class PresignUploadDto {
 	contentType!: string;
 
 	@IsOptional()
-	@IsIn(['fotos', 'firmas', 'pdf', 'planos', 'otros'])
-	kind?: 'fotos' | 'firmas' | 'pdf' | 'planos' | 'otros';
+	@IsIn(['fotos', 'firmas', 'pdf', 'planos', 'otros', 'logos'])
+	kind?: 'fotos' | 'firmas' | 'pdf' | 'planos' | 'otros' | 'logos';
 }

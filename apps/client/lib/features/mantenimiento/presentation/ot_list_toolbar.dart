@@ -18,6 +18,7 @@ class OtListToolbar extends StatelessWidget {
 		required this.onExportarFiltradas,
 		this.onImprimir,
 		this.onImprimirPdf,
+		this.onGantt,
 		this.canAnular = false,
 		this.enabled = true,
 	});
@@ -37,13 +38,22 @@ class OtListToolbar extends StatelessWidget {
 	final VoidCallback onExportarFiltradas;
 	final VoidCallback? onImprimir;
 	final VoidCallback? onImprimirPdf;
+	final VoidCallback? onGantt;
 
 	@override
 	Widget build(BuildContext context) {
 		final hasSelection = selectedCount > 0;
+		final isDark = Theme.of(context).brightness == Brightness.dark;
+		final bg = isDark ? AppColors.cardDark : AppColors.surfaceMuted;
+		final fg = isDark ? Colors.white : AppColors.ink;
+		final muted = isDark
+				? Colors.white.withValues(alpha: 0.75)
+				: AppColors.ink.withValues(alpha: 0.55);
+		final checkSide = isDark ? Colors.white54 : AppColors.ink.withValues(alpha: 0.35);
+		final disabledFg = isDark ? Colors.white38 : AppColors.ink.withValues(alpha: 0.28);
 
 		return Material(
-			color: AppColors.cardDark,
+			color: bg,
 			child: Padding(
 				padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
 				child: Column(
@@ -57,7 +67,7 @@ class OtListToolbar extends StatelessWidget {
 									onChanged: enabled && totalCount > 0
 											? (_) => onToggleSelectAll()
 											: null,
-									side: const BorderSide(color: Colors.white54),
+									side: BorderSide(color: checkSide),
 									activeColor: AppColors.brandYellow,
 								),
 								Expanded(
@@ -66,9 +76,7 @@ class OtListToolbar extends StatelessWidget {
 												? '$selectedCount seleccionada${selectedCount == 1 ? '' : 's'}'
 												: 'Seleccionar OT',
 										style: TextStyle(
-											color: hasSelection
-													? AppColors.brandYellow
-													: Colors.white.withValues(alpha: 0.75),
+											color: hasSelection ? AppColors.brandYellow : muted,
 											fontWeight: FontWeight.w600,
 											fontSize: 13,
 										),
@@ -77,7 +85,7 @@ class OtListToolbar extends StatelessWidget {
 								if (hasSelection)
 									TextButton(
 										onPressed: enabled ? onClearSelection : null,
-										child: const Text('Limpiar'),
+										child: Text('Limpiar', style: TextStyle(color: fg)),
 									),
 							],
 						),
@@ -89,18 +97,21 @@ class OtListToolbar extends StatelessWidget {
 										icon: Icons.person_add_alt_1_rounded,
 										label: 'Reasignar',
 										enabled: enabled && hasSelection,
+										disabledColor: disabledFg,
 										onPressed: onReasignar,
 									),
 									_ToolbarButton(
 										icon: Icons.help_outline_rounded,
 										label: 'Motivo pend.',
 										enabled: enabled && hasSelection,
+										disabledColor: disabledFg,
 										onPressed: onMotivoPendiente,
 									),
 									_ToolbarButton(
 										icon: Icons.swap_horiz_rounded,
 										label: 'Estado',
 										enabled: enabled && hasSelection,
+										disabledColor: disabledFg,
 										onPressed: onCambiarEstado,
 									),
 									if (canAnular)
@@ -109,6 +120,7 @@ class OtListToolbar extends StatelessWidget {
 											label: 'Anular',
 											enabled: enabled && hasSelection,
 											danger: true,
+											disabledColor: disabledFg,
 											onPressed: onAnular,
 										),
 									if (onImprimirPdf != null)
@@ -116,6 +128,7 @@ class OtListToolbar extends StatelessWidget {
 											icon: Icons.picture_as_pdf_outlined,
 											label: 'PDF selección',
 											enabled: enabled && hasSelection,
+											disabledColor: disabledFg,
 											onPressed: onImprimirPdf!,
 										),
 									if (onImprimir != null)
@@ -123,14 +136,24 @@ class OtListToolbar extends StatelessWidget {
 											icon: Icons.print_outlined,
 											label: hasSelection ? 'Imprimir sel.' : 'Vista previa',
 											enabled: enabled,
+											disabledColor: disabledFg,
 											onPressed: onImprimir!,
 										),
 									_ToolbarButton(
 										icon: Icons.download_rounded,
 										label: hasSelection ? 'Exportar sel.' : 'Exportar',
 										enabled: enabled,
+										disabledColor: disabledFg,
 										onPressed: hasSelection ? onExportar : onExportarFiltradas,
 									),
+									if (onGantt != null)
+										_ToolbarButton(
+											icon: Icons.view_timeline_rounded,
+											label: 'Gantt',
+											enabled: enabled,
+											disabledColor: disabledFg,
+											onPressed: onGantt!,
+										),
 								],
 							),
 						),
@@ -146,6 +169,7 @@ class _ToolbarButton extends StatelessWidget {
 		required this.icon,
 		required this.label,
 		required this.onPressed,
+		required this.disabledColor,
 		this.enabled = true,
 		this.danger = false,
 	});
@@ -153,6 +177,7 @@ class _ToolbarButton extends StatelessWidget {
 	final IconData icon;
 	final String label;
 	final VoidCallback onPressed;
+	final Color disabledColor;
 	final bool enabled;
 	final bool danger;
 
@@ -165,7 +190,7 @@ class _ToolbarButton extends StatelessWidget {
 			child: TextButton.icon(
 				onPressed: enabled ? onPressed : null,
 				style: TextButton.styleFrom(
-					foregroundColor: enabled ? color : Colors.white38,
+					foregroundColor: enabled ? color : disabledColor,
 					padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
 				),
 				icon: Icon(icon, size: 18),

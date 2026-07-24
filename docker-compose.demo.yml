@@ -142,6 +142,7 @@ services:
       OT_CRON_ENABLED: ${OT_CRON_ENABLED:-true}
       STOCK_ALERT_CRON_ENABLED: ${STOCK_ALERT_CRON_ENABLED:-true}
       SEED_ON_START: ${SEED_ON_START:-false}
+      PASSWORD_RESET_DEMO: ${PASSWORD_RESET_DEMO:-true}
     volumes:
       - demo_api_storage:/app/storage
     healthcheck:

@@ -4,6 +4,7 @@ import {
 	Get,
 	Param,
 	Post,
+	Put,
 	Req,
 	Res,
 	StreamableFile,
@@ -32,6 +33,7 @@ export class StorageController {
 	}
 
 	@Post('upload/:key')
+	@Put('upload/:key')
 	async uploadLocal(
 		@Param('key') key: string,
 		@Req() req: Request,

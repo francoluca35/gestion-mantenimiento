@@ -115,6 +115,45 @@ class AppTheme {
 				color: Color(0xFFE8E0F0),
 				thickness: 1,
 			),
+			datePickerTheme: DatePickerThemeData(
+				backgroundColor: AppColors.white,
+				headerBackgroundColor: AppColors.brandPurpleDark,
+				headerForegroundColor: AppColors.white,
+				dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) return AppColors.white;
+					if (states.contains(WidgetState.disabled)) {
+						return AppColors.secondary.withValues(alpha: 0.35);
+					}
+					return AppColors.ink;
+				}),
+				dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) {
+						return AppColors.brandPurpleDark;
+					}
+					return Colors.transparent;
+				}),
+				todayForegroundColor: const WidgetStatePropertyAll(AppColors.brandPurpleDark),
+				todayBorder: const BorderSide(color: AppColors.brandPurpleDark, width: 1.5),
+				yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) return AppColors.white;
+					return AppColors.ink;
+				}),
+				yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) {
+						return AppColors.brandPurpleDark;
+					}
+					return Colors.transparent;
+				}),
+				rangeSelectionBackgroundColor: AppColors.brandPurple.withValues(alpha: 0.18),
+				rangePickerHeaderBackgroundColor: AppColors.brandPurpleDark,
+				rangePickerHeaderForegroundColor: AppColors.white,
+				weekdayStyle: const TextStyle(
+					color: AppColors.secondary,
+					fontWeight: FontWeight.w600,
+				),
+				dayStyle: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w500),
+				yearStyle: const TextStyle(color: AppColors.ink),
+			),
 		);
 	}
 
@@ -257,6 +296,46 @@ class AppTheme {
 			),
 			progressIndicatorTheme: const ProgressIndicatorThemeData(
 				color: AppColors.brandPurple,
+			),
+			datePickerTheme: DatePickerThemeData(
+				backgroundColor: AppColors.cardElevated,
+				headerBackgroundColor: AppColors.brandPurple,
+				headerForegroundColor: AppColors.white,
+				surfaceTintColor: Colors.transparent,
+				dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) return AppColors.white;
+					if (states.contains(WidgetState.disabled)) {
+						return AppColors.mutedText.withValues(alpha: 0.35);
+					}
+					return AppColors.white;
+				}),
+				dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) {
+						return AppColors.brandPurple;
+					}
+					return Colors.transparent;
+				}),
+				todayForegroundColor: const WidgetStatePropertyAll(AppColors.brandPurple),
+				todayBorder: const BorderSide(color: AppColors.brandPurple, width: 1.5),
+				yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) return AppColors.white;
+					return AppColors.white;
+				}),
+				yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) {
+						return AppColors.brandPurple;
+					}
+					return Colors.transparent;
+				}),
+				rangeSelectionBackgroundColor: AppColors.brandPurple.withValues(alpha: 0.28),
+				rangePickerHeaderBackgroundColor: AppColors.brandPurple,
+				rangePickerHeaderForegroundColor: AppColors.white,
+				weekdayStyle: const TextStyle(
+					color: AppColors.mutedText,
+					fontWeight: FontWeight.w600,
+				),
+				dayStyle: const TextStyle(color: AppColors.white, fontWeight: FontWeight.w500),
+				yearStyle: const TextStyle(color: AppColors.white),
 			),
 		);
 	}

@@ -1,0 +1,24 @@
+Descripción breve (máx. 80 caracteres)
+=====================================
+Gestión de mantenimiento, stock y eficiencia para planta industrial.
+
+
+Descripción completa
+====================
+GESTION es la aplicación de mantenimiento industrial para administrar órdenes de trabajo, equipos de planta, stock de pañol y el día a día del equipo técnico.
+
+Con GESTION podés:
+
+• Emitir y seguir órdenes de trabajo periódicas y no periódicas
+• Asignar OT a técnicos y controlar el avance en tiempo real
+• Consultar procedimientos, checklists y cerrar trabajos con firma
+• Gestionar el pañol: stock, solicitudes de materiales y seguimiento
+• Visualizar la planta y los equipos en un mapa operativo
+• Recibir notificaciones push cuando te asignan una OT o hay novedades de materiales
+• Administrar usuarios, perfiles y sucursales con control de permisos
+
+Diseñada para supervisores, técnicos y pañoleros que necesitan operar con claridad desde el celular o la tablet, con la misma información que en escritorio.
+
+Gestión inteligente. Resultados globales.
+
+MANTENIMIENTO · STOCK · EFICIENCIA

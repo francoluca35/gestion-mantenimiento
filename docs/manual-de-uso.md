@@ -4,7 +4,9 @@
 **App:** Web (`http://localhost:8080`) y Android  
 **API demo:** `https://api.sorjuanaliberte.store/v1` (o `http://<IP-PC>:3000/v1` en LAN)
 
-Guía práctica para operar el sistema día a día. Para el inventario técnico y mejoras, ver [`inventario-app.md`](inventario-app.md).
+Guía práctica para operar el sistema día a día.  
+**Manual completo (roles, permisos, reglas):** [`manual-de-uso-completo.md`](manual-de-uso-completo.md)  
+Para el inventario técnico y mejoras, ver [`inventario-app.md`](inventario-app.md).
 
 ---
 

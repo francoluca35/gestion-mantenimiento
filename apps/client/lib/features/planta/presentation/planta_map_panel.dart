@@ -88,16 +88,17 @@ class _PlantaMapPanelState extends ConsumerState<PlantaMapPanel> {
 
 	void _initExpanded(_MapNode root) {
 		_expandedIds.clear();
-		void walk(_MapNode node) {
-			if (node.children.isNotEmpty) {
+		void walk(_MapNode node, int depth) {
+			if (node.children.isEmpty) return;
+			if (depth <= 1) {
 				_expandedIds.add(node.id);
-				for (final child in node.children) {
-					walk(child);
-				}
+			}
+			for (final child in node.children) {
+				walk(child, depth + 1);
 			}
 		}
 
-		walk(root);
+		walk(root, 0);
 	}
 
 	void _toggleExpand(String id) {
@@ -561,7 +562,7 @@ class _MapTreeTile extends StatelessWidget {
 												child: _ExpandToggle(expanded: isExpanded),
 											)
 										else
-											const SizedBox(width: 22),
+											const SizedBox(width: 26),
 										const SizedBox(width: 6),
 										Icon(
 											_icon,
@@ -591,12 +592,23 @@ class _MapTreeTile extends StatelessWidget {
 												),
 											),
 										),
-										if (highlighted)
+										if (hasChildren)
+											Text(
+												'${node.children.length}',
+												style: TextStyle(
+													fontSize: 11,
+													fontWeight: FontWeight.w700,
+													color: Colors.white.withValues(alpha: 0.45),
+												),
+											),
+										if (highlighted) ...[
+											const SizedBox(width: 6),
 											const Icon(
 												Icons.my_location_rounded,
 												size: 16,
 												color: AppColors.brandYellow,
 											),
+										],
 									],
 								),
 							),
@@ -628,15 +640,15 @@ class _ExpandToggle extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		return Container(
-			width: 22,
-			height: 22,
+			width: 26,
+			height: 26,
 			decoration: BoxDecoration(
 				color: AppColors.brandYellow,
-				borderRadius: BorderRadius.circular(5),
+				borderRadius: BorderRadius.circular(6),
 			),
 			child: Icon(
 				expanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
-				size: 16,
+				size: 18,
 				color: AppColors.onPrimary,
 			),
 		);

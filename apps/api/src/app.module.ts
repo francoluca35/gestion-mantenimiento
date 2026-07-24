@@ -9,6 +9,8 @@ import { PanolModule } from './modules/panol/panol.module';
 import { PlantaModule } from './modules/planta/planta.module';
 import { SeguridadModule } from './modules/seguridad/seguridad.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { ComprasModule } from './modules/compras/compras.module';
+import { IndicadoresModule } from './modules/indicadores/indicadores.module';
 
 @Module({
 	imports: [
@@ -21,6 +23,8 @@ import { StorageModule } from './modules/storage/storage.module';
 		PlantaModule,
 		MantenimientoModule,
 		PanolModule,
+		ComprasModule,
+		IndicadoresModule,
 		NotificacionesModule,
 		StorageModule,
 	],

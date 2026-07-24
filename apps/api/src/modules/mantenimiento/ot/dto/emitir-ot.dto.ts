@@ -49,4 +49,8 @@ export class EmitirOtDto {
 	@IsInt()
 	@Min(0)
 	tolerancia?: number;
+
+	@IsOptional()
+	@IsAppUuid()
+	otOrigenId?: string;
 }

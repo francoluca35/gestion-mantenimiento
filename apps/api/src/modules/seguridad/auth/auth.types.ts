@@ -11,7 +11,7 @@ export interface AuthUser {
 	supervisaSolicitudesOc: boolean;
 	montoMaximoOc: string | null;
 	derechos: string[];
-	sucursal: { id: string; nombre: string; codigo: string } | null;
+	sucursal: { id: string; nombre: string; codigo: string; logoUrl: string | null } | null;
 	perfil: { id: string; nombre: string } | null;
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import 'breakpoints.dart';
+import 'shell_back_scope.dart';
 
 class AdaptiveScaffold extends StatelessWidget {
 	const AdaptiveScaffold({
@@ -204,6 +205,8 @@ class AdaptiveScaffold extends StatelessWidget {
 		return Scaffold(
 			backgroundColor: pageBg,
 			appBar: AppBar(
+				automaticallyImplyLeading: false,
+				leading: const ShellBackButton(),
 				title: Column(
 					crossAxisAlignment: CrossAxisAlignment.start,
 					children: [
@@ -256,6 +259,8 @@ class _DesktopHeader extends StatelessWidget {
 			),
 			child: Row(
 				children: [
+					const ShellBackButton(),
+					const SizedBox(width: 8),
 					Expanded(
 						child: Column(
 							mainAxisAlignment: MainAxisAlignment.center,

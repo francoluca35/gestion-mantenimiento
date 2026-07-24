@@ -159,6 +159,93 @@ export class AuthService {
 		return { ok: true };
 	}
 
+	async solicitarRecuperacion(dto: { nombreUsuario: string }) {
+		const usuario = await this.prisma.usuario.findUnique({
+			where: { nombreUsuario: dto.nombreUsuario.trim() },
+		});
+
+		// Respuesta uniforme para no filtrar usuarios existentes.
+		const respuestaBase = {
+			ok: true,
+			mensaje:
+				'Si el usuario existe, recibirás un código para restablecer la clave. En demo el código se muestra aquí.',
+		};
+
+		if (!usuario || !usuario.activo) {
+			return respuestaBase;
+		}
+
+		const codigo = String(Math.floor(100000 + Math.random() * 900000));
+		const codigoHash = await bcrypt.hash(codigo, 10);
+		const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+		await this.prisma.passwordResetToken.updateMany({
+			where: { usuarioId: usuario.id, usado: false },
+			data: { usado: true },
+		});
+		await this.prisma.passwordResetToken.create({
+			data: {
+				usuarioId: usuario.id,
+				codigoHash,
+				expiresAt,
+			},
+		});
+
+		const exposeCodigo =
+			this.config.get<string>('NODE_ENV') !== 'production' ||
+			this.config.get<string>('PASSWORD_RESET_DEMO') === 'true';
+
+		return {
+			...respuestaBase,
+			...(exposeCodigo ? { codigoDemo: codigo, expiraEnMinutos: 30 } : {}),
+		};
+	}
+
+	async restablecerClave(dto: {
+		nombreUsuario: string;
+		codigo: string;
+		claveNueva: string;
+	}) {
+		const usuario = await this.prisma.usuario.findUnique({
+			where: { nombreUsuario: dto.nombreUsuario.trim() },
+		});
+		if (!usuario || !usuario.activo) {
+			throw new BadRequestException('Código inválido o expirado');
+		}
+
+		const token = await this.prisma.passwordResetToken.findFirst({
+			where: {
+				usuarioId: usuario.id,
+				usado: false,
+				expiresAt: { gt: new Date() },
+			},
+			orderBy: { createdAt: 'desc' },
+		});
+		if (!token) {
+			throw new BadRequestException('Código inválido o expirado');
+		}
+
+		const ok = await bcrypt.compare(dto.codigo.trim(), token.codigoHash);
+		if (!ok) {
+			throw new BadRequestException('Código inválido o expirado');
+		}
+
+		await this.prisma.usuario.update({
+			where: { id: usuario.id },
+			data: { claveHash: await bcrypt.hash(dto.claveNueva, 10) },
+		});
+		await this.prisma.passwordResetToken.update({
+			where: { id: token.id },
+			data: { usado: true },
+		});
+		await this.prisma.sesion.updateMany({
+			where: { usuarioId: usuario.id, revocada: false },
+			data: { revocada: true },
+		});
+
+		return { ok: true, mensaje: 'Clave actualizada. Ya podés ingresar.' };
+	}
+
 	async listarSesiones(userId: string) {
 		const sesiones = await this.prisma.sesion.findMany({
 			where: { usuarioId: userId },
@@ -236,7 +323,7 @@ export class AuthService {
 		supervisaSolicitudesOt: string;
 		supervisaSolicitudesOc: boolean;
 		montoMaximoOc: { toString(): string } | null;
-		sucursal: { id: string; nombre: string; codigo: string } | null;
+		sucursal: { id: string; nombre: string; codigo: string; logoUrl: string | null } | null;
 		perfil: { id: string; nombre: string } | null;
 	}): Promise<AuthUser> {
 		const derechos = await this.permisosService.getDerechosEfectivos(
@@ -262,6 +349,7 @@ export class AuthService {
 						id: usuario.sucursal.id,
 						nombre: usuario.sucursal.nombre,
 						codigo: usuario.sucursal.codigo,
+						logoUrl: usuario.sucursal.logoUrl ?? null,
 					}
 				: null,
 			perfil: usuario.perfil

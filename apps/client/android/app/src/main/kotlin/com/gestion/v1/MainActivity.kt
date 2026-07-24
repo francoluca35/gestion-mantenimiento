@@ -1,4 +1,4 @@
-package com.sika.mantenimiento.gestion_mantenimiento
+package com.gestion.v1
 
 import io.flutter.embedding.android.FlutterActivity
 

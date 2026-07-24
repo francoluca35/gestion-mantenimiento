@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 
 export class UpdateSucursalDto {
 	@IsOptional()
@@ -9,4 +9,14 @@ export class UpdateSucursalDto {
 	@IsOptional()
 	@IsBoolean()
 	activa?: boolean;
+
+	@IsOptional()
+	@ValidateIf((_, value) => value !== null)
+	@IsString()
+	logoKey?: string | null;
+
+	@IsOptional()
+	@ValidateIf((_, value) => value !== null)
+	@IsString()
+	logoUrl?: string | null;
 }

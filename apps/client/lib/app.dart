@@ -10,12 +10,16 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'features/auth/presentation/login_page.dart';
+import 'features/compras/presentation/compras_page.dart';
+import 'features/indicadores/presentation/indicadores_page.dart';
 import 'features/home/presentation/config_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/home/presentation/perfil_page.dart';
 import 'features/mantenimiento/presentation/contadores_page.dart';
 import 'features/mantenimiento/presentation/emitir_ot_no_periodica_page.dart';
 import 'features/mantenimiento/presentation/emitir_ot_periodica_page.dart';
+import 'features/mantenimiento/presentation/ot_gantt_page.dart';
+import 'features/mantenimiento/presentation/ot_graficos_page.dart';
 import 'features/mantenimiento/presentation/ot_necesarias_page.dart';
 import 'features/mantenimiento/presentation/mis_ot_page.dart';
 import 'features/mantenimiento/presentation/ot_page.dart';
@@ -111,32 +115,16 @@ final _routerProvider = Provider<GoRouter>((ref) {
 
 			if (!isAuth && !loggingIn) return '/login';
 			if (isAuth && loggingIn) {
+				// Preferencia de aterrizaje por rol; la app completa queda abierta por permisos.
 				if (user?.esTecnico == true) return '/mis-ot';
 				if (user?.esPanolero == true) return '/panol';
 				return '/home';
 			}
 
-			if (isAuth && user?.esTecnico == true) {
-				const permitidas = {'/mis-ot', '/perfil'};
-				if (loc == '/home' || !permitidas.contains(loc)) {
-					return '/mis-ot';
-				}
-			}
-
+			// Atajos de compatibilidad pañol (mismas pantallas, rutas canónicas).
 			if (isAuth && user?.esPanolero == true) {
-				const permitidas = {
-					'/panol',
-					'/panol/dashboard',
-					'/panol/stock',
-					'/panol/pedidos',
-					'/panol/seguimiento',
-					'/perfil',
-				};
 				if (loc == '/stock') return '/panol/stock';
 				if (loc == '/solicitudes-materiales') return '/panol/pedidos';
-				if (loc == '/home' || !permitidas.contains(loc)) {
-					return '/panol';
-				}
 			}
 
 			return null;
@@ -148,16 +136,16 @@ final _routerProvider = Provider<GoRouter>((ref) {
 			),
 			ShellRoute(
 				builder: (context, state, child) {
-					final user = ref.read(authControllerProvider).session?.usuario;
-					if (user?.esPanolero == true &&
-							!state.uri.path.startsWith('/perfil')) {
+					final path = state.uri.path;
+					// Shell dedicado solo dentro del módulo pañol; el resto usa AppShell multi-rol.
+					if (path.startsWith('/panol')) {
 						return PanolShell(
-							location: state.uri.path,
+							location: path,
 							child: child,
 						);
 					}
 					return AppShell(
-						location: state.uri.path,
+						location: path,
 						child: child,
 					);
 				},
@@ -167,8 +155,28 @@ final _routerProvider = Provider<GoRouter>((ref) {
 						pageBuilder: (context, state) => _fadePage(state, const HomePage()),
 					),
 					GoRoute(
+						path: '/indicadores',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const IndicadoresPage()),
+					),
+					GoRoute(
+						path: '/compras',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const ComprasPage()),
+					),
+					GoRoute(
 						path: '/ot',
 						pageBuilder: (context, state) => _fadePage(state, const OtPage()),
+					),
+					GoRoute(
+						path: '/ot/gantt',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const OtGanttPage()),
+					),
+					GoRoute(
+						path: '/ot/graficos',
+						pageBuilder: (context, state) =>
+								_fadePage(state, const OtGraficosPage()),
 					),
 					GoRoute(
 						path: '/mis-ot',

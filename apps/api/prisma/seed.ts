@@ -385,14 +385,14 @@ async function main() {
 
 	await assignDerechos(
 		perfilSupervisor.id,
-		['programacion', 'archivos'],
+		['programacion', 'archivos', 'analisis', 'stock.ordenes_compra'],
 		derechoMap,
 		true,
 	);
 
 	await assignDerechos(
 		perfilAdminSucursal.id,
-		['configuracion', 'archivos', 'programacion'],
+		['configuracion', 'archivos', 'programacion', 'analisis', 'stock'],
 		derechoMap,
 		true,
 	);

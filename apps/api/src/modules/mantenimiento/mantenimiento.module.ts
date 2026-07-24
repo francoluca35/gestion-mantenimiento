@@ -6,6 +6,7 @@ import { MotivosOtPendienteController } from './motivos-ot-pendiente/motivos-ot-
 import { MotivosOtPendienteService } from './motivos-ot-pendiente/motivos-ot-pendiente.service';
 import { OtController } from './ot/ot.controller';
 import { OtCronService } from './ot/ot-cron.service';
+import { OtPdfBinaryService } from './ot/ot-pdf-binary.service';
 import { OtService } from './ot/ot.service';
 import { ProcedimientosController } from './procedimientos/procedimientos.controller';
 import { ProcedimientosService } from './procedimientos/procedimientos.service';
@@ -24,6 +25,7 @@ import { SolicitudesTrabajoService } from './solicitudes-trabajo/solicitudes-tra
 		ProcedimientosService,
 		OtService,
 		OtCronService,
+		OtPdfBinaryService,
 		SolicitudesTrabajoService,
 		MotivosOtPendienteService,
 	],

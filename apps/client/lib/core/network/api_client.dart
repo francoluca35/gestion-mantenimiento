@@ -117,6 +117,17 @@ class ApiClient {
 		return _decodeMap(response);
 	}
 
+	Future<List<int>> getBytes(String path, {bool auth = true}) async {
+		final headers = await _headers(auth: auth);
+		headers['Accept'] = 'application/pdf,*/*';
+		final response = await _client.get(
+			_uri(path),
+			headers: headers,
+		);
+		_ensureSuccess(response);
+		return response.bodyBytes;
+	}
+
 	Map<String, dynamic> _decodeMap(http.Response response) {
 		_ensureSuccess(response);
 		if (response.body.isEmpty) {
